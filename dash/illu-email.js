@@ -1,0 +1,203 @@
+/* The Email section of a booking card (user, 2026-11-05): "a summary of all the emails per
+   e-mail / count of emails / which emails have which files / date … through Hiworks".
+   Two tabs: "Hiworks emails" (filled from Claude's answer - totals, summary, people, every email
+   newest first with its files and links) and "My notes" (the card's own text box, as before).
+   Links to Google Drive folders and Mediaslide packages get "Get files": the photos and videos
+   are sorted into 1. BOOK / 2. SNAPS / 3. VIDEOS and saved on this computer and in Dropbox. */
+(function(){
+  'use strict';
+  if(typeof bvStagePane !== 'function') return;
+  const ko = () => typeof LANG !== 'undefined' && LANG === 'ko';
+  const T = (en, k) => ko() ? k : en;
+  const E = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]);
+  let TAB = 'hw';                       // 'hw' | 'notes'
+  let WHO = '';                         // people filter (address)
+  const GLYPH = '<span class="clg" aria-hidden="true">✦</span>';
+
+  /* ---- the data: c.em = {at, summary, unread, list:[{k, dt, dir, name, addr, to, cc, subject, summary, files, hw}]} ---- */
+  const dtKey = dt => { const m = String(dt || '').match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/); return m ? m[3] + m[2] + m[1] + (m[4] || '00').padStart(2, '0') + (m[5] || '00') : ''; };
+  const normDT = v => { const s = String(v || '').trim(); let m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})(?:[ T,]+(\d{1,2}):(\d{2}))?/);
+    if(m) return m[1].padStart(2, '0') + '/' + m[2].padStart(2, '0') + '/' + m[3] + (m[4] ? ' ' + m[4].padStart(2, '0') + ':' + m[5] : '');
+    m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); return m ? m[3] + '/' + m[2] + '/' + m[1] + (m[4] ? ' ' + m[4] + ':' + m[5] : '') : ''; };
+  const arr = v => Array.isArray(v) ? v.map(x => String(x || '').trim()).filter(Boolean).slice(0, 20) : (v ? String(v).split(/[,;]\s*/).filter(Boolean).slice(0, 20) : []);
+  const keyOf = e => e.hw ? 'hw:' + e.hw.replace(/^\/view\/[a-z]+\//, '') : 'd:' + dtKey(e.dt) + '|' + String(e.subject || '').toLowerCase().slice(0, 60);
+  function fromAnswer(j){
+    if(!j || !Array.isArray(j.emails)) return null;
+    const list = [];
+    for(const x of j.emails){
+      if(!x || typeof x !== 'object') continue;
+      const dt = normDT(x.date); if(!dt) continue;                     // the request's own empty example has no real date
+      const files = (Array.isArray(x.files) ? x.files : []).map(f => ({kind: String(f && f.kind || '').toLowerCase().slice(0, 10), name: String(f && f.name || '').slice(0, 120), url: /^https?:\/\//i.test(String(f && f.url || '')) ? String(f.url).slice(0, 600) : ''}))
+        .filter(f => f.name || f.url).slice(0, 40);
+      const e = {dt, dir: /^out|sent/i.test(String(x.dir || '')) ? 'out' : 'in', name: String(x.from_name || '').slice(0, 80), addr: String(x.from || '').toLowerCase().slice(0, 120),
+        to: arr(x.to).map(a => a.toLowerCase()), cc: arr(x.cc).map(a => a.toLowerCase()), subject: String(x.subject || '').slice(0, 200), summary: String(x.summary || '').slice(0, 400), summary_ko: String(x.summary_ko || '').slice(0, 400), files,
+        hw: /^\/view\/[a-z]+\/\d+$/.test(String(x.hiworks || '')) && !/\/0$/.test(x.hiworks) ? String(x.hiworks) : ''};
+      e.k = keyOf(e); list.push(e);
+    }
+    if(!list.length && !j.email_summary) return null;
+    return {list, summary: String(j.email_summary || '').slice(0, 1200), summary_ko: String(j.email_summary_ko || '').slice(0, 1200), unread: Math.max(0, parseInt(j.unread, 10) || 0)};
+  }
+  /* the summaries in Korean when the program is in Korean (Claude writes both; user, 2026-11-06) */
+  const sumOf = o => (ko() && o && o.summary_ko) ? o.summary_ko : (o && o.summary) || '';
+  const emOf = c => (c.em && typeof c.em === 'object' && Array.isArray(c.em.list)) ? c.em : {list: []};
+  function countNew(c, EM){ const have = new Set(emOf(c).list.map(e => e.k)); return EM.list.filter(e => !have.has(e.k)).length; }
+  /* only adds and refreshes: an email already on the card is updated, nothing is taken away */
+  function merge(c, EM){
+    const cur = emOf(c), by = new Map(cur.list.map(e => [e.k, e]));
+    for(const e of EM.list) by.set(e.k, Object.assign({}, by.get(e.k) || {}, e));
+    const list = [...by.values()].sort((a, b) => dtKey(b.dt).localeCompare(dtKey(a.dt)));
+    c.em = {at: new Date().toISOString(), by: 'Claude', summary: EM.summary || cur.summary || '', summary_ko: EM.summary_ko || cur.summary_ko || '', unread: EM.unread, list};
+  }
+  window.__illuEmail = {fromAnswer, countNew, merge};
+
+  /* ---- drawing ---- */
+  const isGet = u => /drive\.google\.com\/(drive\/(u\/\d+\/)?folders|file\/d|open\?|uc\?)|\.mediaslide\.com\/package\/view\//i.test(String(u || ''));
+  const fileChip = f => {
+    const ic = f.kind === 'link' || (f.url && !f.name) ? '🔗' : f.kind === 'video' ? '🎬' : f.kind === 'pdf' ? '📄' : '📎';
+    const host = (() => { try{ return new URL(f.url).hostname.replace(/^www\./, ''); }catch(e){ return ''; } })();
+    const label = f.name || (/drive\.google/.test(host) ? 'Google Drive' : /mediaslide/.test(host) ? 'Mediaslide package' : /wetransfer|we\.tl/.test(host) ? 'WeTransfer' : /dropbox/.test(host) ? 'Dropbox' : host || 'link');
+    return '<span class="emf' + (f.url ? ' emlk' : '') + '">' + ic + ' ' + E(label) +
+      (f.url && isGet(f.url) ? '<button type="button" class="emget" data-emget="' + E(f.url) + '">' + T('Get files', '파일 받기') + '</button>' : '') +
+      (f.url ? '<a class="emopen" href="' + E(f.url) + '" target="_blank" rel="noopener" title="' + E(f.url) + '">↗</a>' : '') + '</span>';
+  };
+  function people(list){
+    const P = new Map();
+    const add = (addr, name, k) => { if(!addr) return; const p = P.get(addr) || {addr, name: '', in: 0, out: 0, cc: 0}; if(name && !p.name) p.name = name; p[k]++; P.set(addr, p); };
+    for(const e of list){ if(e.dir === 'in') add(e.addr, e.name, 'in'); else for(const a of e.to) add(a, '', 'out'); for(const a of e.cc) add(a, '', 'cc'); }
+    return [...P.values()].sort((a, b) => (b.in + b.out) - (a.in + a.out) || b.cc - a.cc).slice(0, 12);
+  }
+  function hwHtml(c){
+    const em = emOf(c), L = em.list;
+    const shown = WHO ? L.filter(e => e.addr === WHO || e.to.includes(WHO) || e.cc.includes(WHO)) : L;
+    const rin = L.filter(e => e.dir === 'in').length, rout = L.length - rin, nf = L.reduce((a, e) => a + e.files.length, 0);
+    const first = L.length ? L[L.length - 1].dt.slice(0, 10) : '', last = L.length ? L[0].dt.slice(0, 10) : '';
+    const upd = em.at ? new Date(em.at) : null;
+    const updTxt = upd ? String(upd.getDate()).padStart(2, '0') + '/' + String(upd.getMonth() + 1).padStart(2, '0') + '/' + upd.getFullYear() + ' ' + String(upd.getHours()).padStart(2, '0') + ':' + String(upd.getMinutes()).padStart(2, '0') : '';
+    const P = people(L);
+    return '<div class="emhw">' +
+      '<div class="emsum">' +
+        '<div class="emk"><div><i>' + T('Emails', '이메일') + '</i><b>' + L.length + '</b></div><div><i>' + T('Received', '받음') + '</i><b>' + rin + '</b></div><div><i>' + T('Sent', '보냄') + '</i><b>' + rout + '</b></div><div><i>' + T('Files', '파일') + '</i><b>' + nf + '</b></div></div>' +
+        (L.length || em.summary ? '<p class="emov">' + (first ? '<b>' + E(first === last ? first : first + ' – ' + last) + '.</b> ' : '') + E(sumOf(em)) + '</p>'
+          : '<p class="emov emnone">' + T('No emails on this card yet.', '이 카드에는 아직 이메일이 없습니다.') + '</p>') +
+        '<div class="emupd"><span>' + (updTxt ? T('Updated ', '업데이트 ') + E(updTxt) + T(' · by Claude', ' · Claude') + (em.unread ? ' · ' + em.unread + T(' unread not opened', '통 안 읽음(열지 않음)') : '') : '') + '</span>' +
+          '</div>' +   /* "Update from Hiworks" asked Claude - taken out with the Claude panel (1.2.112) */
+      '</div>' +
+      (P.length ? '<div class="emppl">' + T('People', '사람') + '</div><div class="empp"><button type="button" data-emwho="" aria-pressed="' + (!WHO) + '">' + T('All', '전체') + ' <em>' + L.length + '</em></button>' +
+        P.map(p => '<button type="button" data-emwho="' + E(p.addr) + '" aria-pressed="' + (WHO === p.addr) + '" title="' + E(p.addr) + '">' + E(p.name ? p.name + ' · ' + p.addr : p.addr) + ' <em>' +
+          [p.in ? p.in + T(' in', ' 받음') : '', p.out ? p.out + T(' out', ' 보냄') : '', p.cc ? 'cc ' + p.cc : ''].filter(Boolean).join(' · ') + '</em></button>').join('') + '</div>' : '') +
+      '<div class="emtl">' + shown.map(e => '<div class="eme"><div class="emd"><b>' + E(e.dt.slice(0, 5)) + '</b>' + E(e.dt.slice(11)) + '<s>' + E(e.dt.slice(6, 10)) + '</s></div><div>' +
+        '<span class="emdir ' + (e.dir === 'in' ? 'i' : 'o') + '">' + (e.dir === 'in' ? T('RECEIVED', '받음') : T('SENT', '보냄')) + '</span>' +
+        '<span class="emwho">' + E(e.dir === 'in' ? (e.name || e.addr) : T('to ', '받는 사람 ') + (e.to[0] || '')) + '</span>' +
+        (e.hw ? '<a class="emhwl" href="https://mails.office.hiworks.com' + E(e.hw) + '" target="_blank" rel="noopener" title="' + T('Open in Hiworks', '하이웍스에서 열기') + '">Hiworks ↗</a>' : '') +
+        '<div class="emsubj">' + E(e.subject) + '</div>' + (sumOf(e) ? '<div class="emtxt">' + E(sumOf(e)) + '</div>' : '') +
+        (e.files.length ? '<div class="emfs">' + e.files.map(fileChip).join('') + '</div>' : '') + '</div></div>').join('') + '</div>' +
+      '<div class="emlink"><input type="url" class="emlinkin" placeholder="' + T('Paste a Google Drive or Mediaslide link…', 'Google Drive 또는 Mediaslide 링크 붙여넣기…') + '" spellcheck="false"><button type="button" class="bvbtn" data-emgetin>' + T('Get files', '파일 받기') + '</button></div>' +
+    '</div>';
+  }
+  const old = bvStagePane;
+  window.bvStagePane = function(c, k){
+    const h = old.apply(this, arguments);
+    if(k !== 'email') return h;
+    const n = emOf(c).list.length;
+    const seg = '<div class="emseg" role="tablist"><button type="button" data-emtab="hw" aria-pressed="' + (TAB === 'hw') + '">' + T('Hiworks emails', 'Hiworks 이메일') + (n ? ' · ' + n : '') + '</button>' +
+      '<button type="button" data-emtab="notes" aria-pressed="' + (TAB === 'notes') + '">' + T('My notes', '내 메모') + '</button></div>';
+    /* the tabs go under the stage chips; the notes box (and its files) stay as they are, under "My notes" */
+    let out = h.replace(/(<\/div>)(<textarea class="bvntext")/, '$1' + seg + (TAB === 'hw' ? hwHtml(c) : '') + '$2');
+    if(TAB === 'hw') out = out.replace('<textarea class="bvntext"', '<textarea hidden class="bvntext"').replace('<div class="bvnfiles">', '<div class="bvnfiles" hidden>');
+    return out;
+  };
+  const redraw = () => { try{ bvSideRefresh(true); }catch(e){} };
+
+  /* ---- Get files ---- */
+  let JOB = null;
+  async function getFiles(link, cid){
+    const c = cid ? BOOK.get(cid) : (typeof bv !== 'undefined' && bv && BOOK.get(bv.id)); if(!c) return;
+    if(!(window.illu && illu.getFilesPlan)){ alertBox(T('Getting files works in the ILLUMENOCTIS program', '파일 받기는 ILLUMENOCTIS 프로그램에서 됩니다')); return; }
+    const m = modal('<h3>' + T('Get files', '파일 받기') + '</h3><p class="clsub">' + T('Reading the link…', '링크를 읽는 중…') + '</p>');
+    const P = await illu.getFilesPlan(link, String(c.nm || '').trim()).catch(e => ({ok: false, why: String(e && e.message || e)}));
+    if(!m.isConnected) return;
+    if(!P.ok){ m.querySelector('.clbox').innerHTML = '<h3>' + T('Get files', '파일 받기') + '</h3><p class="clsub">' + E(P.why) + '</p><div class="clbtns"><button type="button" class="bvbtn" data-clx>' + T('Close', '닫기') + '</button></div>'; return; }
+    const opts = t => ['1. BOOK', '2. SNAPS', '3. VIDEOS', ''].map(x => '<option value="' + x + '"' + (x === t ? ' selected' : '') + '>' + (x ? x.replace('2. SNAPS', '2. SNAPS / POLAS') : T('— leave out —', '— 받지 않음 —')) + '</option>').join('');
+    m.querySelector('.clbox').innerHTML = '<h3>' + T('Get files', '파일 받기') + ' · ' + E(c.nm || '') + '</h3>' +
+      '<p class="clsub">' + E(P.source) + ' · <b>' + E(P.title || '') + '</b>' + (P.models > 1 ? ' · ' + T('package of ', '패키지 모델 ') + P.models + T(' models; this model’s book', '명 중 이 모델') : '') + '</p>' +
+      '<table class="cltab gftab"><tr><th>' + T('From', '원본') + '</th><th>' + T('Files', '파일') + '</th><th>' + T('Goes to', '저장 위치') + '</th></tr>' +
+      P.groups.map((g, i) => '<tr><td>' + E(g.name) + '</td><td>' + (g.files[0] && g.files[0].how === 'zip' ? T('all, as one zip', '전체 (zip)') : g.count) + '</td><td><select data-gfg="' + i + '">' + opts(g.tab) + '</select>' + (!g.tab ? ' <span class="gfq">' + T('choose', '선택') + '</span>' : '') + '</td></tr>').join('') + '</table>' +
+      '<p class="clsub">' + T('Videos always go to 3. VIDEOS. Subfolders are kept. A file already there is skipped; nothing is replaced or deleted.', '영상은 항상 3. VIDEOS로 갑니다. 하위 폴더는 유지됩니다. 이미 있는 파일은 건너뛰며, 어떤 것도 덮어쓰거나 지우지 않습니다.') + '</p>' +
+      '<div class="gfwhere"><b>' + E(bvFolderName(c)) + '</b> · <label><input type="checkbox" data-gfw="pc" checked> ' + T('This computer (Desktop › ILLUMENOCTIS › BOOKING)', '이 컴퓨터 (바탕화면 › ILLUMENOCTIS › BOOKING)') + '</label> <label><input type="checkbox" data-gfw="dbx" checked> Dropbox</label></div>' +
+      '<div class="gfprog" hidden><div class="gfbar"><i></i></div><span class="gfnow"></span></div>' +
+      '<div class="clbtns"><button type="button" class="bvbtn" data-clx>' + T('Cancel', '취소') + '</button><button type="button" class="bvbtn clokb" data-gfgo>' + T('Get files', '파일 받기') + '</button></div>';
+    m.__plan = P; m.__card = c.id;
+  }
+  /* 1.2.129: the photo viewer's Links use the same Get files, for the model's booking card */
+  window.__illuGetFiles = (link, cid) => getFiles(link, cid);
+  async function go(m){
+    const P = m.__plan, c = BOOK.get(m.__card); if(!P || !c) return;
+    m.querySelectorAll('[data-gfg]').forEach(s => { P.groups[+s.dataset.gfg].tab = s.value; });
+    const where = [...m.querySelectorAll('[data-gfw]')].filter(x => x.checked).map(x => x.dataset.gfw);
+    if(!where.length) return;
+    const groups = P.groups.filter(g => g.tab);
+    if(!groups.length) return;
+    JOB = 'gf' + Date.now();
+    m.__job = JOB;
+    m.querySelectorAll('select,input').forEach(x => x.disabled = true);
+    m.querySelector('.gfprog').hidden = false;
+    const b = m.querySelector('[data-gfgo]'); b.textContent = T('Stop', '중지'); b.dataset.gfstop = '1'; b.removeAttribute('data-gfgo'); b.classList.remove('clokb');
+    m.querySelector('[data-clx]').hidden = true;
+    const r = await illu.getFilesRun(JOB, {folder: bvFolderName(c), first: String(c.nm || '').trim()}, groups, where).catch(e => ({ok: false, failed: [String(e && e.message || e)]}));
+    JOB = null;
+    if(m.isConnected){
+      const w = r.where || {};
+      const line = k => w[k] ? (k === 'pc' ? T('This computer', '이 컴퓨터') : 'Dropbox') + ': ' + w[k].saved + T(' saved', '개 저장') + (w[k].same ? ', ' + w[k].same + T(' already there', '개 이미 있음') : '') + (w[k].failed ? ', ' + w[k].failed + T(' not saved', '개 저장 못 함') + (w[k].why ? ' (' + E(w[k].why) + ')' : '') : '') : '';
+      m.querySelector('.clbox').innerHTML = '<h3>' + (r.stopped ? T('Stopped', '중지됨') : T('Done', '완료')) + '</h3><p class="clsub">' + where.map(line).filter(Boolean).join('<br>') + '</p>' +
+        ((r.failed || []).length ? '<p class="clsub gfbad">' + T('Could not get: ', '받지 못함: ') + E(r.failed.slice(0, 8).join(' · ')) + (r.failed.length > 8 ? ' …' : '') + '</p>' : '') +
+        '<div class="clbtns"><button type="button" class="bvbtn clokb" data-clx>' + T('Close', '닫기') + '</button></div>';
+    }
+    /* the folder on screen shows what came in */
+    try{ const g = BVLOAD.get(c.id); if(bv && bv.id === c.id && typeof bvOpenSrc === 'function') bvOpenSrc(c, g && g.loc ? g.loc : (where.includes('dbx') ? 'dbx' : 'pc'), true); }catch(e){}
+  }
+  if(window.illu && illu.onGetFiles) illu.onGetFiles(s => {
+    const m = document.querySelector('.clmod'); if(!m || m.__job !== s.job) return;
+    const bar = m.querySelector('.gfbar i'), now = m.querySelector('.gfnow');
+    if(bar) bar.style.width = (s.total ? Math.round(100 * s.done / s.total) : 0) + '%';
+    if(now) now.textContent = s.done + ' / ' + s.total + T(' · saved ', ' · 저장 ') + s.saved + (s.same ? T(' · already there ', ' · 이미 있음 ') + s.same : '') + ' · ' + (s.bytes > 1048576 ? (s.bytes / 1048576).toFixed(1) + ' MB' : Math.round(s.bytes / 1024) + ' KB') + (s.now ? ' · ' + s.now : '');
+  });
+  function modal(inner){
+    const o = document.querySelector('.clmod'); if(o) o.remove();
+    const m = document.createElement('div'); m.className = 'clmod'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+    m.innerHTML = '<div class="clbox">' + inner + '</div>'; document.body.appendChild(m); return m;
+  }
+  function alertBox(t){ modal('<p class="clsub">' + E(t) + '</p><div class="clbtns"><button type="button" class="bvbtn" data-clx>OK</button></div>'); }
+
+  document.addEventListener('click', async e => {
+    const t = e.target.closest && e.target.closest('[data-emtab],[data-emwho],[data-emup],[data-emget],[data-emgetin],[data-gfgo],[data-gfstop]');
+    if(!t) return;
+    e.preventDefault(); e.stopPropagation();
+    if(t.dataset.emtab){ TAB = t.dataset.emtab; redraw(); return; }
+    if(t.hasAttribute('data-emwho')){ WHO = t.dataset.emwho; redraw(); return; }
+    if(t.hasAttribute('data-emup')){ const b = document.querySelector('.bv [data-clsend]'); if(b) b.click(); return; }
+    if(t.dataset.emget){ getFiles(t.dataset.emget); return; }
+    if(t.hasAttribute('data-emgetin')){ const v = (t.parentNode.querySelector('.emlinkin') || {}).value || ''; if(v.trim()) getFiles(v.trim()); return; }
+    if(t.hasAttribute('data-gfgo')){ go(t.closest('.clmod')); return; }
+    if(t.hasAttribute('data-gfstop')){ const m = t.closest('.clmod'); if(m && m.__job) illu.getFilesStop(m.__job); t.disabled = true; t.textContent = T('Stopping…', '중지 중…'); }
+  }, true);
+  document.addEventListener('keydown', e => { if(e.key === 'Enter' && e.target && e.target.classList && e.target.classList.contains('emlinkin')){ e.preventDefault(); const v = e.target.value.trim(); if(v) getFiles(v); } }, true);
+
+  const st = document.createElement('style');
+  st.textContent = [
+    '.bv .emseg{display:flex;background:#f1eff4;border-radius:8px;padding:2px;margin:8px 0 10px}.bv .emseg button{flex:1;border:0;background:none;padding:6px;border-radius:6px;font:inherit;font-size:12px;color:#666;cursor:pointer}',
+    '.bv .emseg button[aria-pressed="true"]{background:#fff;color:#1d1b22;box-shadow:0 1px 2px rgba(0,0,0,.1);font-weight:600}',
+    '.bv .emhw{font-size:12.5px;overflow:auto}.bv .emsum{border:1px solid #ebe8f0;border-radius:12px;padding:9px 10px;background:#faf9fc}',
+    '.bv .emk{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:7px}.bv .emk div{background:#fff;border:1px solid #eee;border-radius:8px;padding:5px 7px}.bv .emk i{display:block;font-style:normal;font-size:9.5px;letter-spacing:.08em;color:#888;text-transform:uppercase}.bv .emk b{font-size:15px}',
+    '.bv .emov{margin:0 0 4px;color:#333;line-height:1.45}.bv .emnone{color:#777}.bv .emupd{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:#888;margin-top:6px}.bv .emup{white-space:nowrap}.bv .emup .clg{margin-right:4px}',
+    '.bv .emppl{margin:10px 0 4px;font-size:10px;letter-spacing:.1em;color:#888;text-transform:uppercase;font-weight:600}.bv .empp{display:flex;flex-wrap:wrap;gap:5px}.bv .empp button{border:1px solid #e3dfe8;background:#fff;border-radius:8px;padding:3px 8px;font:inherit;font-size:11.5px;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bv .empp button em{font-style:normal;color:#888;margin-left:4px}.bv .empp button[aria-pressed="true"]{border-color:#6b2a5e;background:#f6eff4}',
+    '.bv .emtl{margin-top:6px}.bv .eme{display:grid;grid-template-columns:48px 1fr;gap:8px;padding:8px 2px;border-top:1px solid #f0eef3}.bv .emd{font-size:11px;color:#666;line-height:1.3}.bv .emd b{display:block;color:#1d1b22;font-size:12.5px}.bv .emd s{display:block;text-decoration:none;color:#aaa;font-size:10px}',
+    '.bv .emdir{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.06em;border-radius:4px;padding:0 5px;margin-right:6px}.bv .emdir.i{background:#e8f1fb;color:#2b62a6}.bv .emdir.o{background:#eef7ec;color:#3c7a2f}',
+    '.bv .emwho{font-weight:600}.bv .emhwl{float:right;font-size:11px;color:#6b2a5e;text-decoration:none}.bv .emsubj{color:#555;font-size:11.5px;margin:1px 0 2px}.bv .emtxt{color:#333}',
+    '.bv .emfs{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}.bv .emf{display:inline-flex;align-items:center;gap:5px;font-size:11px;border-radius:6px;padding:1px 6px;background:#f3f1f6;border:1px solid #e6e2ea;max-width:100%}.bv .emf.emlk{background:#fff7ee;border-color:#f1d9bd}',
+    '.bv .emget{border:1px solid #6b2a5e;background:#fff;color:#6b2a5e;border-radius:5px;font:inherit;font-size:10.5px;font-weight:600;padding:0 6px;cursor:pointer}.bv .emopen{color:#999;text-decoration:none}',
+    '.bv .emlink{display:flex;gap:6px;margin:10px 0 4px}.bv .emlinkin{flex:1;min-width:0;border:1px solid #ddd;border-radius:8px;padding:5px 8px;font:inherit;font-size:12px}',
+    '.gftab select{font:inherit;font-size:12.5px;padding:2px 4px}.gfq{color:#b0006a;font-size:11px}.gfwhere{font-size:12.5px;margin:6px 0 10px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center}',
+    '.gfprog{margin:0 0 10px}.gfbar{height:6px;background:#eee;border-radius:3px;overflow:hidden}.gfbar i{display:block;height:100%;width:0;background:#6b2a5e;transition:width .2s}.gfnow{display:block;font-size:11.5px;color:#666;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.gfbad{color:#b0006a}'
+  ].join('\n');
+  document.head.appendChild(st);
+})();

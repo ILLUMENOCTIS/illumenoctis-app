@@ -1,0 +1,1 @@
+try{var __t=localStorage.getItem('illum.theme');if(__t==='dark')__t='dim';if(__t==='dim'||__t==='sepia')document.documentElement.dataset.theme=__t;}catch(e){}

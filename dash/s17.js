@@ -1,0 +1,1 @@
+try{ Object.assign(KO, {"Go to date": "날짜로 이동", "← Previous": "← 이전", "Next →": "다음 →", "Name, person or date…": "이름, 사람 또는 날짜…"}); }catch(e){}

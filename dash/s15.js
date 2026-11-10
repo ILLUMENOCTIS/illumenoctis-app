@@ -1,0 +1,1 @@
+try{ Object.assign(KO, {"Also lit by": "함께 켠 사람"}); }catch(e){}
