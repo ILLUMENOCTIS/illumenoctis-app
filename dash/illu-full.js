@@ -77,7 +77,7 @@
     box.querySelector('.fvsti').textContent = on ? '›' : '‹';
     box.querySelector('.fvstl').textContent = L('Details', '정보');
     if(!on || !S){ side.innerHTML = ''; return; }
-    const keep = [...side.querySelectorAll('[data-mxin],[data-ntin]')].map(n => [n.dataset.mxin ? '[data-mxin="' + n.dataset.mxin + '"]' : '[data-ntin="' + CSS.escape(n.dataset.ntin) + '"]', n.value, n === document.activeElement, n.selectionStart || 0, n.selectionEnd || 0]), sTop = side.scrollTop;
+    const keep = [...side.querySelectorAll('[data-mxin]')].map(n => [n.dataset.mxin, n.value, n === document.activeElement, n.selectionStart || 0, n.selectionEnd || 0]), sTop = side.scrollTop;
     const {i, f, bk} = facts();
     const nm = S.name || i.nm || (bk && bk.nm) || '';
     const ag = i.ag || (bk && bk.ag) || '';
@@ -108,11 +108,10 @@
       '<div class="fvlinks">' + (href ? '<a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(L('Agency page ↗', '에이전시 페이지 ↗')) + '</a>' : '') +
       (bk && bk.ig ? '<a href="https://www.instagram.com/' + esc(String(bk.ig).replace(/^@/, '')) + '/" target="_blank" rel="noopener">Instagram ↗</a>' : '') + '</div>' +
       '<p class="fvcount">' + (S.photos.length > 1 ? esc(L(S.photos.length + ' photos', '사진 ' + S.photos.length + '장')) : '') + '</p>' +
-      /* 1.2.129 (user): every expanded card has Booking / Notes / Links - except the Booking board's own cards */
-      (S.key && !S.bid && window.__illuModelExtras ? window.__illuModelExtras(S.key, {nm, ag, city: i.city || (bk && bk.city) || '', country: i.country || (bk && bk.country) || ''}) : '');
+      (S.key && window.__illuModelExtras ? window.__illuModelExtras(S.key, {nm, ag, city: i.city || (bk && bk.city) || '', country: i.country || (bk && bk.country) || ''}) : '');
     MXABOUT = {nm, ag, city: i.city || (bk && bk.city) || '', country: i.country || (bk && bk.country) || ''};
     /* what was being typed stays, and so does the cursor */
-    for(const [k, v, f, a, b] of keep){ const n = side.querySelector(k); if(!n) continue; n.value = v; if(f){ try{ n.focus({preventScroll: true}); n.setSelectionRange(a, b); }catch(e){} } }
+    for(const [k, v, f, a, b] of keep){ const n = side.querySelector('[data-mxin="' + k + '"]'); if(!n) continue; n.value = v; if(f){ try{ n.focus({preventScroll: true}); n.setSelectionRange(a, b); }catch(e){} } }
     side.scrollTop = sTop;
   }
   let MXABOUT = null;

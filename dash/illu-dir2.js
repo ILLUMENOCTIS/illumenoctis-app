@@ -1188,19 +1188,8 @@
       fx.innerHTML = '<dt>Profile</dt><dd>' + (m.href ? '<a href="' + enc(m.href) + '" target="_blank" rel="noopener noreferrer">Open on the agency’s site ↗</a>' : '—') + '</dd>' +
         '<dt>Photos</dt><dd>' + (SL.state === 'loading' ? 'Looking…' : n > 1 ? n + ' from the agency’s page' : 'Only the card photo' + (SL.why && SLWHY[SL.why] ? ' — ' + enc(SLWHY[SL.why][0].toLowerCase()) : '')) + '</dd>' +
         (m.boards && m.boards.length ? '<dt>Boards</dt><dd>' + m.boards.map(b => enc(b.d || 'Board')).join(' · ') + '</dd>' : '');
-      mxPaint(C);
     }else if(fx) fx.remove();
-    if(!full){ const w = C.querySelector('.d2mxw'); if(w) w.remove(); }
   }
-  /* 1.2.129 (user, 10 Nov 2026): the full view has the same Booking / Notes / Links as every other expanded card */
-  function mxPaint(C){
-    const m = D2.openM, fx = C && C.querySelector('.litcard > .d2slfx'); if(!m || !fx || !window.__illuModelExtras || !window.__illuMxPaint) return;
-    let w = C.querySelector('.litcard > .d2mxw');
-    if(!w){ w = document.createElement('div'); w.className = 'd2mxw'; fx.after(w); }
-    const o = (m.b && m.b.off) || {};
-    window.__illuMxPaint(w, window.__illuModelExtras(m.key, {nm: m.nm || m.name || '', ag: m.ag || '', city: m.city || o.city || '', country: m.country || o.country || ''}));
-  }
-  (window.__illuVoteFns = window.__illuVoteFns || []).push(() => { if(SL.full && D2.open){ const C = $('.d2card.d2full'); if(C) mxPaint(C); } });
   window.__illuSlide = () => ({key: SL.key, i: SL.i, n: slN(), state: SL.state, why: SL.why, full: SL.full});
   document.addEventListener('click', e => {
     if(!DV() || !D2.open || !e.target.closest) return;
@@ -2199,7 +2188,6 @@ html:has(body.d2fullcard),body.d2fullcard{overflow:hidden!important}
 .d2card.d2full.d2noside > .d2slside{right:114px;box-shadow:0 2px 8px -2px rgba(0,0,0,.35)}
 .d2card.d2full.d2noside .litxc{right:160px!important}
 @media (max-width:760px){.d2card.d2full > .d2slside{display:none}}
-.d2mxw{margin:0 0 14px}.d2mxw .mx{margin-top:0}
 .d2slfx{display:grid;grid-template-columns:auto 1fr;gap:9px 16px;margin:14px 0 14px;padding:14px 0 0;border-top:1px solid var(--line)}
 .d2slfx dt{font:600 9.5px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding-top:2px}
 .d2slfx dd{margin:0;font-size:13px;color:var(--ink2);min-width:0;overflow-wrap:anywhere}

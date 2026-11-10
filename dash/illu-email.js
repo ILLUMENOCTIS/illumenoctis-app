@@ -110,8 +110,8 @@
 
   /* ---- Get files ---- */
   let JOB = null;
-  async function getFiles(link, cid){
-    const c = cid ? BOOK.get(cid) : (typeof bv !== 'undefined' && bv && BOOK.get(bv.id)); if(!c) return;
+  async function getFiles(link){
+    const c = typeof bv !== 'undefined' && bv && BOOK.get(bv.id); if(!c) return;
     if(!(window.illu && illu.getFilesPlan)){ alertBox(T('Getting files works in the ILLUMENOCTIS program', '파일 받기는 ILLUMENOCTIS 프로그램에서 됩니다')); return; }
     const m = modal('<h3>' + T('Get files', '파일 받기') + '</h3><p class="clsub">' + T('Reading the link…', '링크를 읽는 중…') + '</p>');
     const P = await illu.getFilesPlan(link, String(c.nm || '').trim()).catch(e => ({ok: false, why: String(e && e.message || e)}));
@@ -128,8 +128,6 @@
       '<div class="clbtns"><button type="button" class="bvbtn" data-clx>' + T('Cancel', '취소') + '</button><button type="button" class="bvbtn clokb" data-gfgo>' + T('Get files', '파일 받기') + '</button></div>';
     m.__plan = P; m.__card = c.id;
   }
-  /* 1.2.129: the photo viewer's Links use the same Get files, for the model's booking card */
-  window.__illuGetFiles = (link, cid) => getFiles(link, cid);
   async function go(m){
     const P = m.__plan, c = BOOK.get(m.__card); if(!P || !c) return;
     m.querySelectorAll('[data-gfg]').forEach(s => { P.groups[+s.dataset.gfg].tab = s.value; });

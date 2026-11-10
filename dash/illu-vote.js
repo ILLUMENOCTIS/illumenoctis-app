@@ -56,7 +56,6 @@
   const VT = new Map();       // pid -> {e: {key: {n: v}}, t: {key: {n: iso}}}
   const OPEN = new Map();     // hash -> vopen doc
   const NOTE = new Map();     // pid -> {hash: [{t, at, r}]}
-  const NOTEX = new Map();    // pid -> {hash: {'<writer>|<at>': {t, at} | {del: 1, at}}}  (1.2.129: edits to anyone's note, kept in the editor's own doc)
   let ready = 0;
   let DBX = null;
   function db(){ if(DBX) return DBX; try{ if(typeof DB !== 'undefined') DBX = DB; }catch(e){} return DBX; }
@@ -65,7 +64,7 @@
     d.collection('fav').onSnapshot(s => { FAV.clear(); for(const x of s.docs){ const v = x.data() || {}; const m = new Map(); for(const k in (v.e || {})) m.set(k, v.e[k]); FAV.set(x.id, m); } ready |= 1; changed(); }, () => {});
     d.collection('vote').onSnapshot(s => { VT.clear(); for(const x of s.docs){ const v = x.data() || {}; VT.set(x.id, {e: Object.assign({}, v.e || {}), t: Object.assign({}, v.t || {})}); } ready |= 2; changed(); }, () => {});
     d.collection('vopen').onSnapshot(s => { OPEN.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k) OPEN.set(x.id, v); } ready |= 4; changed(); }, () => {});
-    d.collection('vnote').onSnapshot(s => { NOTE.clear(); for(const x of s.docs){ const v = x.data() || {}; NOTE.set(x.id, Object.assign({}, v.e || {})); NOTEX.set(x.id, Object.assign({}, v.x || {})); } changed(); }, () => {});
+    d.collection('vnote').onSnapshot(s => { NOTE.clear(); for(const x of s.docs){ const v = x.data() || {}; NOTE.set(x.id, Object.assign({}, v.e || {})); } changed(); }, () => {});
   }
   /* one write at a time per document, newest state wins */
   const WQ = new Map();
@@ -197,7 +196,7 @@
     OPEN.set(h, o); save('vopen/' + h, o); changed();
     say(L((o.nm || 'She') + ' is on the Team Vote — the team is asked to vote.', (o.nm || '') + ' — 팀 투표로 보냈습니다. 팀에게 투표를 요청합니다.'), () => { try{ window.__illuGo && window.__illuGo('team'); }catch(e){} }, null, L('Open Team Vote', '팀 투표 열기'));
   }
-  function canTakeOff(st){ return !!st && st.open && (st.o.by === me() || adminMe()); }
+  function canTakeOff(st){ return !!st && st.open && st.o.by === me(); }
   function takeOff(k){
     if(!signedIn()) return;
     const st = stateOf(k); if(!canTakeOff(st)) return;
@@ -244,7 +243,7 @@
     let c = null;
     try{ c = bkForKey(k); }catch(e){}
     if(!c){ try{ c = bookFromModel(k, st.o.nm || i.nm || '', i.ag || st.o.ag || '', i.city || '', i.country || ''); }catch(e){ console.error(e); } }
-    /* 1.2.129: already on Booking (sent without a vote) - the card and whoever is in charge stay as they are */
+    else { try{ c.by = me(); saveBook(c.id, true); }catch(e){} }
     if(!c) return;
     try{ remember('book', k, c.nm || k, c.ag || '', k); }catch(e){}
     const o = Object.assign({}, st.o, {conf: {by: me(), at: nowIso(), bid: c.id}});
@@ -261,79 +260,14 @@
     OPEN.set(st.h, o); save('vopen/' + st.h, o); changed();
     say(L('Vote reopened — everyone votes again.', '투표를 다시 열었습니다 — 모두 다시 투표합니다.'));
   }
-  /* my own notes doc keeps my notes (e) and my edits to anyone's notes (x) */
-  function saveNotes(){ return save('vnote/' + me(), {e: NOTE.get(me()) || {}, x: NOTEX.get(me()) || {}, at: nowIso()}); }
-  const adminMe = () => { try{ return !!isAdmin(); }catch(e){ return false; } };
   function addNote(k, t){
     if(!signedIn()) return;
     const h = hash(k), st = stateOf(k);
     const mine = Object.assign({}, NOTE.get(me()) || {});
     mine[h] = (mine[h] || []).concat([{t: String(t).slice(0, 2000), at: nowIso(), r: st ? st.round : 1}]);
-    NOTE.set(me(), mine); saveNotes(); changed();
+    NOTE.set(me(), mine); save('vnote/' + me(), {e: mine, at: nowIso()}); changed();
   }
-  function notesAll(k){
-    const h = hash(k), out = [];
-    for(const [p, e] of NOTE) for(const n of (e[h] || [])) out.push(Object.assign({p}, n));
-    /* 1.2.129: the newest edit of each note, by whoever made it, is what everyone sees; a removal hides it */
-    const ed = new Map();
-    for(const [by, x] of NOTEX) for(const id in (x[h] || {})){ const v = x[h][id]; if(v && v.at && (!ed.has(id) || String(v.at) > String(ed.get(id).at))) ed.set(id, Object.assign({by}, v)); }
-    const res = [];
-    for(const n of out){ const v = ed.get(n.p + '|' + n.at); if(v && v.del) continue; if(v && v.t != null){ n.o = n.t; n.t = v.t; n.ed = {by: v.by, at: v.at}; } res.push(n); }
-    return res.sort((a, b) => String(a.at).localeCompare(String(b.at)));
-  }
-  /* edit anyone's note (everyone may); remove anyone's note or link (the admin may; everyone may remove their own) */
-  function setX(k, id, v){
-    const h = hash(k), x = Object.assign({}, NOTEX.get(me()) || {}); x[h] = Object.assign({}, x[h] || {});
-    const before = x[h][id];
-    if(v) x[h][id] = v; else delete x[h][id];
-    if(!Object.keys(x[h]).length) delete x[h];
-    NOTEX.set(me(), x); saveNotes(); changed();
-    return before;
-  }
-  function editNote(k, p, at, t){
-    if(!signedIn()) return false;
-    t = String(t || '').trim().slice(0, 2000); if(!t) return false;
-    const n = notesAll(k).find(x => x.p === p && x.at === at); if(!n || n.u) return false;
-    if(n.t === t) return true;
-    const id = p + '|' + at, before = setX(k, id, {t, at: nowIso()});
-    say(L('Note edited', '메모를 고쳤습니다'), () => setX(k, id, before || null));
-    return true;
-  }
-  function canDrop(p){ return p === me() || adminMe(); }
-  function dropAny(k, p, at){
-    if(!signedIn() || !canDrop(p)) return;
-    if(p === me()) return dropMine(k, at);
-    const n = notesAll(k).find(x => x.p === p && x.at === at); if(!n) return;
-    const id = p + '|' + at, before = setX(k, id, {del: 1, at: nowIso()});
-    say(n.u ? L('Link removed', '링크를 지웠습니다') : L('Note removed', '메모를 지웠습니다'), () => setX(k, id, before || null));
-  }
-  let NTED = '';
-  /* one note, the same in the photo viewer's panel and on the Team Vote: who, when, edited, and its buttons */
-  function noteBtns(k, n){
-    const can = (() => { try{ return !!SIGNED(); }catch(e){ return false; } })();
-    return (can ? '<button type="button" class="mxe" data-nted="' + H(n.p + '|' + n.at) + '" data-ntk="' + H(k) + '">' + L('Edit', '수정') + '</button>' : '') +
-      (can && canDrop(n.p) ? '<button type="button" class="mxx" data-ntdel="' + H(n.p + '|' + n.at) + '" data-ntk="' + H(k) + '" aria-label="' + H(L('Remove this note', '이 메모 지우기')) + '">×</button>' : '');
-  }
-  function noteBody(k, n){
-    const id = n.p + '|' + n.at;
-    if(NTED === k + '#' + id) return '<div class="mxedit"><textarea data-ntin="' + H(id) + '" data-ntk="' + H(k) + '" rows="3">' + H(n.t) + '</textarea><div><button type="button" class="mxb pri" data-ntsave="' + H(id) + '" data-ntk="' + H(k) + '">' + L('Save', '저장') + '</button><button type="button" class="mxb" data-ntcancel>' + L('Cancel', '취소') + '</button></div></div>';
-    return '<p>' + H(n.t) + '</p>' + (n.ed ? '<span class="mxed">' + H(L('edited by ' + pname(n.ed.by) + ' · ' + when(n.ed.at), pname(n.ed.by) + ' 수정 · ' + when(n.ed.at))) + '</span>' : '');
-  }
-  function noteFind(k, id){ const i = id.indexOf('|'); return notesAll(k).find(x => x.p === id.slice(0, i) && x.at === id.slice(i + 1)); }
-  document.addEventListener('click', e => {
-    const t = e.target.closest && e.target.closest('[data-nted],[data-ntdel],[data-ntsave],[data-ntcancel]'); if(!t) return;
-    e.preventDefault(); e.stopPropagation();
-    const d = t.dataset, k = d.ntk;
-    if(d.ntcancel != null){ NTED = ''; changed(); rerender(); return; }
-    if(d.nted){ if(!signedIn()) return; NTED = k + '#' + d.nted; changed(); rerender(); setTimeout(() => { const i = document.querySelector('textarea[data-ntin="' + CSS.escape(d.nted) + '"]'); if(i){ i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 60); return; }
-    if(d.ntdel){ const n = noteFind(k, d.ntdel); if(n) dropAny(k, n.p, n.at); return; }
-    if(d.ntsave){ const n = noteFind(k, d.ntsave), i = t.closest('.mxedit').querySelector('textarea'); if(n && i && editNote(k, n.p, n.at, i.value)){ NTED = ''; changed(); rerender(); } return; }
-  }, true);
-  document.addEventListener('keydown', e => {
-    const i = e.target; if(!i || !i.matches || !i.matches('textarea[data-ntin]')) return;
-    if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); NTED = ''; changed(); rerender(); }
-    else if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); const b = i.closest('.mxedit').querySelector('[data-ntsave]'); if(b) b.click(); }
-  }, true);
+  function notesAll(k){ const h = hash(k), out = []; for(const [p, e] of NOTE) for(const n of (e[h] || [])) out.push(Object.assign({p}, n)); return out.sort((a, b) => String(a.at).localeCompare(String(b.at))); }
   /* links are kept with the notes (vnote/<person>), as entries with a u - the note lists leave them out */
   function notesOf(k){ return notesAll(k).filter(n => !n.u); }
   function linksOf(k){ return notesAll(k).filter(n => n.u); }
@@ -349,7 +283,7 @@
     try{ const x = new URL(u); if(!/^https?:$/.test(x.protocol) || !x.hostname.includes('.')) return false; }catch(e){ return false; }
     const h = hash(k), mine = Object.assign({}, NOTE.get(me()) || {});
     mine[h] = (mine[h] || []).concat([{u: u.slice(0, 1000), t: String(t || '').trim().slice(0, 120), at: nowIso()}]);
-    NOTE.set(me(), mine); saveNotes(); changed(); return true;
+    NOTE.set(me(), mine); save('vnote/' + me(), {e: mine, at: nowIso()}); changed(); return true;
   }
   function dropMine(k, at){
     if(!signedIn()) return;
@@ -357,10 +291,10 @@
     const before = mine[h] || [], kept = before.filter(n => n.at !== at); if(kept.length === before.length) return;
     const gone = before.find(n => n.at === at);
     if(kept.length) mine[h] = kept; else delete mine[h];
-    NOTE.set(me(), mine); saveNotes(); changed();
+    NOTE.set(me(), mine); save('vnote/' + me(), {e: mine, at: nowIso()}); changed();
     say(gone && gone.u ? L('Link removed', '링크를 지웠습니다') : L('Note removed', '메모를 지웠습니다'), () => {
       const m2 = Object.assign({}, NOTE.get(me()) || {}); m2[h] = (m2[h] || []).concat([gone]).sort((a, b) => String(a.at).localeCompare(String(b.at)));
-      NOTE.set(me(), m2); saveNotes(); changed(); });
+      NOTE.set(me(), m2); save('vnote/' + me(), {e: m2, at: nowIso()}); changed(); });
   }
   function sendBook(k, about){
     if(!signedIn()) return;
@@ -372,81 +306,52 @@
     try{ remember('book', k, c.nm || k, c.ag || '', k); }catch(e){}
     const st = stateOf(k);
     if(st){ const o = Object.assign({}, st.o); delete o.legacy; if(!o.voters) o.voters = st.voters;
-      /* 1.2.129 (user, 10 Nov 2026): a vote she is on carries on - only an Approved one waiting for its confirmation is marked done */
-      if(!st.open && st.res === 'appr' && !o.conf){ o.conf = {by: me(), at: nowIso(), bid: c.id}; OPEN.set(st.h, o); save('vopen/' + st.h, o); } }
+      if(st.open) o.off = {by: me(), at: nowIso(), round: st.round, why: 'booking', bid: c.id};
+      else if(st.res === 'appr' && !o.conf) o.conf = {by: me(), at: nowIso(), bid: c.id};
+      if(st.open || (st.res === 'appr' && !st.o.conf)){ OPEN.set(st.h, o); save('vopen/' + st.h, o); } }
     MXASK = '';
     try{ renderBook(); }catch(e){}
     changed();
     say(L((c.nm || '') + ' is on the Booking board — you are in charge of her card.', (c.nm || '') + ' — 부킹 보드로 보냈습니다. 이 카드는 내가 담당합니다.'), () => { try{ bvOpenFor(c.id); }catch(e){} }, null, L('Open card', '카드 열기'));
   }
   let MXASK = '';
-  /* a link's buttons: Get files (the link's book / snaps / videos into her Booking folder - 1.2.129, an option, never automatic) and remove */
-  function linkBtns(k, n, c){
-    const can = (() => { try{ return !!SIGNED(); }catch(e){ return false; } })();
-    let b = '';
-    if(c && window.illu && illu.getFilesPlan && /^https?:/i.test(n.u) && !/instagram\.com|tiktok\.com|facebook\.com|youtube\.com|youtu\.be/i.test(n.u)) b += '<button type="button" class="mxg" data-mxget="' + H(n.u) + '" title="' + H(L('Save the book, snaps and videos at this link into her Booking folder (Dropbox)', '이 링크의 북·스냅·영상을 부킹 폴더(Dropbox)에 저장')) + '">' + L('Get files', '파일 받기') + '</button>';
-    if(can && canDrop(n.p)) b += '<button type="button" class="mxx" data-mxdel="' + H(n.p + '|' + n.at) + '" aria-label="' + H(L('Remove this link', '이 링크 지우기')) + '">×</button>';
-    return b;
-  }
-  function getFilesFor(k, u){
-    let c = null; try{ c = bkForKey(k); }catch(e){}
-    if(!c) return;
-    if(!(window.illu && illu.getFilesPlan) || !window.__illuGetFiles){ say(L('Getting files works in the ILLUMENOCTIS program on a computer.', '파일 받기는 컴퓨터의 ILLUMENOCTIS 프로그램에서 됩니다.')); return; }
-    window.__illuGetFiles(u, c.id);
-  }
   const hostOf = u => { try{ return new URL(u).hostname.replace(/^www\./, ''); }catch(e){ return u; } };
   function extras(k, about){
     if(!k) return '';
     const can = signedIn(), a = about || {}, nm = a.nm || info(k).nm || L('her', '모델');
     let c = null; try{ c = bkForKey(k); }catch(e){}
     const st = stateOf(k);
-    let h = '<div class="mx" data-mxk="' + H(k) + '" data-mxab="' + H(JSON.stringify({nm: a.nm || '', ag: a.ag || '', city: a.city || '', country: a.country || ''})) + '">';
+    let h = '<div class="mx" data-mxk="' + H(k) + '">';
     /* Booking */
     h += '<section class="mxs"><h3>' + L('Booking', '부킹') + '</h3>';
     if(c){ let who = ''; try{ const p = PEOPLE.get(c.by); who = p ? p.n : ''; }catch(e){}
-      h += '<p class="mxok">✓ ' + L('On the Booking board', '부킹 보드에 있음') + (who ? ' · ' + L('in charge: ', '담당: ') + H(who) : '') + '</p><button type="button" class="mxb" data-mxopen="' + H(c.id) + '">' + L('Open booking card →', '부킹 카드 열기 →') + '</button>';
-      /* 1.2.129: the team can still vote on a model who went to Booking without one */
-      if(st && st.open) h += '<p class="mxhint">' + H(L('Team Vote open · ' + st.n + ' of ' + st.of + ' have voted', '팀 투표 진행 중 · ' + st.of + '명 중 ' + st.n + '명 투표')) + '</p>';
-      else if(st && !st.o.off) h += '<p class="mxhint">' + H(st.res === 'appr' ? L('Team Vote: Approved ' + st.g + '–' + st.r, '팀 투표: 승인 ' + st.g + '–' + st.r) : L('Team Vote: Cancelled ' + st.g + '–' + st.r + ' — her booking card stays where it is.', '팀 투표: 취소 ' + st.g + '–' + st.r + ' — 부킹 카드는 그대로 둡니다.')) + '</p>';
-      else h += '<button type="button" class="mxb" data-mxvote' + (can ? '' : ' disabled') + '>' + L('Send to Team Vote', '팀 투표로 보내기') + '</button><p class="mxhint">' + L('She stays on the Booking board while the team votes.', '팀이 투표하는 동안 부킹 보드에 그대로 있습니다.') + '</p>'; }
+      h += '<p class="mxok">✓ ' + L('On the Booking board', '부킹 보드에 있음') + (who ? ' · ' + L('in charge: ', '담당: ') + H(who) : '') + '</p><button type="button" class="mxb" data-mxopen="' + H(c.id) + '">' + L('Open booking card →', '부킹 카드 열기 →') + '</button>'; }
     else if(MXASK === k) h += '<div class="mxask"><p>' + H(L('Send ' + nm + ' to the Booking board without a vote? You will be in charge of her card.', nm + ' — 투표 없이 부킹 보드로 보낼까요? 이 카드는 내가 담당합니다.')) +
-      (st && st.open ? ' ' + H(L('Her Team Vote carries on.', '팀 투표는 계속 진행됩니다.')) : '') + '</p><div><button type="button" class="mxb pri" data-mxsendyes>' + L('Send to Booking', '부킹으로 보내기') + '</button><button type="button" class="mxb" data-mxsendno>' + L('Cancel', '취소') + '</button></div></div>';
+      (st && st.open ? ' ' + H(L('Her Team Vote closes as "sent to Booking".', '팀 투표는 "부킹으로 보냄"으로 닫힙니다.')) : '') + '</p><div><button type="button" class="mxb pri" data-mxsendyes>' + L('Send to Booking', '부킹으로 보내기') + '</button><button type="button" class="mxb" data-mxsendno>' + L('Cancel', '취소') + '</button></div></div>';
     else h += '<button type="button" class="mxb pri" data-mxsend' + (can ? '' : ' disabled') + '>' + L('Send to Booking', '부킹으로 보내기') + '</button><p class="mxhint">' + L('Straight to the Booking board — no team vote needed.', '팀 투표 없이 바로 부킹 보드로.') + '</p>';
     h += '</section>';
     /* Notes */
     const ns = notesOf(k);
     h += '<section class="mxs"><h3>' + L('Notes', '메모') + (ns.length ? ' <span>' + ns.length + '</span>' : '') + '</h3>' +
-      (ns.length ? '<ul class="mxl">' + ns.map(n => '<li><div class="mxw">' + disc(n.p, 'xs') + '<b>' + H(pname(n.p)) + '</b><span>' + H(when(n.at)) + '</span><i class="mxsp"></i>' + noteBtns(k, n) + '</div>' + noteBody(k, n) + '</li>').join('') + '</ul>' : '<p class="mxhint">' + L('No notes yet.', '아직 메모가 없습니다.') + '</p>') +
+      (ns.length ? '<ul class="mxl">' + ns.map(n => '<li><div class="mxw">' + disc(n.p, 'xs') + '<b>' + H(pname(n.p)) + '</b><span>' + H(when(n.at)) + '</span>' + (n.p === me() ? '<button type="button" class="mxx" data-mxdel="' + H(n.at) + '" aria-label="' + H(L('Remove this note', '이 메모 지우기')) + '">×</button>' : '') + '</div><p>' + H(n.t) + '</p></li>').join('') + '</ul>' : '<p class="mxhint">' + L('No notes yet.', '아직 메모가 없습니다.') + '</p>') +
       (can ? '<div class="mxin"><textarea data-mxin="note" rows="2" placeholder="' + H(L('Write a note about ' + nm + '…', nm + '에 대한 메모…')) + '"></textarea><button type="button" class="mxb pri" data-mxnote>' + L('Add', '추가') + '</button></div>' : '') + '</section>';
     /* Links */
     const ls = linksOf(k);
     h += '<section class="mxs"><h3>' + L('Links', '링크') + (ls.length ? ' <span>' + ls.length + '</span>' : '') + '</h3>' +
-      (ls.length ? '<ul class="mxl">' + ls.map(n => '<li class="lk"><a href="' + H(n.u) + '" target="_blank" rel="noopener">' + H(n.t || hostOf(n.u)) + ' ↗</a><span class="mxu">' + H(n.t ? hostOf(n.u) + ' · ' : '') + H(pname(n.p)) + '</span>' + linkBtns(k, n, c) + '</li>').join('') + '</ul>' : '<p class="mxhint">' + L('Instagram, another agency, models.com — any page about her or her agency.', '인스타그램, 다른 에이전시, models.com 등 모델이나 에이전시 관련 페이지.') + '</p>') +
-      (ls.length && !c ? '<p class="mxhint">' + L('Once she is on the Booking board, “Get files” can save the book, snaps and videos at a link into her Booking folder.', '부킹 보드에 올라가면 “파일 받기”로 링크의 북·스냅·영상을 부킹 폴더에 저장할 수 있습니다.') + '</p>' : '') +
-      (ls.length && c && !(window.illu && illu.getFilesPlan) ? '<p class="mxhint">' + L('“Get files” (book, snaps and videos into her Booking folder) is in the ILLUMENOCTIS program on a computer.', '“파일 받기”(북·스냅·영상을 부킹 폴더로)는 컴퓨터의 ILLUMENOCTIS 프로그램에 있습니다.') + '</p>' : '') +
+      (ls.length ? '<ul class="mxl">' + ls.map(n => '<li class="lk"><a href="' + H(n.u) + '" target="_blank" rel="noopener">' + H(n.t || hostOf(n.u)) + ' ↗</a><span class="mxu">' + H(n.t ? hostOf(n.u) + ' · ' : '') + H(pname(n.p)) + '</span>' + (n.p === me() ? '<button type="button" class="mxx" data-mxdel="' + H(n.at) + '" aria-label="' + H(L('Remove this link', '이 링크 지우기')) + '">×</button>' : '') + '</li>').join('') + '</ul>' : '<p class="mxhint">' + L('Instagram, another agency, models.com — any page about her or her agency.', '인스타그램, 다른 에이전시, models.com 등 모델이나 에이전시 관련 페이지.') + '</p>') +
       (can ? '<div class="mxin lk"><input data-mxin="url" type="url" inputmode="url" placeholder="https://…"><input data-mxin="lab" type="text" placeholder="' + H(L('Label (optional)', '이름 (선택)')) + '"><button type="button" class="mxb pri" data-mxlink>' + L('Add link', '링크 추가') + '</button></div><p class="mxerr" hidden></p>' : '') + '</section>';
     return h + '</div>';
   }
   window.__illuModelExtras = extras;
-  /* 1.2.129: paint the Booking / Notes / Links block into any card's panel; what is being typed (a note, a link,
-     a note being edited) and the cursor survive the repaint */
-  window.__illuMxPaint = (host, html) => {
-    if(!host || host.__mxh === html) return;
-    const keep = [...host.querySelectorAll('[data-mxin],[data-ntin]')].map(n => ({sel: n.dataset.mxin ? '[data-mxin="' + n.dataset.mxin + '"]' : '[data-ntin="' + CSS.escape(n.dataset.ntin) + '"]', v: n.value, f: n === document.activeElement, a: n.selectionStart || 0, b: n.selectionEnd || 0}));
-    host.__mxh = html; host.innerHTML = html;
-    for(const x of keep){ const n = host.querySelector(x.sel); if(!n) continue; n.value = x.v; if(x.f){ try{ n.focus({preventScroll: true}); n.setSelectionRange(x.a, x.b); }catch(e){} } }
-  };
   document.addEventListener('click', e => {
-    const t = e.target.closest && e.target.closest('.mx [data-mxvote],.mx [data-mxget],.mx [data-mxsend],.mx [data-mxsendyes],.mx [data-mxsendno],.mx [data-mxnote],.mx [data-mxlink],.mx [data-mxdel],.mx [data-mxopen]'); if(!t) return;
+    const t = e.target.closest && e.target.closest('.mx [data-mxsend],.mx [data-mxsendyes],.mx [data-mxsendno],.mx [data-mxnote],.mx [data-mxlink],.mx [data-mxdel],.mx [data-mxopen]'); if(!t) return;
     e.preventDefault(); e.stopPropagation();
     const box = t.closest('.mx'), k = box.dataset.mxk, d = t.dataset;
     if(d.mxsend != null){ if(!signedIn()) return; MXASK = k; changed(); return; }
-    if(d.mxvote != null){ const ab = (() => { try{ return JSON.parse(box.dataset.mxab || 'null'); }catch(err){ return null; } })(); sendVote(k, ab); return; }
-    if(d.mxget){ getFilesFor(k, d.mxget); return; }
     if(d.mxsendno != null){ MXASK = ''; changed(); return; }
-    if(d.mxsendyes != null){ const ab = (() => { try{ return JSON.parse(box.dataset.mxab || 'null'); }catch(err){ return null; } })(); sendBook(k, ab); return; }
+    if(d.mxsendyes != null){ const ab = window.__illuMxAbout ? window.__illuMxAbout() : null; sendBook(k, ab); return; }
     if(d.mxopen){ try{ const fv = document.getElementById('illufv'); if(fv && !fv.hidden){ const x = fv.querySelector('.fvx'); if(x) x.click(); } }catch(err){} try{ bvOpenFor(d.mxopen); }catch(err){} return; }
-    if(d.mxdel){ const i = d.mxdel.indexOf('|'); dropAny(k, d.mxdel.slice(0, i), d.mxdel.slice(i + 1)); return; }
+    if(d.mxdel){ dropMine(k, d.mxdel); return; }
     if(d.mxnote != null){ const i = box.querySelector('[data-mxin="note"]'), v = i && i.value.trim(); if(!v) return; i.value = ''; addNote(k, v); return; }
     if(d.mxlink != null){ const u = box.querySelector('[data-mxin="url"]'), lb = box.querySelector('[data-mxin="lab"]'), er = box.querySelector('.mxerr');
       if(addLink(k, u && u.value, lb && lb.value)){ u.value = ''; if(lb) lb.value = ''; if(er) er.hidden = true; }
@@ -749,7 +654,7 @@
           (needMe(s) ? '<span class="ivbeacon">' + L('Waiting for your vote', '내 투표를 기다리는 중') + '</span>' : '<span class="ivmut sm">' + L('You voted · waiting for ' + (s.of - s.n) + ' more', '투표함 · ' + (s.of - s.n) + '명 남음') + '</span>') + '</div>' +
           '<div class="ivbar">' + s.voters.map((p, i) => '<i class="' + (i < s.n ? 'in' : '') + '"></i>').join('') + '</div>' +
           '<div class="ivtbg"><div>' + rounds(s) + '</div><div><div class="ivph">' + L('Team notes', '팀 메모') + '</div>' +
-          (ns.length ? ns.map(n => '<div class="ivnoteln">' + disc(n.p) + '<div class="ivnb"><div class="mxw"><b>' + H(pname(n.p)) + '</b> <span class="ivmut sm">' + H(when(n.at)) + (n.r ? ' · R' + n.r : '') + '</span><i class="mxsp"></i>' + noteBtns(s.k, n) + '</div>' + noteBody(s.k, n) + '</div></div>').join('') : '<p class="ivmut sm">' + L('No notes yet. Say why you lean one way.', '아직 메모가 없습니다. 어느 쪽인지 이유를 남겨 주세요.') + '</p>') +
+          (ns.length ? ns.map(n => '<div class="ivnoteln">' + disc(n.p) + '<div><b>' + H(pname(n.p)) + '</b> <span class="ivmut sm">' + H(when(n.at)) + (n.r ? ' · R' + n.r : '') + '</span><div>' + H(n.t) + '</div></div></div>').join('') : '<p class="ivmut sm">' + L('No notes yet. Say why you lean one way.', '아직 메모가 없습니다. 어느 쪽인지 이유를 남겨 주세요.') + '</p>') +
           '<div class="ivrow ivnin"><textarea rows="1" data-ivnotein="' + H(s.k) + '" placeholder="' + H(L('Add a note for the team…', '팀에게 메모 남기기…')) + '"></textarea><button type="button" class="ivbtn" data-ivnote="' + H(s.k) + '">' + L('Post', '올리기') + '</button></div></div></div></section>';
       }).join('') + '</div>' : '<div class="ivempty sm">' + L('No ties to break. When a vote ends level, the card comes here for the team to decide together.', '동점 투표가 없습니다. 투표가 동점으로 끝나면 팀이 함께 정하도록 여기로 옵니다.') + '</div>');
   }, () => ties().length || '');
@@ -842,17 +747,6 @@
 .mxu{font-size:11.5px;color:var(--mut);overflow-wrap:anywhere}
 .mx .mxl li,.mx .mxl li *{text-transform:none!important;letter-spacing:normal!important}
 .mxl li.lk .mxx{order:3}
-.mxsp{flex:1}
-.mxw .mxx{margin-left:0}
-.mxe,.mxg{border:1px solid var(--line);background:none;color:var(--mut);border-radius:7px;padding:2px 8px;font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;min-height:26px}
-.mxe:hover,.mxg:hover{color:var(--acc,#5A2C57);border-color:var(--acc,#5A2C57)}
-.mxl li.lk .mxg{order:2;margin-left:auto}
-.mxed{display:block;font-size:11px;color:var(--faint,#9c93a9);margin-top:2px}
-.mxedit{display:flex;flex-direction:column;gap:6px;margin-top:5px}
-.mxedit textarea{width:100%;box-sizing:border-box;border:1px solid var(--acc,#5A2C57);border-radius:8px;padding:7px 9px;font:inherit;font-size:13px;resize:vertical;background:var(--surf,#fff);color:var(--ink)}
-.mxedit div{display:flex;gap:6px}
-.ivnb{flex:1;min-width:0}.ivnb p{margin:2px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
-@media (pointer:coarse){.mxe,.mxg{min-height:34px;padding:4px 11px}.mxx{min-width:34px;min-height:34px}}
 .mxin{display:flex;gap:6px;align-items:flex-end}
 .mxin textarea,.mxin input{flex:1;min-width:0;border:1px solid var(--line);border-radius:9px;padding:7px 9px;font:inherit;font-size:13px;background:var(--surf,#fff);color:var(--ink);resize:vertical}
 .mxin.lk{flex-wrap:wrap}.mxin.lk input[data-mxin="url"]{flex:1 1 100%}
