@@ -11,6 +11,27 @@
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const canPush = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   const sb = () => window.__illuSb;
+  /* Android / computer Chrome: our own "Install app" button (Chrome hides its own in the ⋮ menu) */
+  let DEFER = null;
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); DEFER = e; setTimeout(installBar, 1500); });
+  addEventListener('appinstalled', () => { DEFER = null; const x = document.getElementById('illuinst'); if (x) x.remove(); LS.set('illu.inst.done', '1'); });
+  const android = /Android/i.test(navigator.userAgent);
+  function installBar() {
+    if (standalone || document.getElementById('illuinst') || LS.get('illu.inst.later') > String(Date.now())) return;
+    if (!DEFER && !android) return;
+    const b = document.createElement('div'); b.id = 'illuinst';
+    b.innerHTML = '<div class="wpin"><img src="' + new URL('../icons/icon-192.png', location.href).href + '" alt="" class="wpimg"><div class="wptx"><b>' + L('Install ILLUMÉNOCTIS on this phone', '이 휴대폰에 ILLUMÉNOCTIS 설치') + '</b>' +
+      (DEFER ? '<span>' + L('It gets its own icon and opens full screen, like any app.', '앱처럼 아이콘이 생기고 전체 화면으로 열립니다.') + '</span>'
+             : '<ol class="wpsteps"><li>' + L('Tap <b>⋮</b> at the top right of Chrome', 'Chrome 오른쪽 위 <b>⋮</b>를 누르세요') + '</li><li>' + L('Choose <b>Add to Home screen</b> (or <b>Install app</b>)', '<b>홈 화면에 추가</b>(또는 <b>앱 설치</b>)를 고르세요') + '</li><li>' + L('Choose <b>Install</b>', '<b>설치</b>를 누르세요') + '</li></ol>') +
+      '</div><div class="wpact">' + (DEFER ? '<button type="button" class="wpon" data-inst>' + L('Install app', '앱 설치') + '</button>' : '') + '<button type="button" class="wplater" data-instlater>' + L('Later', '나중에') + '</button></div></div>';
+    b.addEventListener('click', async e => {
+      if (e.target.closest('[data-inst]') && DEFER) { const d = DEFER; DEFER = null; d.prompt(); try { await d.userChoice; } catch (er) {} b.remove(); }
+      if (e.target.closest('[data-instlater]')) { LS.set('illu.inst.later', String(Date.now() + 864e5)); b.remove(); }
+    });
+    document.body.appendChild(b);
+  }
+  window.__illuInstallBar = installBar;
+  setTimeout(installBar, 4000);
   const b64 = s => { const p = '='.repeat((4 - s.length % 4) % 4), r = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(r, c => c.charCodeAt(0)); };
 
   /* an alert opens the page it is about */
@@ -77,6 +98,14 @@
 
   const css = document.createElement('style');
   css.textContent = `
+#illuinst{position:fixed;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));top:calc(10px + env(safe-area-inset-top,0px));z-index:9401;display:flex;justify-content:center;pointer-events:none}
+#illuinst .wpin{pointer-events:auto;max-width:560px;width:100%;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;background:var(--surf,#fff);color:var(--ink,#1b1724);border:1px solid var(--line,#e6e0ea);border-radius:16px;box-shadow:0 18px 44px -16px rgba(40,10,50,.5);padding:14px 14px 12px}
+#illuinst .wpimg{width:40px;height:40px;border-radius:10px}
+#illuinst .wptx{flex:1;min-width:200px;display:flex;flex-direction:column;gap:3px;font-size:13px;line-height:1.45}#illuinst .wptx>b{font-size:14.5px}#illuinst .wptx>span{color:var(--faint,#6c6875)}
+#illuinst .wpsteps{margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:3px}
+#illuinst .wpact{display:flex;gap:8px;align-items:center;margin-left:auto}
+#illuinst button{min-height:42px;border-radius:999px;padding:8px 16px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--line,#e6e0ea);background:var(--surf,#fff);color:inherit}
+#illuinst .wpon{background:var(--acc,#5A2C57);border-color:var(--acc,#5A2C57);color:#fff}
 #illuwp{position:fixed;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:9400;display:flex;justify-content:center;pointer-events:none}
 #illuwp .wpin{pointer-events:auto;max-width:560px;width:100%;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;background:var(--surf,#fff);color:var(--ink,#1b1724);border:1px solid var(--line,#e6e0ea);border-radius:16px;box-shadow:0 18px 44px -16px rgba(40,10,50,.5);padding:14px 14px 12px}
 #illuwp .wpico{font-size:22px;line-height:1}
