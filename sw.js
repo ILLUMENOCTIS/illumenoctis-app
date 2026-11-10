@@ -5,7 +5,22 @@ self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 /* Android Chrome offers "Install app" only when the app can open without a connection, so the start
    page is kept and shown when there is no signal; everything else always comes fresh from the internet. */
 const START = 'illu-start-v1';
+/* stored photographs (/_blob/<id>): fetched from the shared database with the person's sign-in, kept on the phone */
+self.window = self; try { importScripts('config.js'); } catch (e) {}
+async function blob(id) {
+  const kept = await caches.open('illu-blob'), hit = await kept.match('/_blob/' + id); if (hit) return hit;
+  if (!/^[A-Za-z0-9._-]{4,120}$/.test(id) || id.startsWith('bk.')) return new Response('', { status: 404 });
+  const t = await (await caches.open('illu-auth')).match('/__illu_token'); const tk = t ? await t.text() : '';
+  const C = self.ILLU_CONFIG || {}; if (!tk || !C.url) return new Response('', { status: 401 });
+  const r = await fetch(C.url + '/storage/v1/object/authenticated/assets/' + encodeURIComponent(id), { headers: { Authorization: 'Bearer ' + tk, apikey: C.key } });
+  if (!r.ok) return new Response('', { status: r.status });
+  const out = new Response(await r.blob(), { headers: { 'content-type': r.headers.get('content-type') || 'application/octet-stream', 'cache-control': 'max-age=31536000' } });
+  try { await kept.put('/_blob/' + id, out.clone()); } catch (e) {}
+  return out;
+}
 self.addEventListener('fetch', e => {
+  const u = new URL(e.request.url);
+  if (u.origin === self.location.origin && u.pathname.startsWith('/_blob/')) { e.respondWith(blob(decodeURIComponent(u.pathname.slice(7)))); return; }
   if (e.request.mode !== 'navigate') return;
   e.respondWith(fetch(e.request).then(r => {
     if (r.ok && new URL(e.request.url).pathname.endsWith('/index.html')) { const c = r.clone(); caches.open(START).then(x => x.put(e.request, c)).catch(() => {}); }
