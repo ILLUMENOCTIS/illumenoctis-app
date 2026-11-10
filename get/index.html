@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ILLUMÉNOCTIS Download</title>
+<link rel="manifest" href="../manifest.webmanifest">
+<meta name="theme-color" content="#5A2C57">
+<link rel="apple-touch-icon" href="../icons/apple-180.png">
+<link rel="icon" type="image/png" href="../icons/icon-192.png">
+<style>
+:root{--bg:#F6F2F7;--surf:#fff;--ink:#1B1724;--mut:#6C6875;--line:#E6E0EA;--acc:#5A2C57;--acc2:#7A3E76;--gold:#E3BE72;--wash:#F3E8F2;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#141117;--surf:#1D1921;--ink:#EEEAF2;--mut:#A49DAD;--line:#36303C;--acc:#C79BC2;--acc2:#D9B4D4;--wash:#2E2331;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif;padding-block:calc(28px + env(safe-area-inset-top,0px)) calc(40px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header{display:flex;gap:16px;align-items:center}
+header img{width:72px;height:72px;border-radius:18px}
+h1{margin:0;font-size:26px;letter-spacing:.14em;font-weight:300}
+.ver{color:var(--mut);font-size:13px}
+.ko{display:block;color:var(--mut);font-size:.92em}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.card.me{border-color:var(--acc);box-shadow:0 0 0 2px color-mix(in srgb,var(--acc) 30%,transparent)}
+.card h2{margin:0;font-size:17px;display:flex;align-items:center;gap:8px}
+.tag{font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;background:var(--wash);color:var(--acc);letter-spacing:.04em}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;border-radius:999px;padding:10px 18px;font:inherit;font-weight:700;text-decoration:none;cursor:pointer;border:1px solid var(--acc);background:var(--acc);color:#fff}
+.btn.sec{background:none;color:var(--acc)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:5px}
+.note{font-size:13px;color:var(--mut)}
+code{font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 5px;word-break:break-all}
+.k{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:0 6px;font-size:12px;background:var(--bg)}
+footer{color:var(--mut);font-size:12.5px;text-align:center}
+@media (max-width:640px){.grid{grid-template-columns:minmax(0,1fr)}h1{font-size:21px}header img{width:58px;height:58px}}
+</style>
+</head>
+<body>
+<main>
+  <header><img src="../icons/icon-192.png" alt=""><div><h1>ILLUMÉNOCTIS</h1><div class="ver">MDI Model Management · version 1.2.128</div></div></header>
+
+  <div class="grid" id="grid">
+    <section class="card" data-os="ios">
+      <h2>iPhone · iPad <span class="tag">FREE</span></h2>
+      <ol>
+        <li>Open this page in <b>Safari</b>.<span class="ko">이 페이지를 <b>Safari</b>에서 여세요.</span></li>
+        <li>Tap <span class="k">Open the app</span> below, then <b>Share</b> <span class="k">⬆︎</span> → <b>Add to Home Screen</b>.<span class="ko">아래 <b>앱 열기</b>를 누른 뒤 <b>공유</b> → <b>홈 화면에 추가</b>.</span></li>
+        <li>Open ILLUMÉNOCTIS from the Home Screen, sign in, and tap <b>Turn on alerts</b>.<span class="ko">홈 화면의 ILLUMÉNOCTIS를 열고 로그인한 뒤 <b>알림 켜기</b>를 누르세요.</span></li>
+      </ol>
+      <div class="btns"><a class="btn" href="../index.html">Open the app · 앱 열기</a></div>
+      <p class="note">Alerts need iOS 16.4 or newer. · 알림은 iOS 16.4 이상에서 됩니다.</p>
+    </section>
+
+    <section class="card" data-os="android">
+      <h2>Android <span class="tag">FREE</span></h2>
+      <div class="btns"><button class="btn" id="inst" hidden>Install app · 앱 설치</button><a class="btn sec" href="../index.html">Open the app · 앱 열기</a></div>
+      <ol id="andsteps">
+        <li>Open this page in <b>Chrome</b>.<span class="ko"><b>Chrome</b>에서 여세요.</span></li>
+        <li>Tap <b>Install app</b> (or Chrome menu <span class="k">⋮</span> → <b>Install app</b>).<span class="ko"><b>앱 설치</b>를 누르세요 (또는 Chrome 메뉴 ⋮ → <b>앱 설치</b>).</span></li>
+        <li>Open ILLUMÉNOCTIS, sign in, and tap <b>Turn on alerts</b>.<span class="ko">앱을 열고 로그인한 뒤 <b>알림 켜기</b>.</span></li>
+      </ol>
+    </section>
+
+    <section class="card" data-os="win">
+      <h2>Windows</h2>
+      <div class="btns"><a class="btn" href="https://github.com/ILLUMENOCTIS/illumenoctis-app/releases/latest/download/ILLUMENOCTIS-Setup.exe">Download for Windows · 다운로드</a></div>
+      <ol>
+        <li>Open <b>ILLUMENOCTIS-Setup.exe</b>.<span class="ko">받은 파일을 여세요.</span></li>
+        <li>If Windows shows “Windows protected your PC”, click <b>More info</b> → <b>Run anyway</b>.<span class="ko">“Windows의 PC 보호” 창이 뜨면 <b>추가 정보</b> → <b>실행</b>.</span></li>
+      </ol>
+      <p class="note">The full program: Booking folders, Dropbox, Hiworks, the crawler. Updates itself. · 전체 프로그램, 자동 업데이트.</p>
+    </section>
+
+    <section class="card" data-os="mac">
+      <h2>Mac</h2>
+      <div class="btns"><a class="btn" href="https://github.com/ILLUMENOCTIS/illumenoctis-app/releases/latest/download/ILLUMENOCTIS-mac-AppleSilicon.zip">Apple Silicon (M1–M4)</a><a class="btn sec" href="https://github.com/ILLUMENOCTIS/illumenoctis-app/releases/latest/download/ILLUMENOCTIS-mac-Intel.zip">Intel</a></div>
+      <ol>
+        <li>Unzip, then drag <b>ILLUMENOCTIS</b> into <b>Applications</b>.<span class="ko">압축을 풀고 <b>응용 프로그램</b> 폴더로 옮기세요.</span></li>
+        <li>The first time, <b>right-click</b> it → <b>Open</b> → <b>Open</b>.<span class="ko">처음 한 번은 <b>오른쪽 클릭</b> → <b>열기</b> → <b>열기</b>.</span></li>
+        <li>If the Mac still says it can't be opened: <b>System Settings</b> → <b>Privacy &amp; Security</b> → <b>Open Anyway</b>.<span class="ko">그래도 열리지 않으면: <b>시스템 설정</b> → <b>개인정보 보호 및 보안</b> → <b>그래도 열기</b>.</span></li>
+        <li>If it says the app “is damaged”: open <b>Terminal</b> and run <code>xattr -cr /Applications/ILLUMENOCTIS.app</code>, then open it again.<span class="ko">“손상되었습니다”라고 나오면: <b>터미널</b>에서 위 명령을 실행한 뒤 다시 여세요.</span></li>
+      </ol>
+      <p class="note"> Apple menu → About This Mac shows “Chip: Apple M…” for Apple Silicon. · 이 Mac에 관하여 → 칩이 “Apple M…”이면 Apple Silicon.</p>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>In any browser · 브라우저에서 바로</h2>
+    <div class="btns"><a class="btn sec" href="../index.html">Open ILLUMÉNOCTIS · 열기</a></div>
+    <p class="note">On a computer, Chrome and Edge can also install it as an app (the install icon in the address bar). · 컴퓨터의 Chrome·Edge에서도 주소창의 설치 아이콘으로 앱처럼 설치할 수 있습니다.</p>
+  </section>
+  <footer>https://illumenoctis.github.io/illumenoctis-app/</footer>
+</main>
+<script>
+(function(){
+  var ua = navigator.userAgent, os = /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'ios' : /Android/i.test(ua) ? 'android' : /Windows/i.test(ua) ? 'win' : /Macintosh/i.test(ua) ? 'mac' : '';
+  var g = document.getElementById('grid'), me = os && g.querySelector('[data-os="' + os + '"]');
+  if (me) { me.classList.add('me'); g.prepend(me); var t = document.createElement('span'); t.className = 'tag'; t.textContent = 'THIS DEVICE · 이 기기'; me.querySelector('h2').appendChild(t); }
+  var deferred = null, btn = document.getElementById('inst');
+  addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferred = e; btn.hidden = false; });
+  btn.addEventListener('click', function(){ if (!deferred) return; deferred.prompt(); deferred.userChoice.then(function(){ deferred = null; btn.hidden = true; }); });
+})();
+</script>
+</body>
+</html>
