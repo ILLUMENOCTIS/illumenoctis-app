@@ -43,10 +43,35 @@
     if (error) { say(errText(error), true); return; }
     let ppl = (data || []).map(p => p.name);
     if (SENT.length) { const s = new Set(SENT.map(n => n.toLowerCase())); const f = ppl.filter(n => s.has(n.toLowerCase())); if (f.length) ppl = f; }
-    box.innerHTML = '<h2>' + H(L('Team Vote', '팀 투표')) + '</h2><p class="msg">' + H(L('Who are you?', '누구신가요?')) + '</p>' +
-      '<div class="people">' + ppl.map(n => '<button type="button" data-nm="' + H(n) + '"><span class="av">' + H(n.slice(0, 1).toUpperCase()) + '</span>' + H(n) + '</button>').join('') + '</div>';
-    box.querySelectorAll('[data-nm]').forEach(b => b.addEventListener('click', () => askPin(b.dataset.nm, ppl.length > 1)));
-    if (ppl.length === 1) askPin(ppl[0], false);
+    /* 1.2.138 (user, 11 Nov 2026: "When I share a vote link, I also want to be able to put my USER name to cast a
+       vote"): type your user name and PIN on one screen; the names below fill the name in with one tap */
+    const all = (data || []).map(p => p.name);
+    box.innerHTML = '<h2>' + H(L('Team Vote', '팀 투표')) + '</h2>' +
+      '<form class="pin" id="uf"><label for="un">' + H(L('Your user name', '사용자 이름')) + '</label>' +
+      '<input id="un" class="uname" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="' + H(L('e.g. DANIEL', '예: DANIEL')) + '">' +
+      '<label for="pin">' + H(L('Your PIN (the password you sign in with)', 'PIN (로그인 비밀번호)')) + '</label>' +
+      '<input id="pin" type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false">' +
+      '<p class="msg" id="perr">' + H(L('You type it once on this phone.', '이 기기에서는 한 번만 입력합니다.')) + '</p>' +
+      '<button class="pri" id="go" type="submit">' + H(L('Sign in and vote', '로그인하고 투표')) + '</button></form>' +
+      (ppl.length ? '<p class="msg">' + H(L('Or tap your name', '또는 이름을 누르세요')) + '</p><div class="people">' + ppl.map(n => '<button type="button" data-nm="' + H(n) + '"><span class="av">' + H(n.slice(0, 1).toUpperCase()) + '</span>' + H(n) + '</button>').join('') + '</div>' : '');
+    box.querySelectorAll('[data-nm]').forEach(b => b.addEventListener('click', () => { $('#un').value = b.dataset.nm; box.querySelectorAll('[data-nm]').forEach(x => x.classList.toggle('on', x === b)); $('#pin').focus(); }));
+    const last = LS.get('illum.vname'); if (ppl.length === 1 && SENT.length) $('#un').value = ppl[0]; else if (last && all.some(n => n.toLowerCase() === last.toLowerCase())) $('#un').value = last;
+    setTimeout(() => ($('#un').value ? $('#pin') : $('#un')).focus(), 30);
+    $('#uf').addEventListener('submit', async e => {
+      e.preventDefault();
+      const typed = $('#un').value.trim(), pw = $('#pin').value, er = $('#perr');
+      const name = all.find(n => n.toLowerCase() === typed.toLowerCase());
+      if (!typed) { $('#un').focus(); return; }
+      if (!name) { er.className = 'msg err'; er.textContent = L('No team member is called "' + typed + '". Check the spelling.', '"' + typed + '" 이름의 팀원이 없습니다. 철자를 확인하세요.'); $('#un').select(); return; }
+      if (!pw) { $('#pin').focus(); return; }
+      $('#go').disabled = true; er.className = 'msg'; er.textContent = L('Signing in…', '로그인 중…');
+      const { data: em, error: e1 } = await sb.rpc('login_email', { p_name: name });
+      if (e1 || !em) { er.className = 'msg err'; er.textContent = errText(e1 || 'Invalid login'); $('#go').disabled = false; return; }
+      const { data: ss, error: e2 } = await sb.auth.signInWithPassword({ email: em, password: pw });
+      if (e2) { er.className = 'msg err'; er.textContent = errText(e2); $('#go').disabled = false; $('#pin').select(); return; }
+      LS.set('illum.vname', name);
+      start(ss.session);
+    });
   }
   function askPin(name, canBack) {
     box.innerHTML = '<h2>' + H(L('Hi ' + name, name + '님, 안녕하세요')) + '</h2>' +

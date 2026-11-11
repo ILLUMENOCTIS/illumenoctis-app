@@ -41,3 +41,5 @@ h2{font-size:18px;margin:6px 0 0;text-align:center}
 .prog{display:flex;gap:4px;justify-content:center;flex-wrap:wrap}.prog i{width:22px;height:6px;border-radius:3px;background:var(--line)}.prog i.in{background:var(--acc)}
 .foot{display:flex;flex-direction:column;gap:6px;margin-top:6px}
 .sec{display:block;text-align:center;text-decoration:none;border:1px solid var(--line);border-radius:12px;padding:12px;color:var(--ink);font-weight:600;background:var(--panel)}
+.pin input.uname{letter-spacing:.02em;font-size:18px;text-align:left}
+.people button.on{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc) inset}
