@@ -132,6 +132,8 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
       } catch (e) {} finally { busy = false; }
     }
     window.__illuUpdateCheck = check;
+    /* tell the service worker which version runs, so it drops the files it kept for older ones */
+    try { navigator.serviceWorker && navigator.serviceWorker.ready.then(reg => { const w = navigator.serviceWorker.controller || reg.active; if (w && window.ILLU_WEB_VERSION) w.postMessage({ illuVer: String(window.ILLU_WEB_VERSION) }); }); } catch (e) {}
     setInterval(check, 5 * 60 * 1000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
     addEventListener('online', check); addEventListener('pageshow', check);

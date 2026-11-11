@@ -1,5 +1,5 @@
 /* ILLUMÉNOCTIS service worker: shows the push alerts (votes, the 7:00 arrivals / departures) and opens
-   the app where the alert points. It does not cache pages, so the app is always the newest version. */
+   the app where the alert points. Pages are never kept (always the newest); the app's versioned files are (see FILES). */
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 /* Android Chrome offers "Install app" only when the app can open without a connection, so the start
@@ -18,9 +18,26 @@ async function blob(id) {
   try { await kept.put('/_blob/' + id, out.clone()); } catch (e) {}
   return out;
 }
+/* 1.2.139 (user, 11 Nov 2026: "the app starts quickly"): every file of the app carries its version (?v=1.2.139), so a
+   file with a version never changes - it is kept on the phone and opened from there next time instead of being
+   downloaded again. A new version has new addresses, so it always comes fresh; copies of older versions are removed
+   when the app tells which version it runs. */
+const FILES = 'illu-files';
+async function versioned(req) {
+  const c = await caches.open(FILES), hit = await c.match(req);
+  if (hit) return hit;
+  const r = await fetch(req);
+  if (r.ok && r.type === 'basic') { try { await c.put(req, r.clone()); } catch (e) {} }
+  return r;
+}
+self.addEventListener('message', e => {
+  const v = e.data && e.data.illuVer; if (!v || !/^[\d.]+$/.test(v)) return;
+  e.waitUntil((async () => { const c = await caches.open(FILES); for (const k of await c.keys()) { const kv = new URL(k.url).searchParams.get('v'); if (kv && kv !== v) await c.delete(k); } })());
+});
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
   if (u.origin === self.location.origin && u.pathname.startsWith('/_blob/')) { e.respondWith(blob(decodeURIComponent(u.pathname.slice(7)))); return; }
+  if (e.request.method === 'GET' && u.origin === self.location.origin && /^[\d.]+$/.test(u.searchParams.get('v') || '') && /\.(js|css|webmanifest)$/.test(u.pathname)) { e.respondWith(versioned(e.request)); return; }
   if (e.request.mode !== 'navigate') return;
   e.respondWith(fetch(e.request).then(r => {
     if (r.ok && new URL(e.request.url).pathname.endsWith('/index.html')) { const c = r.clone(); caches.open(START).then(x => x.put(e.request, c)).catch(() => {}); }
