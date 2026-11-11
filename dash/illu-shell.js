@@ -820,6 +820,8 @@ html[data-theme="dark"] .shtoday .shad.d,html[data-theme="dim"] .shtoday .shad.d
     /* the clocks moved to Today: on every other page they start folded (the clock button in the top bar still shows them) - set once */
     try{ if(!localStorage.getItem('illu.shck')){ localStorage.setItem('illu.shck', '1'); const ab = document.getElementById('abck'); if(ab && !B.classList.contains('ckmin')) ab.click(); } }catch(e){}
     showToday();
+    /* 1.2.139: the current design is drawn - take the start-up screen away (index.html head) */
+    requestAnimationFrame(() => requestAnimationFrame(() => { document.documentElement.classList.add('shready'); setTimeout(() => { const b = document.getElementById('illuboot'); if(b) b.remove(); }, 400); }));
     /* the data arrives a little after the page: draw Today again as it lands */
     [800, 2500, 6000, 12000].forEach(t => setTimeout(() => { if(showing) renderToday(); }, t));
   }
