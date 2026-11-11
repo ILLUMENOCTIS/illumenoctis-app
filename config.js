@@ -7,4 +7,4 @@ window.ILLU_CONFIG = {
 };
 
 window.ILLU_VAPID = 'BHpg90vHWNY45e9h8ZewT6uEvvrjwYqcY59lCFrBRE8p4p5CGWfcf_fktG9TAFGYtbERHqZdXVcyOAYR6kGgv8g';
-window.ILLU_WEB_VERSION = '1.2.140';
+window.ILLU_WEB_VERSION = '1.2.141';

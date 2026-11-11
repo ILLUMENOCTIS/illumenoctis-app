@@ -50,6 +50,7 @@ function errText(e) {
 }
 
 async function show(mode) {
+  document.documentElement.classList.add('gform');
   const { data: list, error } = await sb.rpc('list_people');
   const ppl = error ? [] : (list || []);
   if (!mode) mode = ppl.length ? 'in' : 'new';
@@ -184,7 +185,7 @@ async function enter(session) {
     LS.set('illum.me', session.user.id);
     location.replace('dash/index.html');
   } catch (e) {
-    entering = false;
+    entering = false; document.documentElement.classList.add('gform');
     $('#box').innerHTML = '<p class="err">' + esc(errText(e)) + '</p><div class="acts"><span></span><button type="button" class="btn pri" id="retry">OK</button></div>';
     $('#retry').addEventListener('click', () => location.reload());
   }

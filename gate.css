@@ -36,3 +36,16 @@ input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--wash
 .btn.pri{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
 .btn:disabled{opacity:.55;cursor:default}
 .lnk{border:0;background:none;color:var(--acc);font:13.5px var(--sans);cursor:pointer;padding:0}
+
+/* 1.2.141 (user, 12 Nov 2026: "I saw the old version while loading"): a signed-in start goes straight through this page -
+   it shows the same start-up screen as the app (no card in between); the card shows only to sign in or after an error */
+#illuboot{position:fixed;left:0;top:0;width:100vw;height:100vh;height:100dvh;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:#F6F3F8}
+#illuboot b{font:600 22px/1 Inter,system-ui,-apple-system,sans-serif;letter-spacing:.32em;color:#211C26;padding-left:.32em}
+#illuboot i{display:block;width:140px;height:3px;border-radius:2px;background:#E7DDE8;overflow:hidden;position:relative}
+#illuboot i::after{content:"";position:absolute;inset:0;width:40%;border-radius:2px;background:#5A2C57;animation:illubar 1.1s ease-in-out infinite}
+@keyframes illubar{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+html[data-theme="dim"] #illuboot{background:#26222E}html[data-theme="dim"] #illuboot b{color:#EEE9F3}html[data-theme="dim"] #illuboot i{background:#463E51}html[data-theme="dim"] #illuboot i::after{background:#CDA3CA}
+html[data-theme="sepia"] #illuboot{background:#E9DFCE}html[data-theme="sepia"] #illuboot b{color:#2B2117}html[data-theme="sepia"] #illuboot i{background:#D6C8B1}
+@media (prefers-reduced-motion:reduce){#illuboot i::after{animation:none;width:100%}}
+html:not(.gform) .gate{visibility:hidden}
+html.gform #illuboot{display:none}
