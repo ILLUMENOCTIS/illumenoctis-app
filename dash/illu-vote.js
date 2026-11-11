@@ -633,7 +633,7 @@
     const TL = {newfaces: L('New faces', '뉴 페이스'), development: L('Development', '디벨롭먼트'), main: L('Main', '메인'), direct: L('Direct', '다이렉트')};
     const place = [a.city || i.city, a.country || i.country].filter(Boolean).join(', ');
     const meta = [place, sex === 'F' ? L('Female', '여성') : sex === 'M' ? L('Male', '남성') : '', TL[tier] || (tier && tier !== 'unlabelled' ? tier : '')].filter(Boolean).join(' · ');
-    let pic = ''; try{ const id = typeof PICS !== 'undefined' && PICS.get(k); const src = id ? picURL(id) : (F.photo || ''); if(src) pic = '<img src="' + H(src) + '" alt="" referrerpolicy="no-referrer" decoding="async" loading="lazy">'; }catch(e){}
+    let pic = ''; try{ const id = typeof PICS !== 'undefined' && PICS.get(k); let src = id ? picURL(id) : (F.photo || ''); if(src && window.__illuSmall && /^https?:/i.test(src)) src = window.__illuSmall(src, 300); if(src) pic = '<img src="' + H(src) + '" alt="" referrerpolicy="no-referrer" decoding="async" loading="lazy">'; }catch(e){}
     const href = a.href || i.href || '';
     const ag = a.ag || i.ag || '';
     const agH = ag ? (href ? '<a class="pnagl" href="' + H(href) + '" target="_blank" rel="noopener" title="' + H(L('Her page on the agency’s site', '에이전시 사이트의 모델 페이지')) + '">' + H(ag) + ' ↗</a>'
@@ -755,7 +755,7 @@
     if(g.gty === 'cond') rows += cell(1, L('Per month', '월'), '<span class="gscur">₩</span>' + inp('cgm', g.cgm, L('Full guarantee', '월 개런티 전액'), ' inputmode="numeric"')) +
       cell(1, L('If', '조건'), inp('jobs', g.jobs, '5', ' inputmode="numeric" class="gsjobs"') + '<span class="gsunit">' + L('full-day jobs / 30 days', '풀데이 잡 / 30일') + '</span>');
     if(g.gty === 'no') rows += '<div class="gscell none"><small>' + L('Guarantee', '개런티') + '</small><span class="gsval">' + L('None. Nothing to fill in.', '없음. 입력할 것이 없습니다.') + '</span></div>';
-    rows += cell(1, L('Stay', '체류'), inp('days', g.days, L('Days', '일'), ' inputmode="numeric" class="gsdays" style="width:' + (Math.max(2, (g.days || L('Days', '일')).length) + 0.6) + 'ch"') + '<span class="gsunit">' + L('days', '일') + '</span>',
+    rows += cell(1, L('Stay', '체류'), inp('days', g.days, '–', ' inputmode="numeric" class="gsdays" style="width:' + (Math.max(2, (g.days || '–').length) + 0.6) + 'ch"') + '<span class="gsunit">' + L('days', '일') + '</span>',
       '<span class="gschips">' + ['60', '90'].map(d => '<button type="button" data-gdays="' + d + '" aria-pressed="' + (g.days === d) + '"' + dis + '>' + d + L(' days', '일') + '</button>').join('') + '</span>');
     rows += cell(0, L('Available', '가능'), inp('avf', g.avf, L('e.g. mid-Dec or 15/12', '예: 12월 중순, 15/12'), ' maxlength="40"'), '<span class="gsestn">' + L('Rough estimate. Not in the contract.', '대략적인 예상. 계약서에는 들어가지 않습니다.') + '</span>', 'est');
     let ex = '';
@@ -1267,13 +1267,13 @@
     const doneH = vd.length ? '<div class="ivgrid tight ivtg">' + vd.slice(0, vn).map(st => '<div class="ivcw">' + mcard(st.k) + votedCap(st) + offBox(st.k, st) + '</div>').join('') + '</div>' +
         (vd.length > vn ? '<button type="button" class="ivmore" data-ivset="vn=' + (vn + 24) + '">' + L('Show ' + Math.min(24, vd.length - vn) + ' more', Math.min(24, vd.length - vn) + '장 더 보기') + '</button>' : '')
       : '<div class="ivempty sm">' + L('You have not voted on anything yet. Vote on a card and it moves here.', '아직 투표한 카드가 없습니다. 투표하면 카드가 여기로 옵니다.') + '</div>';
-    return '<section class="ivtoday' + (all.length ? ' glow' : '') + '"><div class="ivrow ivth"><span class="ivbeacon dot"></span><h3>' + L('Waiting for your vote', '내 투표를 기다리는 카드') + '</h3><span class="ivpill gold">' + all.length + '</span><span class="ivsp"></span>' +
-      /* a shortcut straight to the Team Vote board (user, 8 Nov 2026) */
-      /* 1.2.108 (user, 8 Nov 2026): when the Vote Now banner shows, the Team Vote shortcut sits on it as "Go to Team Vote" */
+    /* 1.2.138 (user, 11 Nov 2026: "this part is taking up too much space. Don't need that Waiting for your vote. I already
+       have the golden bar telling me. the [team] description should be able to viewed by clicking/touching"):
+       one row - the two tabs (they carry the counts), an ⓘ that opens the team note, Share vote link, Team Vote */
+    return '<section class="ivtoday' + (all.length ? ' glow' : '') + '"><div class="ivrow ivth ivth2">' + subTabs('tsub', tab, all.length, vd.length) + '<span class="ivsp"></span>' +
+      '<details class="ivinfo"><summary title="' + H(L('How the Team Vote works', '팀 투표 방법')) + '" aria-label="' + H(L('How the Team Vote works', '팀 투표 방법')) + '">i</summary><p class="ivmut sm ivtnote">' + L('Team: ', '팀: ') + H(people().map(pname).join(', ')) + ' · ' + L('the majority decides; your vote stays private until everyone has voted.', '다수결 · 모두 투표할 때까지 내 선택은 나만 봅니다.') + (mineDone ? ' · ' + L('<b>' + mineDone + '</b> you voted on are waiting for the others.', '내가 투표한 <b>' + mineDone + '</b>건은 다른 사람을 기다립니다.') : '') + '</p></details>' +
       '<button type="button" class="ivbtn ivshare ivtshare" data-ivshare>' + SHAREI + L('Share vote link', '투표 링크 보내기') + '</button>' +
       (lateN ? '' : '<button type="button" class="ivgo" data-ivgo="team">' + L('Team Vote', '팀 투표') + ' <span aria-hidden="true">→</span></button>') + '</div>' +
-      '<p class="ivmut sm ivtnote">' + L('Team: ', '팀: ') + H(people().map(pname).join(', ')) + ' · ' + L('the majority decides; your vote stays private until everyone has voted.', '다수결 · 모두 투표할 때까지 내 선택은 나만 봅니다.') + (mineDone ? ' · ' + L('<b>' + mineDone + '</b> you voted on are waiting for the others.', '내가 투표한 <b>' + mineDone + '</b>건은 다른 사람을 기다립니다.') : '') + '</p>' +
-      subTabs('tsub', tab, all.length, vd.length) +
       (lateN ? '<div class="ivnowb"><span class="ivnbi">' + CLKI + '</span><div class="ivnbt"><b>' + L('Vote Now — ' + lateN + (lateN === 1 ? ' card needs' : ' cards need') + ' you', '지금 투표 — ' + lateN + '장이 내 투표를 기다립니다') + '</b><span>' + L('They have waited 3 hours or more. The team can’t decide without you.', '3시간 이상 기다렸습니다. 내 투표가 있어야 팀이 정할 수 있습니다.') + '</span></div><div class="ivnbb"><button type="button" data-ivset="tf=now">' + L('Show them', '보기') + '</button><button type="button" data-ivgo="team">' + L('Go to Team Vote', '팀 투표로 가기') + ' <span aria-hidden="true">→</span></button></div></div>' : '') +
       (tab === 'done' ? doneH : (all.length ? '<div class="ivtbar"><div class="ivtfs">' + chip('all', L('All', '전체')) + chip('now', L('Vote Now', '지금 투표')) + chip('today', L('Today', '오늘')) + chip('week', L('This week', '이번 주')) + chip('older', L('Older', '이전')) + '</div><span class="ivsp"></span>' +
         '<select class="ivts" data-ivsort aria-label="' + H(L('Order', '순서')) + '">' + opt('urg', L('Most urgent first', '급한 순')) + opt('new', L('Newest first', '최신 순')) + opt('old', L('Oldest first', '오래된 순')) + '</select></div>' : '') +
@@ -1538,6 +1538,13 @@ p.pnag{cursor:default}
 /* pages */
 .ivpage{padding:10px 0 40px;display:flex;flex-direction:column;gap:14px;font-family:var(--sans,Inter,system-ui,sans-serif);color:var(--ink)}
 .ivpage[hidden]{display:none}
+.ivth2{flex-wrap:wrap;gap:8px;align-items:center}
+.ivth2 .ivsub{margin:0}
+.ivinfo{position:relative}
+.ivinfo>summary{list-style:none;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;cursor:pointer;font:italic 700 14px/1 Georgia,serif;color:var(--mut);background:var(--surf)}
+.ivinfo>summary::-webkit-details-marker{display:none}
+.ivinfo[open]>summary{border-color:var(--acc);color:var(--acc)}
+.ivinfo>p{position:absolute;z-index:30;right:0;top:36px;width:min(320px,80vw);margin:0;padding:12px 14px;background:var(--surf);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(20,10,30,.18)}
 .ivhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .ivbig{font-size:30px;font-weight:300;line-height:1;color:var(--acc)}
 .ivkick{font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--faint)}
@@ -1803,4 +1810,71 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
   window.__illuFitGrids = () => { zRead(); fitGrids(); };
   /* a photo that does not load leaves the plain tile, not a broken-image icon */
   document.addEventListener('error', e => { const t = e.target; if(t && t.tagName === 'IMG' && t.closest && t.closest('.pnth, .ivdet')) t.remove(); }, true);
+})();
+/* 1.2.138 (user, 11 Nov 2026: "I'm unable click&drag&drop, copy/paste photos, load a saved photo from my device
+   onto the main photo of the card. This was used to be available"): on the cards outside Suggestiones and the
+   Directory (Today, Team Vote, My Favorites, Approved, Tie-breaker, Cancelled) a photo dropped on the card's
+   picture was ignored, and since 1.2.133 a click opens the photo viewer, so there was no way to pick a file.
+   - drop a picture file on the card's photo: it becomes her card photo (the same saved photo as everywhere);
+   - "Change photo" on the photo (shown on hover, always on touch screens) opens the device's picker;
+   - paste (Ctrl+V) while pointing at the photo keeps working;
+   - the booking window's photo also takes a paste while the pointer is on it. */
+(function(){
+  const own = el => !!(el && el.closest && !el.closest('.d2card') && (el.closest('#lmain') || el.closest('#pane-arr')));   // those two have their own handlers (the open card has none)
+  const cellOf = t => { const c = t && t.closest ? (t.closest('.uc .litpic[data-pic]') || t.closest('.d2card .litpic[data-pic]')) : null; return c && !own(c) ? c : null; };
+  const signed = () => { try{ if(!SIGNED()){ nudgeSignIn(); return false; } }catch(e){} return true; };
+  const put = (k, f) => { if(!k || !f || !/^image\//i.test(f.type || '')) return false; if(!signed()) return false; try{ setPic(k, f); return true; }catch(e){ return false; } };
+  document.addEventListener('dragover', e => { const c = cellOf(e.target); if(!c) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; c.classList.add('over'); }, true);
+  document.addEventListener('dragleave', e => { const c = cellOf(e.target); if(c) c.classList.remove('over'); }, true);
+  document.addEventListener('drop', e => {
+    const c = cellOf(e.target); if(!c) return;
+    e.preventDefault(); e.stopPropagation(); c.classList.remove('over');
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    put(c.dataset.pic, f);
+  }, true);
+  /* the Change photo button: added to every vote card photo as cards are drawn */
+  const CAM = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+  function addBtns(){
+    document.querySelectorAll('.uc .ucimg').forEach(im => {
+      if(im.querySelector(':scope > .ucchg') || own(im)) return;
+      const c = im.querySelector('.litpic[data-pic]'); if(!c) return;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'ucchg'; b.dataset.ucchg = c.dataset.pic;
+      const ko = typeof LANG !== 'undefined' && LANG === 'ko';
+      b.title = ko ? '사진 바꾸기 — 기기에서 사진 선택 (사진을 끌어다 놓거나 붙여넣어도 됩니다)' : 'Change photo — choose one from this device (or drop / paste a picture on it)';
+      b.setAttribute('aria-label', ko ? '사진 바꾸기' : 'Change photo');
+      b.innerHTML = CAM + '<span>' + (ko ? '사진' : 'Photo') + '</span>';
+      im.appendChild(b);
+    });
+  }
+  let t = 0; new MutationObserver(() => { if(!t) t = requestAnimationFrame(() => { t = 0; addBtns(); }); }).observe(document.body, {childList: true, subtree: true});
+  addBtns();
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-ucchg]'); if(!b) return;
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    if(!signed()) return;
+    const k = b.dataset.ucchg;
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+    inp.addEventListener('change', () => { const f = inp.files && inp.files[0]; if(f) put(k, f); });
+    inp.click();
+  }, true);
+  /* paste on the booking window's photo */
+  let overFace = false;
+  document.addEventListener('pointerover', e => { overFace = !!(e.target.closest && e.target.closest('.bv .bvface')); }, true);
+  /* on the window, ahead of the booking window's own paste (which files a pasted picture into the folder) */
+  addEventListener('paste', e => {
+    if(!overFace) return;
+    const ae = document.activeElement; if(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+    const it = [...((e.clipboardData && e.clipboardData.items) || [])].find(i => i.kind === 'file' && /^image\//i.test(i.type || ''));
+    const f = it && it.getAsFile(); if(!f) return;
+    e.preventDefault(); e.stopPropagation();
+    try{ if(typeof bv !== 'undefined' && bv && bv.id && typeof setBookPic === 'function'){ Promise.resolve(setBookPic(bv.id, f)).then(() => { try{ bvDraw(); }catch(er){} }); } }catch(er){}
+  }, true);
+  const css = document.createElement('style');
+  css.textContent = `.uc .ucimg .ucchg{position:absolute;top:8px;right:8px;z-index:4;display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:999px;border:0;background:rgba(20,12,24,.62);color:#fff;font:600 11.5px/1 var(--sans,Inter,system-ui,sans-serif);cursor:pointer;opacity:0;transition:opacity .15s;backdrop-filter:blur(4px)}
+.uc .ucimg .ucchg svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
+.uc .ucimg:hover .ucchg,.uc .ucimg .ucchg:focus-visible{opacity:1}
+.uc .ucimg .ucchg:hover{background:var(--acc,#5A2C57)}
+@media (pointer:coarse){.uc .ucimg .ucchg{opacity:.92;height:30px}}
+.uc .litpic.over{outline:3px dashed var(--acc,#5A2C57);outline-offset:-6px}`;
+  document.head.appendChild(css);
 })();

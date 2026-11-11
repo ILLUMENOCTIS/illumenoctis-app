@@ -96,6 +96,97 @@
   document.head.appendChild(css);
 })();
 
+/* ==================== The top bar on a phone (1.2.138) ====================
+   User, 11 Nov 2026: "the top bar on the mobile version makes me scroll to see the USER login, language, widgets,
+   etc. ... I want to be able to see everything on the top bar. perhaps move the search bar somewhere else?"
+   On a narrow screen (760 px or less) the bar keeps what is used all the time - the page name, New card,
+   notifications, messages, Arrival/Departure and your ID (initial only) - and a "⋯" button opens a panel with the
+   rest: units, refresh, clocks, full screen, zoom, theme, language. The search moves off the bar (the bottom bar
+   has it). A wider window puts everything back. */
+(function(){
+  const MQ = matchMedia('(max-width:760px)');
+  const MOVE = [['.abun', 'Units', '단위'], ['.abrf', 'Refresh', '새로고침'], ['#abck', 'Clocks and map', '시계와 지도'], ['.abfs', 'Full screen', '전체 화면'],
+    ['#illuzoom', 'Zoom', '확대/축소'], ['#abtheme', 'Theme', '테마'], ['.ablang', 'Language', '언어'], ['#abglobe', 'All languages', '모든 언어']];
+  const ko = () => typeof LANG !== 'undefined' && LANG === 'ko';
+  let btn = null, pan = null, busy = false;
+  function make(){
+    if(btn) return;
+    btn = document.createElement('button'); btn.type = 'button'; btn.id = 'abmore'; btn.className = 'abib abmore';
+    btn.setAttribute('aria-haspopup', 'true'); btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
+    pan = document.createElement('div'); pan.id = 'abmorep'; pan.hidden = true; pan.setAttribute('role', 'dialog');
+    (document.getElementById('appbar') || document.body).appendChild(pan);   /* inside the bar, so its icons keep the bar's look */
+    btn.addEventListener('click', e => { e.stopPropagation(); toggle(pan.hidden); });
+    document.addEventListener('pointerdown', e => { if(!pan.hidden && !pan.contains(e.target) && !btn.contains(e.target) && !e.target.closest('#abunp')) toggle(false); }, true);
+    document.addEventListener('keydown', e => { if(e.key === 'Escape' && !pan.hidden) toggle(false); });
+  }
+  function toggle(on){
+    if(!pan) return; pan.hidden = !on; btn.setAttribute('aria-expanded', String(on)); btn.classList.toggle('on', on);
+    btn.title = ko() ? '더 보기' : 'More'; btn.setAttribute('aria-label', btn.title);
+    if(on){ pan.querySelectorAll('.abmrow > span').forEach(sp => { const d = MOVE.find(m => m[0] === sp.dataset.sel); if(d) sp.textContent = ko() ? d[2] : d[1]; }); }
+  }
+  function apply(){
+    const abr = document.querySelector('#appbar .abr'); if(!abr || busy) return;
+    busy = true;
+    try{
+      make();
+      if(MQ.matches){
+        if(btn.parentNode !== abr) abr.appendChild(btn);
+        for(const [sel, en, k] of MOVE){
+          const el = abr.querySelector(':scope > ' + sel); if(!el) continue;
+          let row = pan.querySelector('.abmrow[data-sel="' + sel + '"]');
+          if(!row){ row = document.createElement('div'); row.className = 'abmrow'; row.dataset.sel = sel; row.innerHTML = '<span data-sel="' + sel + '">' + (ko() ? k : en) + '</span><div class="abmslot"></div>'; pan.appendChild(row); }
+          row.querySelector('.abmslot').appendChild(el);
+        }
+        /* keep the panel's rows in the same order */
+        MOVE.forEach(([sel]) => { const r = pan.querySelector('.abmrow[data-sel="' + sel + '"]'); if(r) pan.appendChild(r); });
+        document.body.classList.add('abphone');
+      }else{
+        pan.querySelectorAll('.abmslot > *').forEach(el => abr.appendChild(el));
+        pan.innerHTML = ''; if(btn.parentNode) btn.remove(); toggle(false);
+        document.body.classList.remove('abphone');
+      }
+    } finally { busy = false; }
+  }
+  let t = 0; const later = () => { if(!t) t = requestAnimationFrame(() => { t = 0; apply(); }); };
+  function start(){
+    const abr = document.querySelector('#appbar .abr'); if(!abr){ setTimeout(start, 300); return; }
+    apply();
+    try{ new MutationObserver(later).observe(abr, {childList: true}); }catch(e){}
+    try{ MQ.addEventListener('change', later); }catch(e){ try{ MQ.addListener(later); }catch(er){} }
+  }
+  start();
+  const css = document.createElement('style');
+  css.textContent = `
+body.abphone #appbar #shkbtn,body.abphone #appbar .shkbtn{display:none!important}
+body.abphone #appbar .abr{gap:4px;flex-wrap:nowrap}
+body.abphone #appbar .abr>.absep{display:none}
+body.abphone #appbar .abr>.abon{display:none}
+body.abphone #appbar #abme .bnm{display:none}
+body.abphone #appbar #abme{padding:0 2px;min-width:34px;justify-content:center}
+#appbar .abmore svg{fill:currentColor!important;stroke:none!important;width:20px!important;height:20px!important}
+#appbar .abmore svg circle{fill:currentColor!important}
+#appbar .abmore.on{background:var(--wash,#F3ECF3);color:var(--acc,#5A2C57)}
+#abmorep{position:fixed;z-index:3000;top:calc(env(safe-area-inset-top,0px) + 56px);right:10px;left:10px;max-width:420px;margin-left:auto;background:var(--surf,#fff);color:var(--ink,#211C26);border:1px solid var(--line,#E7E2EC);border-radius:16px;box-shadow:0 18px 44px rgba(20,10,30,.22);padding:6px 14px;font:500 14px/1.3 var(--sans,Inter,system-ui,sans-serif)}
+#abmorep[hidden]{display:none}
+#abmorep .abmrow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:50px;border-bottom:1px solid var(--line,#E7E2EC)}
+#abmorep .abmrow:last-child{border-bottom:0}
+#abmorep .abmrow>span{color:var(--mut,#6D6577)}
+#abmorep .abmslot{display:flex;align-items:center}
+#abmorep .abmslot>*{height:36px;box-sizing:border-box}
+#abmorep .abmslot>.abib{width:36px;min-width:36px;display:inline-grid;place-items:center;border-radius:10px}
+#abmorep .abmslot svg{width:18px;height:18px}
+#abmorep .abmslot>.abib,#abmorep .abmslot>.abun,#abmorep .abmslot>.abglobe{border:1px solid var(--line,#E7E2EC);background:var(--surf,#fff);color:var(--ink,#211C26);border-radius:10px;padding:0 10px;display:inline-flex;align-items:center;gap:6px;font:600 13px/1 var(--sans,Inter,system-ui,sans-serif)}
+#abmorep .abmslot>.abib{padding:0}
+#abmorep .abmslot>.abib svg,#abmorep .abmslot>.abun svg,#abmorep .abmslot>.abglobe svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#abmorep .abmslot .abrfpin{fill:var(--acc,#5A2C57)!important;stroke:none!important}
+#abmorep .abmslot>.ablang{display:inline-flex;border:1px solid var(--line,#E7E2EC);border-radius:999px;overflow:hidden;background:var(--surf,#fff)}
+#abmorep .abmslot>.ablang button{border:0;background:none;padding:0 14px;font:600 13px/1 var(--sans,Inter,system-ui,sans-serif);color:var(--ink,#211C26)}
+#abmorep .abmslot>.ablang button[aria-pressed="true"],#abmorep .abmslot>.ablang button.on{background:var(--acc,#5A2C57);color:#fff}
+`;
+  document.head.appendChild(css);
+})();
+
 /* ==================== Full screen uses the whole monitor ====================
    Whenever any view is in full screen - a card's full view, a board, Lumen, the Atlas,
    Suggestiones, the Directory, the booking viewer made big, or any tab - the program

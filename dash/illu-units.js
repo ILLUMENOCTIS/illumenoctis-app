@@ -11,7 +11,7 @@
   const isKO = () => typeof LANG !== 'undefined' && LANG === 'ko';
   const L = (en, ko) => isKO() ? ko : en;
   let U = {len: 'cm', shoe: 'EU'};
-  try{ const s = JSON.parse(localStorage.getItem('illu.units') || 'null'); if(s){ if(s.len === 'in') U.len = 'in'; if(['EU', 'US', 'UK'].includes(s.shoe)) U.shoe = s.shoe; } }catch(e){}
+  try{ const s = JSON.parse(localStorage.getItem('illu.units') || 'null'); if(s){ if(s.len === 'in') U.len = 'in'; if(['EU', 'US', 'UK', 'mm'].includes(s.shoe)) U.shoe = s.shoe; } }catch(e){}
   const num = v => { if(v == null || v === '') return null; const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? null : n; };
   window.__illuU = () => ({len: U.len, shoe: U.shoe});
   /* a length (cm in) as text in the chosen unit; height in feet and inches */
@@ -27,12 +27,26 @@
   window.__illuShoe = (eu, us, g) => {
     const e = num(eu), u = num(us), men = g === 'M';
     if(U.shoe === 'EU'){ if(e != null) return String(e); if(u != null) return String(Math.round(u + (men ? 33 : 30.5))); return null; }
+    /* 1.2.138 (user, 11 Nov 2026: "I want the shoes measurements to be available in mm as well"): the Korean
+       size in mm, from the EU size (Paris point: EU = (foot cm + 2) x 1.5), to the nearest 5 mm as Korean
+       sizes go - EU 38 = 240, 40 = 255, 42 = 265, 44 = 280 */
+    if(U.shoe === 'mm'){ const e2 = e != null ? e : (u != null ? u + (men ? 33 : 30.5) : null); if(e2 == null) return null; return String(Math.round((e2 - 2) / 1.5 * 10 / 5) * 5); }
     if(e == null) return U.shoe === 'US' && u != null ? String(u) : null;
     const uk = Math.round((e - (men ? 34 : 33)) * 2) / 2;
     if(U.shoe === 'UK') return String(uk);
     return u != null ? String(u) : String(uk + (men ? 1 : 2.5));
   };
   window.__illuShoeUnit = () => U.shoe;
+  /* a shoe size typed in the chosen unit, back to the EU size cards store (a number of 150 or more is
+     always millimetres, whatever is chosen) */
+  window.__illuShoeToEU = (v, g) => {
+    const n = num(v); if(n == null) return null; const men = g === 'M';
+    const half = x => Math.round(x * 2) / 2;
+    if(n >= 150 || U.shoe === 'mm') return half(n / 10 * 1.5 + 2);
+    if(U.shoe === 'US') return half(n + (men ? 33 : 30.5));
+    if(U.shoe === 'UK') return half(n + (men ? 34 : 33));
+    return n;
+  };
 
   function apply(){
     try{ localStorage.setItem('illu.units', JSON.stringify(U)); }catch(e){}
@@ -76,7 +90,7 @@
     close();
     const p = document.createElement('div'); p.id = 'abunp'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', L('Units', '단위'));
     p.innerHTML = '<div class="aburow"><span>' + L('Lengths', '길이') + '</span><div class="abuseg"><button type="button" data-un="len=cm">cm</button><button type="button" data-un="len=in">in</button></div></div>' +
-      '<div class="aburow"><span>' + L('Shoe', '신발') + '</span><div class="abuseg"><button type="button" data-un="shoe=EU">EU</button><button type="button" data-un="shoe=US">US</button><button type="button" data-un="shoe=UK">UK</button></div></div>' +
+      '<div class="aburow"><span>' + L('Shoe', '신발') + '</span><div class="abuseg"><button type="button" data-un="shoe=EU">EU</button><button type="button" data-un="shoe=US">US</button><button type="button" data-un="shoe=UK">UK</button><button type="button" data-un="shoe=mm">mm</button></div></div>' +
       '<p>' + L('Every card, the side panel and the filters use these.', '모든 카드, 사이드 패널, 필터에 적용됩니다.') + '</p>';
     document.body.appendChild(p);
     const r = btn.getBoundingClientRect();

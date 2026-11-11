@@ -1097,8 +1097,8 @@
      the card's details on the right. ←/→ photos, F or double-click full view, Esc back. */
   const SL = {key: '', i: 0, photos: null, state: '', why: '', full: false, side: true};
   try{ SL.side = localStorage.getItem('illu.d2fullside') !== '0'; }catch(e){}
-  const slImg = (u, w) => window.__illuSlideSrc ? window.__illuSlideSrc(u, w) : (window.illu && window.illu.web) ? u : 'illuimg://p/' + encodeURIComponent(u) + '?r=' + encodeURIComponent((D2.openM && D2.openM.href) || '') + '&nc=1&w=' + (w || 1400);
-  const fileKey = u => { let p = String(u || ''); try{ p = decodeURIComponent(new URL(p.startsWith('illuimg:') ? decodeURIComponent(new URL(p).pathname.slice(1)) : p).pathname); }catch(e){}
+  const slImg = (u, w) => window.__illuSlideSrc ? window.__illuSlideSrc(u, w) : (window.illu && window.illu.web) ? (window.__illuSmall ? window.__illuSmall(u, w && w <= 400 ? 300 : 900) : u) : 'illuimg://p/' + encodeURIComponent(u) + '?r=' + encodeURIComponent((D2.openM && D2.openM.href) || '') + '&nc=1&w=' + (w || 1400);
+  const fileKey = u => { let p = String(u || ''); try{ if(/images\.weserv\.nl/.test(p)) p = new URL(p).searchParams.get('url') || p; }catch(e){} try{ p = decodeURIComponent(new URL(p.startsWith('illuimg:') ? decodeURIComponent(new URL(p).pathname.slice(1)) : p).pathname); }catch(e){}
     return p.toLowerCase().replace(/^.*\//, '').replace(/-\d{2,4}x\d{2,4}(?=\.)/, '').replace(/\.(jpe?g|png|webp|avif)$/, '').replace(/^(large|medium|small|thumb|xlarge)[-_]/, ''); };
   const SLWHY = {
     gone: ['This model’s page is no longer on the agency’s site', 'Check the agency’s site directly'],

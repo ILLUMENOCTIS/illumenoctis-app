@@ -93,7 +93,7 @@
         '<label class="ncph" data-ncph tabindex="0" title="' + H(L('Choose or drop a photograph', '사진을 선택하거나 끌어다 놓기')) + '"><input type="file" accept="image/*" data-ncfile hidden><span class="ncphi">' + L('+ Photo', '+ 사진') + '</span></label>' +
         '<div class="ncf">' +
           '<label class="ncl full"><span>' + L('Name', '이름') + ' <b>*</b></span><input data-nc="nm" autocomplete="off" required></label>' +
-          '<label class="ncl full"><span>' + L('Agency', '에이전시') + '</span><input data-nc="ag" list="ncags" autocomplete="off"><datalist id="ncags">' + agencies().map(a => '<option value="' + H(a) + '">').join('') + '</datalist></label>' +
+          '<div class="ncl full ncagw"><label for="ncag"><span>' + L('Agency', '에이전시') + '</span></label><input id="ncag" data-nc="ag" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="ncagl" aria-autocomplete="list" placeholder="' + H(L('Type the agency name…', '에이전시 이름 입력…')) + '"><div class="ncagl" id="ncagl" role="listbox" hidden></div><p class="ncagn" data-ncagn hidden></p></div>' +
           '<label class="ncl"><span>' + L('City', '도시') + '</span><input data-nc="city" autocomplete="off"></label>' +
           '<label class="ncl"><span>' + L('Country', '국가') + '</span><input data-nc="country" autocomplete="off"></label>' +
           '<div class="ncl full"><span>' + L('Female / Male', '여성 / 남성') + '</span><div class="ncseg" role="radiogroup">' +
@@ -111,6 +111,60 @@
     document.body.appendChild(m);
     setTimeout(() => { const i = m.querySelector('[data-nc="nm"]'); if(i) i.focus(); }, 30);
   }
+  /* 1.2.138 (user, 11 Nov 2026: "unable to scroll down the model agency list ... If it's in the directory list, then I
+     want it to detect it so I can easily select the Agency"): the agency box finds as you type - names that start with
+     what is typed first, then names that contain it - eight at a time, chosen by tap, click or the arrow keys + Enter.
+     Choosing one fills the city and country from the Directory. A name the Directory does not have is marked
+     "New agency". */
+  const agObjs = () => { try{ return AG || []; }catch(e){ return []; } };
+  const fold = t => String(t || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9가-힣]+/g, ' ').trim();
+  function agMatches(q){
+    const f = fold(q); if(!f) return [];
+    const seen = new Set(), a = [], b = [];
+    for(const x of agObjs()){
+      const n = fold(x.name); if(!n || seen.has(x.name)) continue;
+      if(n.startsWith(f) || n.split(' ').some(w => w.startsWith(f))){ a.push(x); seen.add(x.name); }
+      else if(n.replace(/ /g, '').includes(f.replace(/ /g, ''))){ b.push(x); seen.add(x.name); }
+    }
+    const byLen = (p, q2) => p.name.length - q2.name.length || p.name.localeCompare(q2.name);
+    return a.sort(byLen).concat(b.sort(byLen)).slice(0, 8);
+  }
+  let agSel = -1, agList = [];
+  function agPaint(m){
+    const inp = m.querySelector('#ncag'), box = m.querySelector('#ncagl'), note = m.querySelector('[data-ncagn]');
+    const q = inp.value.trim(); agList = agMatches(q);
+    const exact = agObjs().find(x => fold(x.name) === fold(q));
+    if(!q || (exact && agList.length === 1 && agList[0] === exact && document.activeElement !== inp)){ box.hidden = true; inp.setAttribute('aria-expanded', 'false'); }
+    else{
+      box.innerHTML = agList.length ? agList.map((x, i) => '<button type="button" role="option" data-ncag="' + i + '" aria-selected="' + (i === agSel) + '"' + (i === agSel ? ' class="on"' : '') + '><b>' + H(x.name) + '</b><span>' + H([x.city, x.country].filter(Boolean).join(', ')) + '</span></button>').join('')
+        : '<p class="ncagnone">' + H(L('Not in the Directory', '디렉터리에 없음')) + '</p>';
+      box.hidden = false; inp.setAttribute('aria-expanded', 'true');
+    }
+    note.hidden = !q || !!exact;
+    note.textContent = L('New agency — not in the Directory yet.', '새 에이전시 — 아직 디렉터리에 없습니다.');
+  }
+  function agPick(m, x){
+    const inp = m.querySelector('#ncag'); inp.value = x.name; agSel = -1;
+    const set = (f, v) => { const e = m.querySelector('[data-nc="' + f + '"]'); if(e && v && !e.value.trim()) e.value = v; };
+    set('city', x.city); set('country', x.country);
+    m.querySelector('#ncagl').hidden = true; inp.setAttribute('aria-expanded', 'false');
+    agPaint(m); m.querySelector('#ncagl').hidden = true;
+  }
+  document.addEventListener('input', e => { if(e.target && e.target.id === 'ncag'){ agSel = -1; agPaint(document.getElementById('ncm')); } });
+  document.addEventListener('focusin', e => { if(e.target && e.target.id === 'ncag' && e.target.value.trim()) agPaint(document.getElementById('ncm')); });
+  document.addEventListener('keydown', e => {
+    if(!e.target || e.target.id !== 'ncag') return;
+    const m = document.getElementById('ncm'), box = m && m.querySelector('#ncagl'); if(!box || box.hidden) return;
+    if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){ e.preventDefault(); if(!agList.length) return; agSel = (agSel + (e.key === 'ArrowDown' ? 1 : -1) + agList.length) % agList.length; agPaint(m); }
+    else if(e.key === 'Enter' && agSel >= 0 && agList[agSel]){ e.preventDefault(); agPick(m, agList[agSel]); }
+    else if(e.key === 'Escape'){ e.stopPropagation(); box.hidden = true; }
+  }, true);
+  document.addEventListener('mousedown', e => { const b = e.target.closest && e.target.closest('[data-ncag]'); if(b) e.preventDefault(); }, true);   /* keep the typing box focused */
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-ncag]'); const m = document.getElementById('ncm');
+    if(b && m){ agPick(m, agList[+b.dataset.ncag]); return; }
+    if(m && !e.target.closest('.ncagw')){ const box = m.querySelector('#ncagl'); if(box) box.hidden = true; }
+  });
   function close(){ const m = document.getElementById('ncm'); if(m) m.remove(); if(photoURL){ try{ URL.revokeObjectURL(photoURL); }catch(e){} photoURL = ''; } }
   function setPhoto(f){
     if(!f || !/^image\//i.test(f.type || '')) return;
@@ -146,7 +200,7 @@
         await DB.doc('mcard/' + id).set(doc);
       }
       /* the figures, into the same store as figures typed on any card */
-      for(const [f] of MS){ const n = num((m.querySelector('[data-ncm="' + f + '"]') || {}).value); if(n != null) try{ mxSet(k, f, n); }catch(e){} }
+      for(const [f] of MS){ let n = num((m.querySelector('[data-ncm="' + f + '"]') || {}).value); if(f === 'eu' && n != null && window.__illuShoeToEU) n = window.__illuShoeToEU(n); if(n != null) try{ mxSet(k, f, n); }catch(e){} }
       try{ flushEdits(); }catch(e){}
       if(photo) try{ setPic(k, photo); }catch(e){ console.error(e); }
       const A = window.__illuVoteAct;
@@ -190,6 +244,15 @@
 
   const css = document.createElement('style');
   css.textContent = `
+.ncm .ncagw{position:relative}
+.ncm .ncagl{position:absolute;z-index:5;left:0;right:0;top:100%;margin-top:4px;background:var(--surf,#fff);border:1px solid var(--line,#E7E2EC);border-radius:12px;box-shadow:0 14px 34px rgba(20,10,30,.18);padding:4px;max-height:min(320px,46vh);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.ncm .ncagl[hidden]{display:none}
+.ncm .ncagl button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;border:0;background:none;text-align:left;padding:9px 10px;border-radius:8px;cursor:pointer;color:var(--ink,#211C26);font:inherit}
+.ncm .ncagl button b{font-weight:600;font-size:14px}
+.ncm .ncagl button span{font-size:12px;color:var(--mut,#6D6577)}
+.ncm .ncagl button:hover,.ncm .ncagl button.on{background:var(--wash,#F3ECF3)}
+.ncm .ncagnone{margin:0;padding:10px;color:var(--mut,#6D6577);font-size:13px}
+.ncm .ncagn{margin:6px 0 0;font-size:12.5px;color:#9A6A00}
 #abtools [data-abproxy="bknew"]{display:none!important}
 #appbar .abr>.abnc{height:34px;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;padding:0 13px 0 10px;border-radius:999px;border:0;background:var(--acc,#5A2C57);color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
 #appbar .abr>.abnc[hidden]{display:none}

@@ -23,6 +23,20 @@
   const pmSrc = pm => pm && pm.u ? (window.illu && window.illu.modelPhotos ? 'illuimg://p/' + encodeURIComponent(pm.u) + '?r=' + encodeURIComponent(pm.r || '') + '&w=1000' : pm.u) : '';
   let ready = false;
   const idOf = k => 'p' + hkey(k).slice(1);
+  /* 1.2.138 (user, 11 Nov 2026: photos missing on the booking cards): some agencies (Q Model Management) give
+     photo links that stop working after a few days (signed links: X-Amz-Expires, Expires=...). Such a link is
+     not trusted once it has run out, and a photo found through one is kept as the program's own saved copy. */
+  function expiryOf(u){
+    const s = String(u || ''); let q; try{ q = new URL(s).searchParams; }catch(e){ return 0; }
+    const ad = q.get('X-Amz-Date'), ae = q.get('X-Amz-Expires');
+    if(ad && ae){ const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(ad); if(m) return Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]) + (+ae) * 1000; }
+    const ex = q.get('Expires') || q.get('expires'); if(ex && /^\d{9,11}$/.test(ex)) return +ex * 1000;
+    const se = q.get('se'); if(se && q.get('sig')){ const t = Date.parse(se); if(t) return t; }
+    return 0;
+  }
+  const expiring = u => expiryOf(u) > 0;
+  const expired = u => { const t = expiryOf(u); return t > 0 && t < Date.now() + 3600e3; };
+  window.__illuPhotoExpired = expired;
 
   async function load(){
     for(let i = 0; i < 60 && (typeof DB === 'undefined' || !DB); i++) await new Promise(r => setTimeout(r, 500));
@@ -34,10 +48,10 @@
       for(const x0 of (c.docs || c || [])){
         const x = docOf(x0); if(!x || !x.e) continue;
         const uses = new Map(); for(const u of Object.values(x.e)) uses.set(u, (uses.get(u) || 0) + 1);
-        for(const [k, u] of Object.entries(x.e)) if(u && uses.get(u) < 3 && !/dummy|no[-_ ]?image|placeholder|cover_error|default/i.test(u)) PLINK.set(k, u);
+        for(const [k, u] of Object.entries(x.e)) if(u && !expired(u) && uses.get(u) < 3 && !/dummy|no[-_ ]?image|placeholder|cover_error|default/i.test(u)) PLINK.set(k, u);
       }
       for(const x0 of (d.docs || d || [])){ const x = docOf(x0); if(x && x.b) SWEPT.set(x.b, x); }
-      for(const d of (a.docs || a || [])){ const x = docOf(d); if(x && x.k && x.u){ PLINK.set(x.k, x.u); PLINKSINGLE.add(x.k); } }
+      for(const d of (a.docs || a || [])){ const x = docOf(d); if(x && x.k && x.u && !expired(x.u)){ PLINK.set(x.k, x.u); PLINKSINGLE.add(x.k); } }
       for(const d of (b.docs || b || [])){ const x = docOf(d); if(x && x.k) PFAIL.set(x.k, x); }
     }catch(e){}
     try{ const m = await DB.collection('pmain').limit(10000).get(); for(const d of (m.docs || m || [])){ const x = docOf(d); if(x && x.k && x.u) PMAIN.set(x.k, {u: x.u, r: x.r || ''}); } }catch(e){}
@@ -55,7 +69,8 @@
   const litFacts0 = window.litFacts;
   window.litFacts = litFacts = function(m){
     const f = litFacts0(m);
-    const pm = PMAIN.get(m.key); if(pm){ f.photo = pmSrc(pm); return f; }
+    const pm = PMAIN.get(m.key); if(pm && !expired(pm.u)){ f.photo = pmSrc(pm); return f; }
+    if(f.photo && expired(f.photo)) f.photo = '';
     const u = PLINK.get(m.key);
     if(u && (!f.photo || BROKEN.has(f.photo))) f.photo = u;
     return f;
@@ -119,7 +134,7 @@
       try{ await DB.doc('plink/' + idOf(key)).set({k: key, u: r.url, how: r.how || '', page: page, at: new Date().toISOString(), by: ME || ''}); }catch(e){}
       if(PFAIL.has(key)){ PFAIL.delete(key); try{ await DB.doc('pfail/' + idOf(key)).delete(); }catch(e){} }
       paintCell(key);
-      if(lit(key)) backup(key);
+      if(lit(key) || expiring(r.url) || BKKEYS().has(key)) backup(key);
     }else{
       const err = (r && r.error) || 'unknown';
       /* the network failed, not the site: not written down for everyone, so it is tried again */
@@ -144,7 +159,7 @@
       if(PICS.get(key)) continue;
       let url = PLINK.get(key);
       if(!url){ try{ const f = litFacts({key: key, g: '?'}); url = f.photo; }catch(e){} }
-      if(!url || BROKEN.has(url)) continue;
+      if(!url || BROKEN.has(url) || expired(url)){ if(url && expired(url) && !TRIED.has(key)){ BDONE.delete(key); find(key); } continue; }
       try{
         const r = await illu.photoThumb(url, hrefOf(key));
         if(r && r.jpeg){
@@ -155,6 +170,9 @@
           if(res && res.id && !PICS.get(key)){
             PICS.set(key, res.id);
             await savePicShard(key);
+            try{ window.__illuPipe && window.__illuPipe.render(); }catch(e){}
+            try{ window.__illuTodayRender && window.__illuTodayRender(); }catch(e){}
+            try{ window.__illuVoteChanged && window.__illuVoteChanged(); }catch(e){}
             document.querySelectorAll('.litpic[data-pic="' + CSS.escape(key) + '"]').forEach(cell => {
               try{ cell.outerHTML = picCell(key, nmOf(cell), ''); }catch(e){}
             });
@@ -333,8 +351,24 @@
     }, 600000);
   }
   /* pick a photo as the card photo / go back to the one the crawler found */
+  /* a photo only this computer can open (one of the booking folder's files, /_blob/bk.…) or one whose link runs
+     out is saved as the program's own copy first, so every computer and phone shows the same card photo */
+  async function stash(url, page){
+    try{
+      if(!ASSETS){ try{ ASSETS = await use('assets'); }catch(e){} }
+      if(!ASSETS) return '';
+      let blob = null;
+      if(/^\/_blob\/bk\./.test(url)){ const r = await fetch(url); if(r.ok) blob = await r.blob(); }
+      else if(/^https?:/i.test(url) && illu.photoThumb){ const r = await illu.photoThumb(url, page || ''); if(r && r.jpeg) blob = new Blob([r.jpeg], {type: 'image/jpeg'}); }
+      if(!blob || !blob.size || !/^image\//i.test(blob.type || 'image/jpeg')) return '';
+      const res = await ASSETS.upload(new File([blob], 'photo.' + ((blob.type || '').split('/')[1] || 'jpg').replace('jpeg', 'jpg'), {type: blob.type || 'image/jpeg'}));
+      return res && res.id ? '/_blob/' + res.id : '';
+    }catch(e){ return ''; }
+  }
+  const needsStash = u => /^\/_blob\/bk\./.test(String(u || '')) || expiring(u);
   async function setMain(key, url, page){
     if(!key || !url) return false;
+    if(needsStash(url)){ const kept = await stash(url, page); if(kept) url = kept; }
     PMAIN.set(key, {u: url, r: page || ''}); paintCell(key, true);
     try{ await DB.doc('pmain/' + idOf(key)).set({k: key, u: url, r: page || '', by: ME || '', at: new Date().toISOString()}); }catch(e){ console.error('pmain', e); return false; }
     return true;
@@ -345,5 +379,27 @@
     try{ await DB.doc('pmain/' + idOf(key)).delete(); }catch(e){ console.error('pmain', e); }
   }
   window.__illuPhoto = {PMAIN, setMain, clearMain, PLINK, PFAIL, SWEPT, find, backup, sweep, boardList, boardNow, readBoard, stop: () => { stopSweep = true; }};
-  load().then(() => { setTimeout(backupLit, 15000); setTimeout(sweep, 60000); setInterval(sweep, 6 * 3600e3); });
+  /* the booking cards' models (they need a face on every computer and phone) */
+  function BKKEYS(){ const out = new Set(); try{ if(typeof BOOK !== 'undefined') for(const c of BOOK.values()) if(c && c.k && !c.ph) out.add(c.k); }catch(e){} return out; }
+  async function repairBooked(){
+    /* earlier card photos only this computer could open, or with links that run out: saved once as the program's copy */
+    for(const [k, pm] of [...PMAIN]){
+      if(!needsStash(pm.u)) continue;
+      if(/^\/_blob\/bk\./.test(pm.u)){ try{ const r = await fetch(pm.u, {method: 'HEAD'}); if(!r.ok) continue; }catch(e){ continue; } }
+      else if(expired(pm.u)) continue;
+      const kept = await stash(pm.u, pm.r); if(!kept) continue;
+      PMAIN.set(k, {u: kept, r: pm.r || ''});
+      try{ await DB.doc('pmain/' + idOf(k)).set({k, u: kept, r: pm.r || '', by: ME || '', at: new Date().toISOString()}); }catch(e){}
+      paintCell(k, true);
+    }
+    for(const k of BKKEYS()){
+      if(PICS.get(k)) continue;
+      const pm = PMAIN.get(k); if(pm && !needsStash(pm.u)) continue;
+      let ph = ''; try{ ph = (litFacts({key: k, g: '?'}) || {}).photo || ''; }catch(e){}
+      if(!ph) find(k);
+      else if(expiring(ph) || /^https?:/i.test(ph)) backup(k);
+    }
+  }
+  window.__illuPhoto.repairBooked = repairBooked; window.__illuPhoto.expiryOf = expiryOf; window.__illuPhoto.stash = stash;
+  load().then(() => { if(window.illu && window.illu.photoThumb && !window.illu.web) setTimeout(repairBooked, 8000); setTimeout(backupLit, 15000); setTimeout(sweep, 60000); setInterval(sweep, 6 * 3600e3); });
 })();

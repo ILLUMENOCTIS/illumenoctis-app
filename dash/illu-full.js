@@ -14,7 +14,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
   const isKO = () => typeof LANG !== 'undefined' && LANG === 'ko';
   const L = (en, ko) => isKO() ? ko : en;
-  const src = (u, ref, w) => (window.illu && window.illu.modelPhotos && !window.illu.web) ? 'illuimg://p/' + encodeURIComponent(u) + '?r=' + encodeURIComponent(ref || '') + '&nc=1&w=' + (w || 2000) : u;
+  const src = (u, ref, w) => (window.illu && window.illu.modelPhotos && !window.illu.web) ? 'illuimg://p/' + encodeURIComponent(u) + '?r=' + encodeURIComponent(ref || '') + '&nc=1&w=' + (w || 2000) : (window.__illuSmall ? window.__illuSmall(u, 1400) : u);
   const small = u => /[?&]w=\d+/.test(u) ? u.replace(/([?&]w=)\d+/, '$1300') : u;
   const SIDEK = 'illu.fvside';
   const narrow = () => matchMedia('(max-width:900px)').matches;
@@ -159,6 +159,34 @@
     Promise.resolve(setMark(S.key, b.dataset.fvl, {nm: S.name || '', url: S.ref || S.key})).then(paintSide, paintSide);
     setTimeout(paintSide, 30);
   });
+  /* 1.2.138 (user, 11 Nov 2026: "when I slide down the information panel on the voting card, I want the card to slide
+     down and eventually close if I slide all the way down, so the focus is on the slide-show view"): on a phone the
+     details sheet follows the finger down when it is scrolled to its top; let go past a quarter of its height (or
+     with a quick flick) and it closes, otherwise it springs back. */
+  (function sheetDrag(){
+    let y0 = 0, dy = 0, on = false, t0 = 0, top0 = false;
+    side.addEventListener('touchstart', e => {
+      if(!narrow() || !narrowOn || e.touches.length !== 1) { on = false; return; }
+      if(e.target.closest('input, textarea, select, [contenteditable]')) { on = false; return; }
+      y0 = e.touches[0].clientY; dy = 0; on = true; t0 = Date.now(); top0 = side.scrollTop <= 0;
+    }, {passive: true});
+    side.addEventListener('touchmove', e => {
+      if(!on) return;
+      const d = e.touches[0].clientY - y0;
+      if(!top0 || side.scrollTop > 0 || (d <= 0 && dy <= 0)){ return; }   // scrolling the details as usual
+      dy = Math.max(0, d);
+      if(e.cancelable) e.preventDefault();
+      side.style.transition = 'none'; side.style.transform = 'translateY(' + dy + 'px)';
+    }, {passive: false});
+    const end = () => {
+      if(!on) return; on = false;
+      side.style.transition = ''; side.style.transform = '';
+      const fast = dy > 40 && Date.now() - t0 < 250;
+      if(dy > side.offsetHeight * 0.25 || fast){ narrowOn = false; paintSide(); }
+      dy = 0;
+    };
+    side.addEventListener('touchend', end); side.addEventListener('touchcancel', end);
+  })();
   box.querySelector('.fvsidet').addEventListener('click', () => { if(narrow()) narrowOn = !narrowOn; else { try{ localStorage.setItem(SIDEK, sideOn() ? '0' : '1'); }catch(e){} } paintSide(); });
   box.addEventListener('click', e => {
     const b = e.target.closest && e.target.closest('[data-fvmain], [data-fvunmain]'); if(!b || !S) return;
@@ -353,7 +381,8 @@
   #illufv .fvsidet{top:auto;right:auto;left:50%;bottom:calc(var(--fvstrip,0px) + 14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:auto;flex-direction:row;gap:6px;padding:9px 18px;border:1px solid rgba(255,255,255,.25);border-radius:999px;z-index:5;writing-mode:horizontal-tb}
   #illufv .fvsidet .fvstl{writing-mode:horizontal-tb;transform:none;font-size:13px;letter-spacing:.06em}
   #illufv .fvsidet .fvsti{transform:rotate(-90deg)}
-  #illufv:not(.fvnoside) .fvsidet{bottom:calc(76vh + 10px);background:var(--surf,#fff)}
+  #illufv:not(.fvnoside) .fvsidet{bottom:calc(76vh + 10px);background:var(--surf,#fff);color:var(--ink,#211C26);border-color:var(--line,#E7E2EC)}
+  #illufv:not(.fvnoside) .fvsidet *{color:inherit}
   #illufv:not(.fvnoside) .fvsidet .fvsti{transform:rotate(90deg)}
 }
 @media (max-width:900px) and (prefers-reduced-motion:reduce){#illufv .fvside{transition:none}}
