@@ -38,6 +38,32 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
       } catch (e) { return { ok: false, error: String(e) }; }
     }
   };
+  /* 1.2.137 (user, 11 Nov 2026: "my biggest issue was that the photos didn't appear during the slideshow"):
+     a phone browser may not read an agency's page, so the Supabase function model-photos reads it and
+     gives back the photo addresses (the same reading the computer program does). Signed-in members only. */
+  const GAL = new Map();
+  window.illu.modelPhotos = async page => {
+    page = String(page || '');
+    if (!/^https?:\/\//i.test(page)) return { photos: [], why: 'nolink' };
+    if (GAL.has(page)) return GAL.get(page);
+    const job = (async () => {
+      const C = window.ILLU_CONFIG || {}, sb = window.__illuSb;
+      let tk = ''; try { const { data } = await sb.auth.getSession(); tk = (data && data.session && data.session.access_token) || ''; } catch (e) {}
+      if (!tk || !C.url) return { photos: [], why: 'none' };
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 25000);
+      try {
+        const r = await fetch(C.url + '/functions/v1/model-photos', { method: 'POST', signal: ctl.signal,
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tk, apikey: C.key }, body: JSON.stringify({ page }) });
+        const j = await r.json().catch(() => ({}));
+        return j && Array.isArray(j.photos) ? j : { photos: [], why: 'none' };
+      } catch (e) { return { photos: [], why: 'none' }; } finally { clearTimeout(t); }
+    })();
+    GAL.set(page, job); job.then(v => { if (!v.photos.length) setTimeout(() => GAL.delete(page), 60000); });
+    while (GAL.size > 300) GAL.delete(GAL.keys().next().value);
+    return job;
+  };
+  /* agency sites often refuse their photos to other sites; a photo asked for with no referrer is usually allowed */
+  try { const m = document.createElement('meta'); m.name = 'referrer'; m.content = 'no-referrer'; (document.head || document.documentElement).appendChild(m); } catch (e) {}
   /* keep the service worker's copy of the sign-in fresh (it is renewed about every hour) */
   async function tok() { try { const sb = window.__illuSb; if (!sb) return; const { data } = await sb.auth.getSession(); if (data && data.session) await window.illu.setToken(data.session.access_token); } catch (e) {} }
   setTimeout(tok, 3000); setInterval(tok, 4 * 60 * 1000);
@@ -49,6 +75,45 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
   addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent =
     '@media (max-width:760px){.rchd{flex-wrap:wrap;gap:10px!important}.rchd>div:first-child{flex:1 1 100%!important}.rchd .rc2tabs{display:flex;flex-wrap:nowrap;width:100%}.rchd .rc2tabs button{flex:1;white-space:nowrap;padding:0 8px}.rchd>.rcnav{margin-left:0!important}.rchd>.illufs span{display:none}' +
     '#shrail{gap:0!important}#shrail .shnv{flex:1 1 0;min-width:40px;width:auto!important;max-width:56px}#shrail .shfoot{margin-left:0!important}}'; document.head.appendChild(st); });
+  /* 1.2.137 (user, 11 Nov 2026: "have the program restart on its own on mobile without me having to exit or
+     close the app"): the app checks the published version every 5 minutes and whenever it comes back to the
+     screen; a newer one reloads the app by itself - straight away when it is in the background, otherwise
+     after a short "Updating" note, and never while something is being typed. */
+  (function autoUpdate(){
+    const root = new URL((document.currentScript && document.currentScript.src) || location.href).href.replace(/web-illu\.js.*$/, '');
+    let busy = false, waiting = '';
+    const typing = () => { const a = document.activeElement; return !!(a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable)); };
+    /* a reload that still came back with the old version (a phone or network cache) is not repeated for
+       10 minutes, so the app can never get stuck reloading */
+    const tried = v => { try { const t = JSON.parse(sessionStorage.getItem('illu.upd') || 'null'); return t && t.v === v && Date.now() - t.at < 600000; } catch (e) { return false; } };
+    const reload = v => { try { sessionStorage.setItem('illu.upd', JSON.stringify({ v, at: Date.now() })); } catch (e) {} location.reload(); };
+    const go = v => {
+      if (tried(v)) return;
+      if (document.hidden) { reload(v); return; }
+      if (typing()) { waiting = v; return; }
+      let n = document.getElementById('illuupd');
+      if (!n) { n = document.createElement('div'); n.id = 'illuupd'; n.setAttribute('role', 'status');
+        n.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 10px);transform:translateX(-50%);z-index:2147483647;background:#5A2C57;color:#fff;font:600 13px/1.2 Inter,system-ui,sans-serif;padding:9px 16px;border-radius:999px;box-shadow:0 6px 20px rgba(0,0,0,.25)';
+        document.body.appendChild(n); }
+      n.textContent = (document.documentElement.lang === 'ko' ? '새 버전 ' + v + '(으)로 업데이트 중…' : 'Updating to ' + v + '…');
+      setTimeout(() => reload(v), 1500);
+    };
+    async function check(){
+      if (busy || !navigator.onLine) return; busy = true;
+      try {
+        const r = await fetch(root + 'version.txt?t=' + Date.now(), { cache: 'no-store' });
+        const v = r.ok ? (await r.text()).trim() : '';
+        const have = String(window.ILLU_WEB_VERSION || '');
+        if (v && have && /^\d+(\.\d+)+$/.test(v) && v !== have) go(v);
+      } catch (e) {} finally { busy = false; }
+    }
+    window.__illuUpdateCheck = check;
+    setInterval(check, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+    addEventListener('online', check); addEventListener('pageshow', check);
+    document.addEventListener('focusout', () => setTimeout(() => { if (waiting && !typing()) { const v = waiting; waiting = ''; go(v); } }, 300));
+    setTimeout(check, 20000);
+  })();
   /* the service worker carries the push alerts; it lives at the app's root */
   if ('serviceWorker' in navigator) {
     const root = new URL((document.currentScript && document.currentScript.src) || location.href).href.replace(/web-illu\.js.*$/, '');
