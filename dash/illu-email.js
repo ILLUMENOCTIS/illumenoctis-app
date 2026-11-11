@@ -46,9 +46,32 @@
     const cur = emOf(c), by = new Map(cur.list.map(e => [e.k, e]));
     for(const e of EM.list) by.set(e.k, Object.assign({}, by.get(e.k) || {}, e));
     const list = [...by.values()].sort((a, b) => dtKey(b.dt).localeCompare(dtKey(a.dt)));
-    c.em = {at: new Date().toISOString(), by: 'Claude', summary: EM.summary || cur.summary || '', summary_ko: EM.summary_ko || cur.summary_ko || '', unread: EM.unread, list};
+    c.em = {at: new Date().toISOString(), by: EM.by || 'Claude', summary: EM.summary || cur.summary || '', summary_ko: EM.summary_ko || cur.summary_ko || '', unread: EM.unread, list};
   }
   window.__illuEmail = {fromAnswer, countNew, merge};
+  /* 1.2.133 (user, 10 Nov 2026): "Collect from Hiworks" - the program searches her name in received and sent mail
+     (read only; unread emails are counted, not opened) and fills this tab. Sign-in: once, in the program's Hiworks
+     window, typed by the person. */
+  let HWBUSY = false, HWMSG = '';
+  async function collect(c){
+    if(!c || HWBUSY) return;
+    HWBUSY = true; HWMSG = ''; redraw();
+    let r = null; try{ r = await window.illu.hiworksCollect(String(c.nm || '').trim()); }catch(e){ r = {ok: false, why: String(e && e.message || e)}; }
+    HWBUSY = false;
+    if(r && r.need === 'signin'){ HWMSG = E(T('Hiworks needs you to sign in once in the program.', 'Hiworks 로그인이 한 번 필요합니다.')) + ' <button type="button" class="bvbtn" data-emsignin>' + T('Sign in to Hiworks', 'Hiworks 로그인') + '</button> ' + E(T('Then press Collect again.', '그다음 다시 가져오기를 누르세요.')); redraw(); return; }
+    if(!r || !r.ok){ HWMSG = E(T('Could not read Hiworks: ', 'Hiworks를 읽지 못했습니다: ') + ((r && r.why) || '')); redraw(); return; }
+    const EM = fromAnswer({emails: r.emails || [], unread: r.unread || 0, email_summary: ''});
+    const n = EM ? countNew(c, EM) : 0;
+    if(EM){ EM.by = 'program'; merge(c, EM); try{ saveBook(c.id, true); }catch(e){} }
+    HWMSG = E(r.found ? T(r.found + ' found · ' + n + ' new on the card' + (r.unread ? ' · ' + r.unread + ' unread not opened' : ''), r.found + '통 찾음 · 새로 ' + n + '통' + (r.unread ? ' · 안 읽은 ' + r.unread + '통은 열지 않음' : '')) : T('No emails found for ' + (c.nm || ''), (c.nm || '') + ' 관련 메일이 없습니다'));
+    redraw();
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-emcollect],[data-emsignin]'); if(!b) return;
+    e.preventDefault(); e.stopPropagation();
+    if(b.hasAttribute('data-emsignin')){ try{ window.illu.hiworksSignin(); }catch(err){} return; }
+    const c = typeof bv !== 'undefined' && bv && BOOK.get(bv.id); collect(c);
+  }, true);
 
   /* ---- drawing ---- */
   const isGet = u => /drive\.google\.com\/(drive\/(u\/\d+\/)?folders|file\/d|open\?|uc\?)|\.mediaslide\.com\/package\/view\//i.test(String(u || ''));
@@ -79,8 +102,9 @@
         '<div class="emk"><div><i>' + T('Emails', '이메일') + '</i><b>' + L.length + '</b></div><div><i>' + T('Received', '받음') + '</i><b>' + rin + '</b></div><div><i>' + T('Sent', '보냄') + '</i><b>' + rout + '</b></div><div><i>' + T('Files', '파일') + '</i><b>' + nf + '</b></div></div>' +
         (L.length || em.summary ? '<p class="emov">' + (first ? '<b>' + E(first === last ? first : first + ' – ' + last) + '.</b> ' : '') + E(sumOf(em)) + '</p>'
           : '<p class="emov emnone">' + T('No emails on this card yet.', '이 카드에는 아직 이메일이 없습니다.') + '</p>') +
-        '<div class="emupd"><span>' + (updTxt ? T('Updated ', '업데이트 ') + E(updTxt) + T(' · by Claude', ' · Claude') + (em.unread ? ' · ' + em.unread + T(' unread not opened', '통 안 읽음(열지 않음)') : '') : '') + '</span>' +
-          '</div>' +   /* "Update from Hiworks" asked Claude - taken out with the Claude panel (1.2.112) */
+        '<div class="emupd"><span>' + (updTxt ? T('Updated ', '업데이트 ') + E(updTxt) + (em.by === 'program' ? '' : T(' · by Claude', ' · Claude')) + (em.unread ? ' · ' + em.unread + T(' unread not opened', '통 안 읽음(열지 않음)') : '') : '') + '</span>' +
+          (window.illu && window.illu.hiworksCollect ? '<button type="button" class="bvbtn emcol" data-emcollect' + (HWBUSY ? ' disabled' : '') + '>' + (HWBUSY ? T('Reading Hiworks…', 'Hiworks 읽는 중…') : T('Collect from Hiworks', 'Hiworks에서 가져오기')) + '</button>' : '') +
+          '</div>' + (HWMSG ? '<p class="emcolm">' + HWMSG + '</p>' : '') +   /* 1.2.133: the program reads Hiworks itself */
       '</div>' +
       (P.length ? '<div class="emppl">' + T('People', '사람') + '</div><div class="empp"><button type="button" data-emwho="" aria-pressed="' + (!WHO) + '">' + T('All', '전체') + ' <em>' + L.length + '</em></button>' +
         P.map(p => '<button type="button" data-emwho="' + E(p.addr) + '" aria-pressed="' + (WHO === p.addr) + '" title="' + E(p.addr) + '">' + E(p.name ? p.name + ' · ' + p.addr : p.addr) + ' <em>' +
@@ -110,8 +134,8 @@
 
   /* ---- Get files ---- */
   let JOB = null;
-  async function getFiles(link){
-    const c = typeof bv !== 'undefined' && bv && BOOK.get(bv.id); if(!c) return;
+  async function getFiles(link, cid){
+    const c = cid ? BOOK.get(cid) : (typeof bv !== 'undefined' && bv && BOOK.get(bv.id)); if(!c) return;
     if(!(window.illu && illu.getFilesPlan)){ alertBox(T('Getting files works in the ILLUMENOCTIS program', '파일 받기는 ILLUMENOCTIS 프로그램에서 됩니다')); return; }
     const m = modal('<h3>' + T('Get files', '파일 받기') + '</h3><p class="clsub">' + T('Reading the link…', '링크를 읽는 중…') + '</p>');
     const P = await illu.getFilesPlan(link, String(c.nm || '').trim()).catch(e => ({ok: false, why: String(e && e.message || e)}));
@@ -128,6 +152,8 @@
       '<div class="clbtns"><button type="button" class="bvbtn" data-clx>' + T('Cancel', '취소') + '</button><button type="button" class="bvbtn clokb" data-gfgo>' + T('Get files', '파일 받기') + '</button></div>';
     m.__plan = P; m.__card = c.id;
   }
+  /* 1.2.129: the photo viewer's Links use the same Get files, for the model's booking card */
+  window.__illuGetFiles = (link, cid) => getFiles(link, cid);
   async function go(m){
     const P = m.__plan, c = BOOK.get(m.__card); if(!P || !c) return;
     m.querySelectorAll('[data-gfg]').forEach(s => { P.groups[+s.dataset.gfg].tab = s.value; });
@@ -198,4 +224,15 @@
     '.gfprog{margin:0 0 10px}.gfbar{height:6px;background:#eee;border-radius:3px;overflow:hidden}.gfbar i{display:block;height:100%;width:0;background:#6b2a5e;transition:width .2s}.gfnow{display:block;font-size:11.5px;color:#666;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.gfbad{color:#b0006a}'
   ].join('\n');
   document.head.appendChild(st);
+  /* 1.2.129: the window these boxes open in (.clmod / .clbox) was styled only by illu-claude.js, which does
+     not run where the Claude button is not offered (the web / phone version) - there the box sat unstyled at
+     the bottom of the page, under the photo viewer. The same rules, here, so the window is always a window. */
+  const st2 = document.createElement('style');
+  st2.textContent = '.clmod{position:fixed;inset:0;z-index:2147483000;background:rgba(20,16,24,.45);display:grid;place-items:center}' +
+    '.clbox{background:#fff;color:#222;border-radius:14px;max-width:640px;width:calc(100% - 40px);max-height:84vh;overflow:auto;padding:18px 20px;box-shadow:0 20px 60px rgba(0,0,0,.3);box-sizing:border-box}' +
+    '.clbox h3{margin:0 0 6px;font-size:16px}.clsub{margin:0 0 10px;color:#666;font-size:12.5px}.clbtns{display:flex;justify-content:flex-end;gap:8px}';
+  document.head.insertBefore(st2, document.head.firstChild);
+  const st3 = document.createElement('style'); st3.textContent = '.emupd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.emupd .emcol{margin-left:auto}.emcolm{margin:6px 0 0;font-size:12.5px;color:var(--mut)}.emcolm .bvbtn{margin:0 4px}'; document.head.appendChild(st3);
+  /* ...and its Close / OK button works there too (illu-claude.js handles it in the program) */
+  if(!(window.illu && window.illu.claudeToggle)) document.addEventListener('click', e => { const x = e.target.closest && e.target.closest('.clmod [data-clx]'); if(!x) return; e.preventDefault(); const m = x.closest('.clmod'); if(m) m.remove(); });
 })();

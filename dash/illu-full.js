@@ -14,7 +14,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
   const isKO = () => typeof LANG !== 'undefined' && LANG === 'ko';
   const L = (en, ko) => isKO() ? ko : en;
-  const src = (u, ref, w) => (window.illu && window.illu.modelPhotos) ? 'illuimg://p/' + encodeURIComponent(u) + '?r=' + encodeURIComponent(ref || '') + '&nc=1&w=' + (w || 2000) : u;
+  const src = (u, ref, w) => (window.illu && window.illu.modelPhotos && !window.illu.web) ? 'illuimg://p/' + encodeURIComponent(u) + '?r=' + encodeURIComponent(ref || '') + '&nc=1&w=' + (w || 2000) : u;
   const small = u => /[?&]w=\d+/.test(u) ? u.replace(/([?&]w=)\d+/, '$1300') : u;
   const SIDEK = 'illu.fvside';
   const narrow = () => matchMedia('(max-width:900px)').matches;
@@ -25,7 +25,7 @@
   box.id = 'illufv'; box.hidden = true; box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
   box.innerHTML = '<div class="fvstage"><img class="fvimg" alt=""></div>' +
     '<button type="button" class="fvnav fvp" data-fv="-1" aria-label="Previous">‹</button><button type="button" class="fvnav fvn" data-fv="1" aria-label="Next">›</button>' +
-    '<div class="fvtop"><b class="fvnm"></b><span class="fvct"></span><span class="fvmsg"></span><span class="fvmainw"></span></div>' +
+    '<div class="fvtop"><b class="fvnm"></b><span class="fvct"></span><span class="fvmsg"></span><span class="fvmainw"></span><span class="fvtabs" role="group"></span></div>' +
     '<div class="fvstrip" aria-label="All photos"></div>' +
     '<aside class="fvside"></aside>' +
     '<button type="button" class="fvsidet" aria-label="Details"><span class="fvsti">›</span><span class="fvstl"></span></button>' +
@@ -40,7 +40,7 @@
     if(n < 2){ strip.innerHTML = ''; return; }
     if(strip.dataset.sig !== n + '|' + S.photos[0]){
       strip.dataset.sig = n + '|' + S.photos[0];
-      strip.innerHTML = S.photos.map((u, k) => '<button type="button" class="fvt" data-fvt="' + k + '" aria-label="Photo ' + (k + 1) + '"><img alt="" loading="lazy" decoding="async" src="' + esc(small(u)) + '"></button>').join('');
+      strip.innerHTML = S.photos.map((u, k) => '<button type="button" class="fvt' + (S.vid && S.vid.has(u) ? ' vid' : '') + '" data-fvt="' + k + '" aria-label="' + (S.vid && S.vid.has(u) ? 'Video ' : 'Photo ') + (k + 1) + '">' + (S.vid && S.vid.has(u) ? '<span>▶</span>' : '<img alt="" loading="lazy" decoding="async" src="' + esc(small(u)) + '">') + '</button>').join('');
     }
     strip.querySelectorAll('.fvt').forEach((b, k) => b.classList.toggle('on', k === S.i));
     const on = strip.querySelector('.fvt.on'); if(on) try{ on.scrollIntoView({block: 'nearest', inline: 'center'}); }catch(e){}
@@ -48,7 +48,12 @@
   function draw(){
     if(!S) return;
     const n = S.photos.length;
-    if(n) img.src = S.photos[S.i];
+    const isV = u => !!(S.vid && S.vid.has(u));
+    const cur = S.photos[S.i];
+    let vid = box.querySelector('.fvvid');
+    if(n && isV(cur)){ if(!vid){ vid = document.createElement('video'); vid.className = 'fvvid'; vid.controls = true; vid.playsInline = true; box.querySelector('.fvstage').appendChild(vid); } if(vid.getAttribute('src') !== cur) vid.src = cur; vid.hidden = false; img.hidden = true; }
+    else { if(vid){ try{ vid.pause(); }catch(e){} vid.hidden = true; vid.removeAttribute('src'); } img.hidden = false; if(n) img.src = cur; }
+    paintTabs();
     img.alt = S.name || '';
     box.querySelector('.fvnm').textContent = S.name || '';
     box.querySelector('.fvct').textContent = n > 1 ? (S.i + 1) + ' / ' + n : '';
@@ -77,7 +82,7 @@
     box.querySelector('.fvsti').textContent = on ? '›' : '‹';
     box.querySelector('.fvstl').textContent = L('Details', '정보');
     if(!on || !S){ side.innerHTML = ''; return; }
-    const keep = [...side.querySelectorAll('[data-mxin]')].map(n => [n.dataset.mxin, n.value, n === document.activeElement, n.selectionStart || 0, n.selectionEnd || 0]), sTop = side.scrollTop;
+    const keep = [...side.querySelectorAll('[data-mxin],[data-ntin]')].map(n => [n.dataset.mxin ? '[data-mxin="' + n.dataset.mxin + '"]' : '[data-ntin="' + CSS.escape(n.dataset.ntin) + '"]', n.value, n === document.activeElement, n.selectionStart || 0, n.selectionEnd || 0]), sTop = side.scrollTop;
     const {i, f, bk} = facts();
     const nm = S.name || i.nm || (bk && bk.nm) || '';
     const ag = i.ag || (bk && bk.ag) || '';
@@ -100,6 +105,17 @@
     let who = ''; try{ const h = S.key && window.lampHolder ? window.lampHolder(S.key) : null; const p = h && PEOPLE.get(h.pid); if(p) who = h.pid === ME ? L('You lit this first', '내가 처음 켬') : L(p.n + ' lit this first', p.n + ' 님이 처음 켬'); }catch(e){}
     const signed = typeof SIGNED === 'function' && SIGNED();
     const href = S.ref && /^https?:/i.test(S.ref) ? S.ref : '';
+    /* 1.2.129: every expanded card outside the Booking board shows the one shared panel */
+    if(S.key && !S.bid && window.__illuModelPanel){
+      let dom = ''; try{ const hit = (typeof AG !== 'undefined' ? AG : []).find(x => x.name === ag); dom = hit ? (hit.domain || hit.name) : ''; }catch(e){}
+      const html = window.__illuModelPanel(S.key, {nm, ag, agRef: dom, city: i.city || (bk && bk.city) || '', country: i.country || (bk && bk.country) || '', href, nPhotos: S.photos.length > 1 ? S.photos.length : 0, boards: [sex, i.div || ''].filter(Boolean).join(' · '), f, readNote});
+      if(side.__pnh !== html){ side.__pnh = html; side.innerHTML = html; }
+      MXABOUT = {nm, ag, city: i.city || '', country: i.country || ''};
+      for(const [k, v, f2, a2, b2] of keep){ const n = side.querySelector(k); if(!n) continue; n.value = v; if(f2){ try{ n.focus({preventScroll: true}); n.setSelectionRange(a2, b2); }catch(e){} } }
+      side.scrollTop = sTop;
+      return;
+    }
+    side.__pnh = '';
     side.innerHTML = '<div class="fvsh"><h2>' + esc(nm) + '</h2>' + (ag ? '<p class="fvag">' + esc(ag) + '</p>' : '') + (place ? '<p class="fvpl">' + esc(place) + '</p>' : '') + '</div>' +
       (S.key && window.__illuVotePanel ? window.__illuVotePanel(S.key) : '') +
       (S.key && signed && !window.__illuVotePanel ? '<div class="fvlamps" role="group" aria-label="Lamp">' + LAMPS().map(([v, l]) => '<button type="button" class="fvl fvl-' + v + (eff === v ? ' on' : '') + (mine === v ? ' mine' : '') + '" data-fvl="' + v + '" aria-pressed="' + (mine === v) + '"><i></i>' + esc(l) + '</button>').join('') + '</div>' +
@@ -108,10 +124,11 @@
       '<div class="fvlinks">' + (href ? '<a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(L('Agency page ↗', '에이전시 페이지 ↗')) + '</a>' : '') +
       (bk && bk.ig ? '<a href="https://www.instagram.com/' + esc(String(bk.ig).replace(/^@/, '')) + '/" target="_blank" rel="noopener">Instagram ↗</a>' : '') + '</div>' +
       '<p class="fvcount">' + (S.photos.length > 1 ? esc(L(S.photos.length + ' photos', '사진 ' + S.photos.length + '장')) : '') + '</p>' +
-      (S.key && window.__illuModelExtras ? window.__illuModelExtras(S.key, {nm, ag, city: i.city || (bk && bk.city) || '', country: i.country || (bk && bk.country) || ''}) : '');
+      /* 1.2.129 (user): every expanded card has Booking / Notes / Links - except the Booking board's own cards */
+      (S.key && !S.bid && window.__illuModelExtras ? window.__illuModelExtras(S.key, {nm, ag, city: i.city || (bk && bk.city) || '', country: i.country || (bk && bk.country) || ''}) : '');
     MXABOUT = {nm, ag, city: i.city || (bk && bk.city) || '', country: i.country || (bk && bk.country) || ''};
     /* what was being typed stays, and so does the cursor */
-    for(const [k, v, f, a, b] of keep){ const n = side.querySelector('[data-mxin="' + k + '"]'); if(!n) continue; n.value = v; if(f){ try{ n.focus({preventScroll: true}); n.setSelectionRange(a, b); }catch(e){} } }
+    for(const [k, v, f, a, b] of keep){ const n = side.querySelector(k); if(!n) continue; n.value = v; if(f){ try{ n.focus({preventScroll: true}); n.setSelectionRange(a, b); }catch(e){} } }
     side.scrollTop = sTop;
   }
   let MXABOUT = null;
@@ -127,9 +144,10 @@
       if(!(r && r.ok && r.rec)){ FIG.set(k, r && r.ok === false && !r.gone && /answer|network|timeout|fetch/i.test(r.error || '') ? 'fail' : 'none'); if(S && S.key === k) paintSide(); return; }
       const old = (typeof MEAS !== 'undefined' && MEAS.get(k)) || [];
       const rec = r.rec.map((v, j) => v == null || v === '' ? (old[j] == null ? null : old[j]) : v);
+      if(/\.(mp4|m4v|mov|webm|ogv|avi|mkv|m3u8)(\?|#|$)/i.test(rec[6] || '')) rec[6] = old[6] && !/\.(mp4|m4v|mov|webm|ogv|avi|mkv|m3u8)(\?|#|$)/i.test(old[6]) ? old[6] : null;   // never a film as her photo
       const more = [1, 2, 3, 4].some(j => rec[j] != null && old[j] == null);
       FIG.set(k, more ? 'got' : 'none');
-      try{ MEAS.set(k, rec); }catch(e){}
+      try{ if(window.__measPut) window.__measPut(k, rec); else MEAS.set(k, rec); }catch(e){}
       try{ if(ME && typeof DB !== 'undefined'){ const ref = DB.doc('meas/p-' + ME); const cur = await ref.get(); const d = cur && cur.exists ? cur.data() : null; const e = Object.assign({}, (d && d.e) || {}); e[k] = rec; await ref.set({e, at: new Date().toISOString(), name: 'read from agency pages'}); } }catch(e){}
       if(S && S.key === k) paintSide();
       try{ document.querySelectorAll('.uc[data-uck="' + CSS.escape(k) + '"]').length && window.__illuVoteChanged && window.__illuVoteChanged(); }catch(e){}
@@ -163,6 +181,18 @@
     box.querySelector('.fvmsg').textContent = '';
     draw();
     try{ box.querySelector('.fvx').focus({preventScroll: true}); }catch(e){}
+    /* 1.2.133 (user, 10 Nov 2026): the folders saved in her booking folder (Book / Snaps / Videos) as tabs, as on the
+       booking card, beside the agency's own photos. Her Book opens first when there is one. */
+    S.src = {agency: S.photos.slice(), book: [], snaps: [], videos: []}; S.araw = S.raw.slice(); S.tab = 'agency';
+    if(S.key && window.__illuMatPhotos){
+      window.__illuMatPhotos(S.key, true).then(mat => {
+        if(my !== seq || !S || !mat || !mat.length) return;
+        for(const m of mat) if(S.src[m.t]) S.src[m.t].push(m.u);
+        S.vid = new Set(S.src.videos);
+        const t = S.src.book.length ? 'book' : S.src.snaps.length ? 'snaps' : S.src.videos.length ? 'videos' : 'agency';
+        if(S.tab === 'agency') tabTo(t); else draw();
+      }).catch(() => {});
+    }
     /* the model's other photos, from the agency's page */
     if(href && /^https?:/i.test(href) && window.illu && window.illu.modelPhotos){
       box.querySelector('.fvmsg').textContent = L('Looking for more photos…', '사진을 더 찾는 중…');
@@ -171,18 +201,29 @@
         box.querySelector('.fvmsg').textContent = '';
         const more = ((r && r.photos) || []).map(p => src(p.url || p, href));
         if(more.length){
-          const keep = S.photos[S.i];
-          S.photos = first ? [first].concat(more) : more;
-          const raws = ((r && r.photos) || []).map(p => p.url || p); S.raw = first ? [first].concat(raws) : raws;
-          S.i = Math.max(0, S.photos.indexOf(keep));
+          S.src.agency = first ? [first].concat(more) : more;
+          const raws = ((r && r.photos) || []).map(p => p.url || p); S.araw = first ? [first].concat(raws) : raws;
+          if(S.tab === 'agency'){ const keep = S.photos[S.i]; S.photos = S.src.agency.slice(); S.raw = S.araw.slice(); S.i = Math.max(0, S.photos.indexOf(keep)); }
           draw();
         }
       }).catch(() => { if(my === seq) box.querySelector('.fvmsg').textContent = ''; });
     }
   }
+  function tabTo(t){
+    if(!S || !S.src || !S.src[t] || !S.src[t].length) return;
+    S.tab = t; S.photos = S.src[t].slice(); S.raw = t === 'agency' ? S.araw.slice() : S.src[t].slice(); S.i = 0; strip.dataset.sig = '';
+    draw();
+  }
+  function paintTabs(){
+    const w = box.querySelector('.fvtabs'); if(!w) return;
+    const sv = S && S.src; const own = sv && (sv.book.length || sv.snaps.length || sv.videos.length);
+    if(!own){ w.innerHTML = ''; return; }
+    const T = [['book', L('Book', '북')], ['snaps', L('Snaps', '스냅')], ['videos', L('Videos', '영상')], ['agency', L('Agency', '에이전시')]];
+    w.innerHTML = T.filter(([k]) => sv[k].length).map(([k, lab]) => '<button type="button" data-fvtab="' + k + '" aria-pressed="' + (S.tab === k) + '">' + esc(lab) + ' <s>' + sv[k].length + '</s></button>').join('');
+  }
   function close(){
     if(box.hidden) return;
-    seq++; S = null; box.hidden = true; img.removeAttribute('src'); strip.innerHTML = ''; side.innerHTML = '';
+    seq++; S = null; box.hidden = true; img.removeAttribute('src'); strip.innerHTML = ''; side.innerHTML = ''; side.__pnh = '';   /* 1.2.133: reopening the same card drew an empty panel */
     document.body.classList.remove('illufvon');
   }
   function step(d){ if(!S || S.photos.length < 2) return; S.i = (S.i + d + S.photos.length) % S.photos.length; draw(); }
@@ -224,6 +265,7 @@
     }
   }, true);
   box.addEventListener('click', e => {
+    const tb = e.target.closest('[data-fvtab]'); if(tb){ tabTo(tb.dataset.fvtab); return; }
     const n = e.target.closest('[data-fv]'); if(n){ step(+n.dataset.fv); return; }
     if(e.target.closest('.fvside, .fvsidet, .fvstrip, .fvtop')) return;           // the panel, the strip and the title keep the view open
     if(e.target.closest('.fvx') || !e.target.closest('.fvimg') || !onPhoto(e)) close();
@@ -254,6 +296,12 @@
 #illufv .fvct{font:600 11.5px var(--sans);padding:2px 9px;border-radius:999px;background:rgba(255,255,255,.14)}
 #illufv .fvct:empty,#illufv .fvmsg:empty{display:none}
 #illufv .fvmsg{opacity:.7;font-size:12px}
+#illufv .fvtabs{display:inline-flex;gap:4px;margin-left:10px;pointer-events:auto}
+#illufv .fvtabs button{border:0;background:rgba(255,255,255,.12);color:#fff;border-radius:999px;padding:4px 11px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+#illufv .fvtabs button[aria-pressed="true"]{background:#fff;color:#1B1724}
+#illufv .fvtabs s{text-decoration:none;opacity:.7;font-size:11px;margin-left:2px}
+#illufv .fvvid{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+#illufv .fvt.vid span{display:grid;place-items:center;width:100%;height:100%;color:#fff;font-size:18px;background:#2a2230}
 #illufv .fvx{position:absolute;right:18px;top:14px;z-index:3;width:38px;height:38px;border-radius:50%;border:0;background:rgba(255,255,255,.14);color:#fff;font-size:22px;line-height:1;cursor:pointer}
 #illufv:not(.fvnoside) .fvx{background:var(--surf2,#F1EDF4);color:var(--ink,#1B1724)}
 #illufv .fvx:hover{background:#2A2027;color:#fff}

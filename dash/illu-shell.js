@@ -122,6 +122,8 @@
     if(c0 && c1 && c1.getAttribute('aria-pressed') !== c0.getAttribute('aria-pressed')) c1.setAttribute('aria-pressed', c0.getAttribute('aria-pressed') || 'false');
   }
   window.__illuShellRepaint = () => later();
+  /* 1.2.129: which page is showing, for the + New card button (illu-newcard.js) */
+  window.__illuPageNow = () => showing ? 'today' : page;
   /* the name beside the icon, on hover or keyboard focus */
   const tip = document.createElement('div'); tip.id = 'shtip'; tip.setAttribute('role', 'tooltip');
   function showTip(b){

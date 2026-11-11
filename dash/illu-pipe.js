@@ -30,6 +30,8 @@
   /* small notes on the card, only from what the card holds */
   function tags(c, i){
     const out = [];
+    /* 1.2.130: still on the Team Vote (sent to Booking, or Get files, before the vote ended) */
+    try{ if(c.k && window.__illuVoteState && /^(open|tie)$/.test(window.__illuVoteState(c.k))) out.push(['w', L('Team Vote still open', '팀 투표 진행 중')]); }catch(e){}
     const GT = {no: L('No Guarantee', '노 개런티'), cond: L('Condition', '컨디션'), net: L('Net Guarantee', '넷 개런티')};
     if(c.gty && GT[c.gty]) out.push(['', GT[c.gty]]);
     if(c.vty) out.push(['', c.vty === 'e6' ? 'E-6' : 'C-4']);

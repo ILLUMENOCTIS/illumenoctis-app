@@ -410,6 +410,91 @@ async function loadAgDel(){
   }catch(e){}
   agApply();
 }
+/* 1.2.130 (user, 10 Nov 2026): "if I want to place the country/region of an agency's board that hasn't
+   been decided, where do I input this information?" - Country and City in the agency's contacts box.
+   Kept in agloc/<domain> {d, country, city, by, at} (shared, live) and laid over the directory's own
+   values; the region follows from the country. An agency with offices in several places keeps the
+   offices that already have a country - the typed place goes to the ones without one. */
+const AGLOC = new Map();
+const RGSET = {
+  Europe: 'Albania|Andorra|Austria|Belarus|Belgium|Bosnia and Herzegovina|Bulgaria|Croatia|Cyprus|Czechia|Czech Republic|Denmark|Estonia|Finland|France|Germany|Greece|Hungary|Iceland|Ireland|Italy|Kosovo|Latvia|Liechtenstein|Lithuania|Luxembourg|Malta|Moldova|Monaco|Montenegro|Netherlands|North Macedonia|Norway|Poland|Portugal|Romania|Russia|San Marino|Serbia|Slovakia|Slovenia|Spain|Sweden|Switzerland|Turkey|Ukraine|United Kingdom|Vatican City',
+  Asia: 'Afghanistan|Armenia|Azerbaijan|Bahrain|Bangladesh|Bhutan|Brunei|Cambodia|China|Georgia|Hong Kong|India|Indonesia|Iran|Iraq|Israel|Japan|Jordan|Kazakhstan|Kuwait|Kyrgyzstan|Laos|Lebanon|Macau|Malaysia|Maldives|Mongolia|Myanmar|Nepal|North Korea|Oman|Pakistan|Palestine|Philippines|Qatar|Saudi Arabia|Singapore|South Korea|Sri Lanka|Syria|Taiwan|Tajikistan|Thailand|Timor-Leste|Turkmenistan|United Arab Emirates|Uzbekistan|Vietnam|Yemen',
+  'North America': 'Antigua and Barbuda|Bahamas|Barbados|Belize|Canada|Costa Rica|Cuba|Dominica|Dominican Republic|El Salvador|Grenada|Guatemala|Haiti|Honduras|Jamaica|Mexico|Nicaragua|Panama|Puerto Rico|Saint Kitts and Nevis|Saint Lucia|Saint Vincent and the Grenadines|Trinidad and Tobago|United States',
+  'South America': 'Argentina|Bolivia|Brazil|Chile|Colombia|Ecuador|Guyana|Paraguay|Peru|Suriname|Uruguay|Venezuela',
+  Oceania: 'Australia|Fiji|Kiribati|Marshall Islands|Micronesia|Nauru|New Zealand|Palau|Papua New Guinea|Samoa|Solomon Islands|Tonga|Tuvalu|Vanuatu'
+};
+const RGOF = new Map();
+for(const r in RGSET) for(const c of RGSET[r].split('|')) RGOF.set(c.toLowerCase(), r);
+function regionFor(country){
+  const c = String(country || '').trim(); if(!c) return '';
+  if(REGION[c]) return REGION[c];
+  const r = RGOF.get(c.toLowerCase()); if(r) return r;
+  return WORLD.some(w => w.toLowerCase() === c.toLowerCase()) ? 'Africa' : 'Unknown';
+}
+const worldName = c => { const t = String(c || '').trim(); return WORLD.find(w => w.toLowerCase() === t.toLowerCase()) || t; };
+function agLocApply(){
+  const byDom = new Map();
+  for(const a of AGALL){
+    if(!a.__o) a.__o = {country: a.country || '', city: a.city || '', region: a.region || ''};
+    const d = a.domain || ''; if(!byDom.has(d)) byDom.set(d, []); byDom.get(d).push(a);
+  }
+  for(const [d, list] of byDom){
+    const o = d ? AGLOC.get(d) : null;
+    for(const a of list){
+      const use = o && (list.length === 1 || !a.__o.country);
+      a.country = use && o.country ? o.country : a.__o.country;
+      a.city = use && o.country ? (o.city || '') : a.__o.city;
+      a.region = use && o.country ? regionFor(o.country) : a.__o.region;
+    }
+  }
+  DIRSUB = ''; AGOF = null; KEYINFO = null;
+  window.__illuAGv = (window.__illuAGv || 0) + 1;
+  try{ tallies(); }catch(e){}
+}
+function agLocOf(dom){
+  const a = AGALL.find(x => x.domain === dom);
+  const o = AGLOC.get(dom);
+  return {country: o ? o.country : (a ? a.country || '' : ''), city: o ? o.city || '' : (a ? a.city || '' : '')};
+}
+function agLocBlock(dom){
+  if(!dom) return '';
+  const v = agLocOf(dom), o = AGLOC.get(dom);
+  const who = o && o.by ? ((PEOPLE.get(o.by) || {}).n || '') : '';
+  return '<div class="ctloc"><span class="ctagi" aria-hidden="true">◎</span>' +
+    '<label><span>Country</span><input class="ctlf" data-loc="country" list="worldcc" autocomplete="off" placeholder="Not stated" aria-label="Agency country" value="' + esc(v.country) + '"></label>' +
+    '<label><span>City</span><input class="ctlf" data-loc="city" autocomplete="off" placeholder="Not stated" aria-label="Agency city" value="' + esc(v.city) + '"></label>' +
+    '<em class="ctlrg">' + esc(v.country ? regionFor(v.country) : '') + '</em>' +
+    (who ? '<s class="ctlby">set by ' + esc(who) + '</s>' : '') + '</div>';
+}
+async function agLocSave(dom, f, val){
+  if(!DB || !SIGNED() || !dom) return;
+  const cur = Object.assign({d: dom}, agLocOf(dom), AGLOC.get(dom) || {});
+  cur[f] = f === 'country' ? worldName(val) : String(val || '').trim().slice(0, 80);
+  cur.by = ME || ''; cur.at = new Date().toISOString();
+  AGLOC.set(dom, cur); agLocApply();
+  try{ await DB.doc('agloc/' + dom.replace(/[^A-Za-z0-9_\-.~:@+]/g, '_')).set(cur); }catch(e){ try{ siteToast('Could not save the place — check the connection.'); }catch(_){} }
+  try{ refresh(); }catch(e){}
+}
+document.addEventListener('change', e => {
+  const t = e.target; if(!t || !t.classList || !t.classList.contains('ctlf')) return;
+  const box = t.closest('.cts[data-dom]'); if(!box) return;
+  if(!SIGNED()){ try{ nudgeSignIn(t); }catch(_){} return; }
+  agLocSave(box.dataset.dom, t.dataset.loc, t.value).then(() => {
+    const rg = box.querySelector('.ctlrg'), c = box.querySelector('.ctlf[data-loc="country"]');
+    if(c && t.dataset.loc === 'country') c.value = worldName(t.value);
+    if(rg) rg.textContent = c && c.value ? regionFor(c.value) : '';
+  });
+});
+document.addEventListener('keydown', e => { const t = e.target; if(t && t.classList && t.classList.contains('ctlf') && e.key === 'Enter'){ e.preventDefault(); t.blur(); } });
+(function agLocListen(){
+  if(!DB){ setTimeout(agLocListen, 500); return; }
+  try{ DB.collection('agloc').onSnapshot(snap => {
+    AGLOC.clear();
+    for(const d of ((snap && snap.docs) ? snap.docs : [])){ const v = docOf(d); if(v && v.d && v.country) AGLOC.set(v.d, v); }
+    agLocApply();
+    try{ refresh(); }catch(e){}
+  }, () => {}); }catch(e){}
+})();
 async function loadSiteStat(){
   if(!DB) return;
   try{
@@ -1503,11 +1588,11 @@ function ctsChip(ref, name){
   const n = ctsCount(dom), t = telCount(dom), d = esc(dom);
   const x = '';
   return '<span class="agmail' + x + '" data-ctopen="' + d + '" data-dom="' + d +
-      '" data-n="' + n + '" role="button" tabindex="0" title="' + n + ' email contact' +
-      (n === 1 ? '' : 's') + ' — click to open contacts">✉ ' + n + '</span>' +
+      '" data-n="' + n + '" role="button" tabindex="0" title="' + (n ? n + ' email contact' +
+      (n === 1 ? '' : 's') + ' — click to open contacts' : 'No email yet — click to type one in') + '">✉ ' + n + '</span>' +
     '<span class="agtel' + x + '" data-ctopen="' + d + '" data-dom="' + d +
-      '" data-n="' + t + '" role="button" tabindex="0" title="' + t + ' phone number' +
-      (t === 1 ? '' : 's') + ' — click to open contacts">☎ ' + t + '</span>';
+      '" data-n="' + t + '" role="button" tabindex="0" title="' + (t ? t + ' phone number' +
+      (t === 1 ? '' : 's') + ' — click to open contacts' : 'No phone number yet — click to type one in') + '">☎ ' + t + '</span>';
 }
 function paintCtsChip(dom, els){
   const n = ctsCount(dom), t = telCount(dom);
@@ -1606,7 +1691,7 @@ function contactsBlock(dom){
     '<div class="ctsh"><b>Contacts</b><span class="ctsn">' +
       (CONTACTS.get(dom) || []).filter(ctsReal).length + '</span>' +
     '<button type="button" class="ctadd">+ Add</button></div>' +
-    addrBlock(dom) +
+    addrBlock(dom) + agLocBlock(dom) +
     '<div class="ctlist">' + ctsRows(dom) + '</div></div>';
 }
 /* The store lands a beat after the first paint, so any panel already open when the
@@ -1648,7 +1733,12 @@ function openContacts(dom){
     '<div class="ctbbody">' + contactsBlock(dom) + '</div></div>';
   ctmodal.dataset.on = '1';
   document.body.style.overflow = 'hidden';
-  const f = ctmodal.querySelector('.ctf');
+  /* 1.2.129 (user, 10 Nov 2026): nothing saved yet - a blank contact is ready to type into, everywhere
+     the ✉ / ☎ chips are (cards, Directory, Booking, the shared side panel) */
+  if(!(CONTACTS.get(dom) || []).filter(ctsReal).length && !document.body.matches('[data-ro="1"]')){
+    const add = ctmodal.querySelector('.ctadd'); if(add) add.click();
+  }
+  const f = ctmodal.querySelector('.ctf[data-k="e"]') || ctmodal.querySelector('.ctf');
   if(f) f.focus();
 }
 function closeContacts(){
@@ -1850,6 +1940,18 @@ function markClick(e){
   return true;
 }
 const MEAS = new Map();
+/* 11 Nov 2026: a film is never a card's photo. An agency page that opens with a video (Ego Models) once
+   gave "…/RED-render_-.mp4" as the photo, and the card stayed black. A video in the photo place is dropped
+   and any real photo already known for her is kept. */
+const MEASVID = /\.(mp4|m4v|mov|webm|ogv|avi|mkv|m3u8)(\?|#|$)/i;
+function measPut(k, v){
+  if(!Array.isArray(v)) { MEAS.set(k, v); return; }
+  const old = MEAS.get(k), oldPh = Array.isArray(old) && old[6] && !MEASVID.test(old[6]) ? old[6] : null;
+  if(v[6] && MEASVID.test(v[6])){ v = v.slice(); v[6] = oldPh; }
+  else if(!v[6] && oldPh){ v = v.slice(); v[6] = oldPh; }
+  MEAS.set(k, v);
+}
+window.__measPut = measPut;
 /* Hand corrections, kept in their own collection ("medits", sharded exactly as the
    measurements are) and layered over the crawled figures at read time. A field present
    here wins; a field absent falls through to what the agency published; a field set to
@@ -1935,7 +2037,7 @@ async function loadMeas(){
     const docs = (snap && snap.docs) ? snap.docs : (snap || []);
     for(const d of docs){
       const data = docOf(d);
-      for(const [k, v] of Object.entries((data && data.e) || {})) MEAS.set(k, v);
+      for(const [k, v] of Object.entries((data && data.e) || {})) measPut(k, v);
     }
     await loadEdits();
     measState = 'ready';
@@ -4347,9 +4449,11 @@ function peerMini(key){
 /* One ID's work: the models that ID has put a lamp on, and the booking cards that ID
    opened. Clicking any ID disc on the page narrows every tab to just that. */
 function whoHas(pid, key){
-  const mk = PEERMARKS.get(pid);
-  if(mk && mk.e.has(key)) return true;
-  return pid === ME && MARKS.has(key);
+  /* 1.2.130: one person's work = their favorites, the cards they sent to the vote, the booking cards they are
+     in charge of (the old lamps are no longer counted - the ♡ and the vote replaced them on 7 Nov) */
+  try{ if(window.__illuWhoHas && window.__illuWhoHas(pid, key)) return true; }catch(e){}
+  for(const c of BOOK.values()) if(c.by === pid && c.k === key && c.st !== 'canc') return true;
+  return false;
 }
 function whoPaint(){
   const bar = document.getElementById('whobar');
@@ -4357,15 +4461,16 @@ function whoPaint(){
   const p = litWho && PEOPLE.get(litWho);
   if(!p){ bar.hidden = true; bar.innerHTML = ''; document.body.dataset.who = ''; return; }
   document.body.dataset.who = litWho;
-  let lit = 0, bk = 0;
-  const mk = PEERMARKS.get(litWho);
-  if(mk) lit = mk.e.size; else if(litWho === ME) lit = MARKS.size;
+  let bk = 0, n = {fav: 0, vote: 0};
+  try{ if(window.__illuWhoCounts) n = window.__illuWhoCounts(litWho); }catch(e){}
   for(const c of BOOK.values()) if(c.by === litWho && c.st !== 'canc') bk++;
+  const ko = typeof LANG !== 'undefined' && LANG === 'ko';
   bar.hidden = false;
-  bar.innerHTML = '<span class="whol">Showing only</span>' + idDisc(litWho) +
-    '<b>' + esc(p.n) + '</b><span class="whos">' + lit + (lit === 1 ? ' model lit' : ' models lit') +
-    ' \u00b7 ' + bk + (bk === 1 ? ' booking' : ' bookings') + '</span>' +
-    '<button type="button" id="whoclear">Show everyone \u00d7</button>';
+  bar.innerHTML = '<span class="whol">' + (ko ? '전체 화면 필터' : 'Showing only') + '</span>' + idDisc(litWho) +
+    '<b>' + esc(p.n) + '</b><span class="whos">\u2665 ' + n.fav + (ko ? ' 즐겨찾기' : (n.fav === 1 ? ' favorite' : ' favorites')) +
+    ' \u00b7 ' + n.vote + (ko ? ' 투표로 보냄' : ' sent to vote') +
+    ' \u00b7 ' + bk + (ko ? ' 부킹 담당' : (bk === 1 ? ' booking in charge' : ' bookings in charge')) + '</span>' +
+    '<button type="button" id="whoclear">' + (ko ? '모두 보기 \u00d7' : 'Show everyone \u00d7') + '</button>';
 }
 function whoSet(pid){
   litWho = (pid && litWho !== pid && PEOPLE.has(pid)) ? pid : '';
@@ -4373,6 +4478,8 @@ function whoSet(pid){
   if(litWho && litWho !== ME && VIEW === 'lit') { whoPaint(); setView('com'); return; }
   whoPaint();
   refresh();
+  try{ window.__illuVoteChanged && window.__illuVoteChanged(); }catch(e){}
+  try{ window.__illuTodayRender && window.__illuTodayRender(); }catch(e){}
 }
 /* any ID disc, anywhere, is a filter - except inside the ID dialog and the lamp chips
    that already filter on their own */
@@ -4382,11 +4489,33 @@ document.addEventListener('click', e => {
   if(t.closest('#whoclear')){ e.preventDefault(); whoSet(''); return; }
   if(t.closest('#idme') || t.closest('[role="dialog"]') || t.closest('.bv')) return;
   if(t.closest('button[data-lw]')) return;
-  const d = t.closest('.iddisc[data-p]') || (t.closest('#sigwho') && document.querySelector('#sigwho .iddisc[data-p]'));
-  if(!d) return;
+  /* 1.2.130 (user, 10 Nov 2026): a name badge on a card no longer switches the whole program to one person
+     by accident. The filter is chosen on purpose: a person in the "here now" pill opens a small menu. */
+  const go = t.closest('[data-whogo]');
+  if(go){ e.preventDefault(); e.stopPropagation(); whoMenuClose(); whoSet(go.dataset.whogo === 'off' ? '' : go.dataset.whogo); return; }
+  if(t.closest('#whomenu')) return;
+  const d = t.closest('#abon .iddisc[data-p]') || t.closest('#sigwho .iddisc[data-p]');
+  if(!d){ whoMenuClose(); return; }
   e.preventDefault(); e.stopPropagation();
-  whoSet(d.dataset.p);
+  whoMenu(d, d.dataset.p);
 }, true);
+function whoMenuClose(){ const m = document.getElementById('whomenu'); if(m) m.remove(); }
+function whoMenu(anchor, pid){
+  whoMenuClose();
+  const p = PEOPLE.get(pid); if(!p) return;
+  const ko = typeof LANG !== 'undefined' && LANG === 'ko';
+  const m = document.createElement('div'); m.id = 'whomenu'; m.setAttribute('role', 'menu');
+  const on = litWho === pid;
+  m.innerHTML = '<div class="whomh">' + idDisc(pid) + '<b>' + esc(p.n) + '</b></div>' +
+    (on ? '<button type="button" role="menuitem" data-whogo="off">' + (ko ? '모두 보기' : 'Show everyone again') + '</button>'
+        : '<button type="button" role="menuitem" data-whogo="' + esc(pid) + '">' + (ko ? esc(p.n) + '의 작업만 모든 화면에 보기' : 'Show only ' + esc(p.n) + '\u2019s work everywhere') + '</button>') +
+    '<p>' + (ko ? '즐겨찾기, 투표로 보낸 카드, 담당 부킹. 한 보드만 거르려면 보드 위의 이름 칩을 쓰세요.' : 'Their favorites, the cards they sent to the vote, the bookings they are in charge of. To filter one board only, use the name chips on that board.') + '</p>';
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect();
+  m.style.top = Math.round(r.bottom + 8) + 'px';
+  m.style.left = Math.round(Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.left + r.width / 2 - m.offsetWidth / 2))) + 'px';
+}
+document.addEventListener('keydown', e => { if(e.key === 'Escape') whoMenuClose(); });
 function litPasses(m, term){
   const sexes = checked('sex'), regions = checked('region'),
         tiers = checked('tier'), marks = checked('mark');

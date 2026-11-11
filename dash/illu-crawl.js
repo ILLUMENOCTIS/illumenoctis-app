@@ -189,7 +189,7 @@
         while(C.paused) await wait(2000);
         const r = await illu.crawlProfile(h);
         st.read++; L.read++; C.read++;
-        if(r && r.ok && r.rec){ E[k] = r.rec; MEAS.set(k, r.rec); st.measured++; L.ok++; C.found++; since++; }
+        if(r && r.ok && r.rec){ E[k] = r.rec; if(window.__measPut) window.__measPut(k, r.rec); else MEAS.set(k, r.rec); st.measured++; L.ok++; C.found++; since++; }
         else if(r && r.gone) st.gone++;
         else if(r && /no measurements/.test(r.error || '')) st.nomeas++;
         else st.errors++;

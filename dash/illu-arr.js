@@ -483,8 +483,35 @@
     }catch(e){} }
     const leg = S.view === 'ov' && S.home === 'cal' ? '<p class="adhint adhleg"><span><i style="background:#1F8A55"></i>' + L('arrival', '도착') + '</span><span><i style="background:#C2334D"></i>' + L('departure', '출국') + '</span><span><i style="background:#5B48C9"></i>' + L('appointment', '일정') + '</span></p>' : '';
     return '<div class="adbdh"><h2>' + L('Arrival/Departure', '입국/출국') + '</h2>' + (S.view === 'ov' ? seg : '') + crumbs + tot + leg + '<span class="adsp"></span><div class="adbnav">' + (S.view !== 'ov' ? '<button type="button" class="adpill" data-adback>‹ ' + L('Back', '뒤로') + '</button>' : '') +
-      '<button type="button" class="adnav" data-adbmv="-1" aria-label="' + H(lab[0]) + '">‹</button><button type="button" class="adtoday" data-adbtoday>' + L('Today', '오늘') + '</button><button type="button" class="adnav" data-adbmv="1" aria-label="' + H(lab[1]) + '">›</button></div></div>';
+      '<button type="button" class="adpill adfs" data-adfs aria-pressed="' + document.body.classList.contains('adfull') + '" title="' + H(L('Full screen (Esc to leave)', '전체 화면 (Esc로 나가기)')) + '">' + (document.body.classList.contains('adfull') ? L('Exit full screen', '전체 화면 끝내기') : L('⤢ Full screen', '⤢ 전체 화면')) + '</button>' + '<button type="button" class="adnav" data-adbmv="-1" aria-label="' + H(lab[0]) + '">‹</button><button type="button" class="adtoday" data-adbtoday>' + L('Today', '오늘') + '</button><button type="button" class="adnav" data-adbmv="1" aria-label="' + H(lab[1]) + '">›</button></div></div>';
   }
+
+  /* 1.2.132 (user, 10 Nov 2026): the timeline scrolls left and right by clicking and holding the mouse and dragging
+     (like grabbing the page), and the board can fill the whole window (Full screen; Esc leaves). */
+  (function(){
+    let d = null, moved = false;
+    PG.addEventListener('pointerdown', e => {
+      if(e.button !== 0 || e.pointerType === 'touch') return;
+      const w = e.target.closest && e.target.closest('.adtlw'); if(!w) return;
+      if(e.target.closest('input,select,textarea,a')) return;
+      d = {w, x: e.clientX, y: e.clientY, l: w.scrollLeft, t: w.scrollTop, id: e.pointerId, on: false}; moved = false;
+    });
+    addEventListener('pointermove', e => {
+      if(!d || e.pointerId !== d.id) return;
+      const dx = e.clientX - d.x, dy = e.clientY - d.y;
+      if(!d.on){ if(Math.abs(dx) < 5 && Math.abs(dy) < 5) return; d.on = true; moved = true; d.w.classList.add('addrag'); try{ d.w.setPointerCapture(d.id); }catch(err){} }
+      d.w.scrollLeft = d.l - dx; d.w.scrollTop = d.t - dy; e.preventDefault();
+    });
+    const end = () => { if(!d) return; d.w.classList.remove('addrag'); try{ d.w.releasePointerCapture(d.id); }catch(err){} d = null; };
+    addEventListener('pointerup', end); addEventListener('pointercancel', end);
+    /* a drag is not a click on the bar under the mouse */
+    PG.addEventListener('click', e => { if(moved){ moved = false; e.preventDefault(); e.stopPropagation(); } }, true);
+    const setFull = on => { document.body.classList.toggle('adfull', on); try{ board(); }catch(err){} };
+    PG.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-adfs]'); if(!b) return; e.preventDefault(); e.stopPropagation(); setFull(!document.body.classList.contains('adfull')); }, true);
+    addEventListener('keydown', e => { if(e.key === 'Escape' && document.body.classList.contains('adfull') && ![...document.querySelectorAll('.clmod, #ncm, .bv[role="dialog"], #illufv:not([hidden])')].some(x => x.getClientRects().length)) setFull(false); });
+    /* leaving the page leaves full screen */
+    setInterval(() => { if(document.body.classList.contains('adfull') && PG.hidden) document.body.classList.remove('adfull'); }, 800);
+  })();
   function board(){
     if(PG.hidden) return;
     const all = stays();
@@ -1075,6 +1102,11 @@ html[data-theme="dark"] .adg.net,html[data-theme="dim"] .adg.net{background:#332
 .adg.mq .admq{display:inline-flex;gap:var(--gap);animation:admq var(--dur) linear infinite;animation-delay:1.2s}
 @keyframes admq{from{transform:translateX(0)}to{transform:translateX(calc(-1 * var(--shift)))}}
 .adnx{font-size:12px;color:var(--mut)}.adnx b{color:var(--ink)}.adnx.a{color:#1F8A55}.adnx.d{color:#C2334D}
+
+.adtlw{cursor:grab}.adtlw.addrag{cursor:grabbing;user-select:none}.adtlw.addrag *{cursor:grabbing!important}
+body.adfull #pane-arrd{position:fixed;inset:0;z-index:3000;background:var(--paper,var(--bg,#fff));padding:12px max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px));overflow:auto}
+body.adfull #pane-arrd .adbd{height:100%}
+.adfs[aria-pressed="true"]{background:var(--acc);color:var(--on-acc,#fff);border-color:var(--acc)}
 /* timeline */
 .adtlbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:0 0 10px}.adtlbar .adhint{margin:0}
 .adtlw{background:var(--surf);border:1px solid var(--line);border-radius:14px;overflow:auto;position:relative;flex:1;min-height:0}

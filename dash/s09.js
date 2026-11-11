@@ -65,23 +65,31 @@
                            : T('Stages') + '<b>' + esc(T('All done')) + '</b>';
     bvSteps.querySelectorAll('.bvstp').forEach((p, i) => p.classList.toggle('cur', !!cu && i === cu.i));
   }
+  /* user, 10 Nov 2026: "let's have the body measurements (bust, waist, hip) and shoe size available here".
+     The rebuilt header had lost the figures row (.bvmx); it comes back under the agency line, in the same units as the
+     profile panel, and the existing hooks keep it current while measurements are typed. Age moves into that row. */
+  function bvMs(c){
+    let h = ''; try{ h = bvFigures(c); }catch(e){}
+    return '<div class="bvmx">' + h + '</div>';
+  }
   function head(c){
     const src = bkPhoto(c);
     let age = '';
     try{ age = ageFrom(c.dob); }catch(e){}
     if(age === '' || age == null) age = (c.age == null || c.age === '') ? '' : c.age;
     const place = [c.city, c.country].filter(Boolean).join(', ');
-    const sub = [place, age !== '' ? age + ' ' + T('yrs') : ''].filter(Boolean).join(' · ');
+    const sub = place;
     const got = BVLOAD.get(c.id);
     bvHd.innerHTML =
       '<span class="bvface">' + (src ? '<img src="' + esc(src) + '" alt="">' : '') + '</span>' +
       '<div class="bvwho"><h2 class="bvnm">' + esc(c.nm || 'Unnamed') + '</h2>' +
-      '<div class="bvag">' + (c.ag ? '<b>' + esc(c.ag) + '</b>' : '') + esc(sub) + '</div></div>' +
+      '<div class="bvag">' + (c.ag ? '<b>' + esc(c.ag) + '</b>' : '') + esc(sub) + '</div>' + bvMs(c) + '</div>' +
       '<div class="bvact"><div class="bvtrk"><div class="bvtrkl"></div></div>' +
         /* the same EN / 한 switch as the top bar */
         '<div class="bvlang2" role="group" aria-label="Language">' +
           '<button type="button" data-bvlang="en" aria-pressed="' + (LANG !== 'ko') + '">EN</button>' +
           '<button type="button" data-bvlang="ko" aria-pressed="' + (LANG === 'ko') + '">\ud55c</button></div>' +
+        (window.illu && window.illu.bookingShare ? '<button type="button" class="bvbtn bvshbtn" data-bvshare title="' + esc(T('Send a view-only link to her BOOK, SNAPS and VIDEOS')) + '">' + SHAREIC + T('Share material') + '</button>' : '') +
         '<span class="bvfiles"><button type="button" class="bvbtn bvfbtn" data-bvfiles aria-expanded="false" ' +
           'aria-haspopup="true">' + FOLDER + T('Files') + CHEV + '</button>' +
           '<div class="bvfmenu" hidden role="menu">' +
@@ -92,6 +100,67 @@
         '<button type="button" class="bvx" aria-label="Close" title="Close (Esc)">×</button></div>';
     trk(c);
   }
+  /* 1.2.129 (user, 10 Nov 2026): send someone a link to see her BOOK, SNAPS and VIDEOS. View-only Dropbox links,
+     one per folder; the passport, contract and visa folders are never shared. */
+  const SHAREIC = '<svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8" aria-hidden="true"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8l7.4-4.4M8.3 13.2l7.4 4.4"/></svg>';
+  const SHLAB = {book: '1. BOOK', snaps: '2. SNAPS', videos: '3. VIDEOS'};
+  try{ Object.assign(KO, {'Copy her details + links': '모델 정보 + 링크 복사'}); }catch(e){}
+  let SHR = null;
+  /* 1.2.133 (user, 10 Nov 2026): "send a link of the model, BOOK/SNAPS/VIDEOS - measurements and all this type of
+     detail for the person receiving this information to be able to view": the message carries her details too */
+  function shMsg(c){
+    const ok = (SHR && SHR.links || []).filter(l => l.url);
+    let f = {}; try{ f = bkFacts(c) || {}; }catch(e){}
+    const Lw = (v, h) => { try{ return window.__illuLen ? window.__illuLen(v, h) : v; }catch(e){ return v; } };
+    const lu = (() => { try{ return window.__illuU ? window.__illuU().len : 'cm'; }catch(e){ return 'cm'; } })();
+    const shoe = (() => { try{ return window.__illuShoe ? window.__illuShoe(f.eu, f.us, f.g) : f.eu; }catch(e){ return f.eu; } })(), su = (() => { try{ return window.__illuShoeUnit ? window.__illuShoeUnit() : 'EU'; }catch(e){ return 'EU'; } })();
+    const ms = [f.ht != null ? 'Height ' + Lw(f.ht, true) + (lu === 'cm' ? ' cm' : '') : '', f.bu != null ? 'Bust ' + Lw(f.bu) + ' ' + lu : '', f.wa != null ? 'Waist ' + Lw(f.wa) + ' ' + lu : '', f.hp != null ? 'Hips ' + Lw(f.hp) + ' ' + lu : '', shoe != null && shoe !== '' ? 'Shoe ' + shoe + ' ' + su : ''].filter(Boolean).join(' · ');
+    const age = String(c.age || '').trim(), av = [c.avf ? 'from ' + c.avf : '', c.avd ? String(c.avd).replace('-', '–') + ' days' : ''].filter(Boolean).join(', ');
+    const lines = [String(c.nm || '').trim() + (c.ag ? ' – ' + String(c.ag).trim() : '')];
+    if(ms) lines.push(ms);
+    const more = [age ? 'Age ' + age : '', c.nat ? String(c.nat) : '', av ? 'Available ' + av : ''].filter(Boolean).join(' · ');
+    if(more) lines.push(more);
+    if(ok.length) lines.push('');
+    return lines.concat(ok.map(l => SHLAB[l.tab] + ': ' + l.url)).join('\n');
+  }
+  function shPaint(c){
+    const m = document.getElementById('bvshm'); if(!m) return;
+    let body = '';
+    if(!SHR) body = '<p class="bvshd">' + esc(T('Making the links…')) + '</p>';
+    else if(SHR.need === 'connect') body = '<p class="bvshd">' + esc(T('Sharing makes a link in Dropbox, so this computer has to be signed in to Dropbox once (you type your own Dropbox sign-in in your browser).')) + '</p><div class="bvsha"><button type="button" class="bvbtn pri" data-bvshconn>' + esc(T('Sign in to Dropbox')) + '</button></div>';
+    else if(SHR.scope) body = '<p class="bvshd err">' + esc(T('Dropbox did not allow the program to make links. In the Dropbox App Console, the ILLUMENOCTIS MDI app needs the "sharing.write" permission turned on; then sign in to Dropbox again here.')) + '</p>';
+    else if(SHR.nofolder) body = '<p class="bvshd">' + esc(T('There is no folder for her in Dropbox › ILLUMENOCTIS › BOOKING yet.')) + ' <b>' + esc(SHR.want || '') + '</b></p>';
+    else if(!SHR.ok) body = '<p class="bvshd err">' + esc(T('Could not make the links: ') + (SHR.why || '')) + '</p>';
+    else {
+      const ls = SHR.links || [];
+      body = '<div class="bvshl">' + ls.map(l => '<div class="bvshr"><b>' + esc(SHLAB[l.tab]) + '</b>' +
+        (l.url ? '<span class="bvshn">' + l.n + ' ' + esc(T(l.n === 1 ? 'file' : 'files')) + '</span><span class="bvshu">' + esc(l.url) + '</span><button type="button" class="bvbtn" data-bvshcopy="' + esc(l.url) + '">' + esc(T('Copy')) + '</button>'
+          : '<span class="bvshn">' + esc(l.missing ? T('No folder') : l.n === 0 ? T('Empty — nothing to share') : T('Could not make a link')) + '</span>') + '</div>').join('') + '</div>' +
+        (ls.some(l => l.url) ? '<div class="bvsha"><button type="button" class="bvbtn pri" data-bvshcopy="__all">' + esc(T('Copy her details + links')) + '</button>' + (navigator.share ? '<button type="button" class="bvbtn" data-bvshnat>' + esc(T('Share…')) + '</button>' : '') + '</div>' : '') +
+        '<p class="bvshd sm">' + esc(T('Anyone with a link can look at and download those files. Nothing can be changed. Passport, contract and visa folders are never shared.')) + '</p>';
+    }
+    m.innerHTML = '<div class="bvshp"><div class="bvshh"><b>' + esc(T('Share her material')) + '</b><button type="button" class="bvshx" data-bvshx aria-label="Close">×</button></div>' +
+      '<p class="bvshd"><b>' + esc(String(c.nm || '')) + '</b>' + (c.ag ? ' · ' + esc(c.ag) : '') + '</p>' + body + '<textarea class="bvsht" aria-hidden="true" tabindex="-1"></textarea></div>';
+  }
+  async function shOpen(c){
+    let m = document.getElementById('bvshm');
+    if(!m){ m = document.createElement('div'); m.id = 'bvshm'; m.className = 'bvshm'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m);
+      m.addEventListener('click', async e => {
+        const cc = bv && BOOK.get(bv.id);
+        if(e.target === m || e.target.closest('[data-bvshx]')){ m.remove(); return; }
+        if(e.target.closest('[data-bvshconn]')){ try{ await window.illu.dropboxConnect(); }catch(err){} if(cc) shOpen(cc); return; }
+        const cp = e.target.closest('[data-bvshcopy]');
+        if(cp && cc){ const txt = cp.dataset.bvshcopy === '__all' ? shMsg(cc) : cp.dataset.bvshcopy; const done = () => { const o = cp.textContent; cp.textContent = T('Copied ✓'); setTimeout(() => { cp.textContent = o; }, 1400); };
+          try{ (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(done, () => { const ta = m.querySelector('textarea'); ta.value = txt; ta.select(); try{ document.execCommand('copy'); done(); }catch(err){} }); }catch(err){} return; }
+        if(e.target.closest('[data-bvshnat]') && cc){ try{ navigator.share({title: String(cc.nm || ''), text: shMsg(cc)}).catch(() => {}); }catch(err){} }
+      });
+      document.addEventListener('keydown', e => { if(e.key === 'Escape' && document.getElementById('bvshm')){ e.stopPropagation(); document.getElementById('bvshm').remove(); } }, true);
+    }
+    SHR = null; shPaint(c);
+    try{ SHR = await window.illu.bookingShare(bvFolderName(c), String(c.nm || '').trim()); }catch(err){ SHR = {ok: false, why: String(err && err.message || err)}; }
+    shPaint(c);
+  }
+  document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-bvshare]'); if(!b || !bv) return; const c = BOOK.get(bv.id); if(c){ e.preventDefault(); shOpen(c); } });
   function tabs(){
     const bs = [...bvTabs.querySelectorAll('[data-bvtab]')];
     if(!bs.length || bvTabs.querySelector('.bvtg')) return;
@@ -193,6 +262,6 @@
     'Visa': '비자', 'Airline Ticket': '항공권', 'Statement': '진술서', 'Next step': '다음 단계', 'Measurements': '사이즈',
     'Profile': '프로필', 'Travel': '여행', 'Mark done': '완료로 표시', 'Notes': '메모', 'In process': '진행 중',
     'Not started': '시작 전', 'Stage': '단계', 'of': '/', 'Stages': '단계', 'All done': '모두 완료',
-    'All five stages are done': '다섯 단계가 모두 끝났습니다', 'yrs': '세', 'file': '파일', 'files': '파일',
+    'All five stages are done': '다섯 단계가 모두 끝났습니다', 'yrs': '세', 'Height': '신장', 'Bust': '가슴', 'Chest': '가슴', 'Waist': '허리', 'Hips': '엉덩이', 'Shoe': '신발', 'No measurements yet': '아직 치수 정보 없음', 'file': '파일', 'files': '파일',
     'Light mode': '라이트 모드', 'Dim mode': '딤 모드', 'Dark mode': '다크 모드'});
 })();

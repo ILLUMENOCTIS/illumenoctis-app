@@ -10,7 +10,7 @@
    whenever the bar changes, and does nothing when they already are. */
 (function(){
   const GROUPS = [
-    ['.abflt', '.abrf'],
+    ['.abnc', '.abflt', '.abun', '.abrf'],
     ['#abck', '.abfs', '#illuzoom'],
     ['#abon'],
     ['[data-abp="notif"]', '[data-abp="msg"]', '[data-abp="log"]'],

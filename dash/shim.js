@@ -64,21 +64,59 @@ function checkBody(data) {
   return JSON.parse(s);
 }
 
-/* live changes: one stream for the whole store, handed to whichever listener it concerns */
-const LISTEN = new Set();          // {kind:'doc'|'coll', key, fn(row|null, path)}
-let live = null;
+/* live changes: one stream for the whole store, handed to whichever listener it concerns.
+   1.2.129 (10 Nov 2026): the stream can go quiet without saying so (the computer slept, the network
+   changed, the sign-in token was renewed late) - then nobody else's changes arrive (who is here, votes,
+   cards) until the program is restarted. Every open program writes its own heartbeat every 30 s and the
+   stream echoes it back, so a healthy stream is never silent for long. If nothing at all has come
+   through for 75 s, or the stream reports an error, it is closed and opened again, and every board
+   re-reads what it shows so nothing missed in between stays missing. */
+const LISTEN = new Set();          // {kind:'doc'|'coll', key, fn(row|null, path), re()}
+let live = null, liveUp = false, lastEvt = Date.now(), liveRetry = 0, liveDog = 0, liveGen = 0;
 function startLive() {
   if (live) return;
+  const gen = ++liveGen;
+  try { if (SESSION && SESSION.access_token && sb.realtime && sb.realtime.setAuth) sb.realtime.setAuth(SESSION.access_token); } catch (e) {}
   live = sb.channel('illu-docs')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'docs' }, p => {
+      if (gen !== liveGen) return;
+      lastEvt = Date.now();
       const n = p.new && p.new.path ? p.new : null, o = p.old && p.old.path ? p.old : null;
       const row = p.eventType === 'DELETE' ? null : n;
       const pathv = (n || o || {}).path, coll = (n || o || {}).coll;
       if (!pathv) return;
       deliver(pathv, coll, row, p.eventType);
     })
-    .subscribe();
+    .subscribe(st => {
+      if (gen !== liveGen) return;
+      if (st === 'SUBSCRIBED') {
+        const was = liveUp; liveUp = true; lastEvt = Date.now();
+        if (was === false && liveGen > 1) resyncAll();
+      } else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') {
+        liveUp = false; restartLive('stream ' + st, 3000);
+      }
+    });
+  lastEvt = Date.now();
+  if (!liveDog) liveDog = setInterval(() => {
+    if (live && LISTEN.size && Date.now() - lastEvt > 75000) restartLive('quiet for ' + Math.round((Date.now() - lastEvt) / 1000) + ' s', 0);
+  }, 15000);
 }
+function restartLive(why, delay) {
+  clearTimeout(liveRetry);
+  liveRetry = setTimeout(() => {
+    try { console.warn('[illu] live stream restarted:', why); } catch (e) {}
+    const old = live; live = null; liveUp = false;
+    try { if (old) sb.removeChannel(old); } catch (e) {}
+    startLive();
+  }, delay || 0);
+}
+/* re-read everything on screen (after a reconnect) */
+function resyncAll() { for (const l of LISTEN) { try { l.re && l.re(); } catch (e) {} } }
+window.__illuLive = { restart: why => restartLive(why || 'asked', 0), last: () => lastEvt, up: () => liveUp };
+try {
+  addEventListener('online', () => restartLive('back online', 500));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && live && Date.now() - lastEvt > 45000) restartLive('woke up', 0); });
+} catch (e) {}
 function deliver(pathv, coll, row, ev) {
   for (const l of LISTEN) {
     if (l.kind === 'doc' && l.key === pathv) l.fn(pathv, row, ev);
@@ -152,7 +190,8 @@ function docRef(pathv) {
       startLive();
       let last, dead = false;
       const emit = data => { const k = JSON.stringify(data === undefined ? null : data); if (k === last) return; last = k; try { next(dsnap(id, data == null ? null : view(coll, data))); } catch (e) { console.error(e); } };
-      const l = { kind: 'doc', key: pathv, fn: (_p, row) => { if (!dead) emit(row ? row.data : null); } };
+      const l = { kind: 'doc', key: pathv, fn: (_p, row) => { if (!dead) emit(row ? row.data : null); },
+        re: () => fetchDoc(pathv).then(r => { if (!dead) emit(r ? r.data : null); }, () => {}) };
       LISTEN.add(l);
       fetchDoc(pathv).then(r => { if (!dead) emit(r ? r.data : null); }, e => { if (onErr && !dead) onErr({ code: 'unavailable', message: e.message }); });
       return () => { dead = true; LISTEN.delete(l); };
@@ -234,7 +273,7 @@ function query(coll, q) {
         const id = p.slice(coll.length + 1);
         if (row && row.data !== undefined) all.set(id, { id, data: row.data }); else if (row) { fetchDoc(p).then(r => { if (r) all.set(id, { id, data: r.data }); emit(); }); return; } else all.delete(id);
         clearTimeout(t); t = setTimeout(emit, 30);
-      } };
+      }, re: () => fetchColl(coll).then(rows => { if (dead || have === null) return; all.clear(); for (const r of rows) all.set(r.id, { id: r.id, data: r.data }); emit(); }, () => {}) };
       LISTEN.add(l);
       fetchColl(coll).then(rows => { if (dead) return; for (const r of rows) all.set(r.id, { id: r.id, data: r.data }); have = ''; emit(); },
         e => { if (onErr && !dead) onErr({ code: 'unavailable', message: e.message }); });

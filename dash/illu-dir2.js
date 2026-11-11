@@ -552,6 +552,7 @@
     if(!t){ t = document.createElement('div'); t.id = 'd2toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
     t.innerHTML = '<span>' + html + '</span>' + (undo ? '<button type="button" data-d2undo>Undo</button>' : '');
     t.hidden = false; clearTimeout(toastT); toastT = setTimeout(hideToast, 8000);
+    if(undo) try{ const u = D2.lastRemoved; if(u && window.__illuUndo) window.__illuUndo.push(String(html).replace(/<[^>]+>/g, ''), () => { hideToast(); restoreAg(u.n, u.mem); }); }catch(e){}
   }
   function hideToast(){ const t = document.getElementById('d2toast'); if(t) t.hidden = true; }
   function narrowed(){
@@ -719,6 +720,13 @@
     box.hidden = false;
   }
   /* open an agency (by its website, else its name) from the start screen */
+  /* 1.2.129: the shared panel's agency name opens that agency in the Directory, from any page */
+  window.__illuDirGoAg = ref => {
+    try{ const fv = document.getElementById('illufv'); if(fv && !fv.hidden){ const x = fv.querySelector('.fvx'); if(x) x.click(); } }catch(e){}
+    try{ if(D2.open){ D2.open = ''; SL.full = false; document.body.classList.remove('d2fullcard'); } }catch(e){}
+    if(typeof VIEW === 'undefined' || VIEW !== 'dir'){ try{ window.__illuGo ? window.__illuGo('dir') : setView('dir'); }catch(e){} }
+    setTimeout(() => goAgency(ref, ''), 350);
+  };
   function goAgency(ref, key){
     const a = AG.find(x => x.domain === ref) || AG.find(x => x.name === ref);
     const q = $('#d2q'); if(!q) return;
@@ -1089,7 +1097,7 @@
      the card's details on the right. ←/→ photos, F or double-click full view, Esc back. */
   const SL = {key: '', i: 0, photos: null, state: '', why: '', full: false, side: true};
   try{ SL.side = localStorage.getItem('illu.d2fullside') !== '0'; }catch(e){}
-  const slImg = (u, w) => window.__illuSlideSrc ? window.__illuSlideSrc(u, w) : 'illuimg://p/' + encodeURIComponent(u) + '?r=' + encodeURIComponent((D2.openM && D2.openM.href) || '') + '&nc=1&w=' + (w || 1400);
+  const slImg = (u, w) => window.__illuSlideSrc ? window.__illuSlideSrc(u, w) : (window.illu && window.illu.web) ? u : 'illuimg://p/' + encodeURIComponent(u) + '?r=' + encodeURIComponent((D2.openM && D2.openM.href) || '') + '&nc=1&w=' + (w || 1400);
   const fileKey = u => { let p = String(u || ''); try{ p = decodeURIComponent(new URL(p.startsWith('illuimg:') ? decodeURIComponent(new URL(p).pathname.slice(1)) : p).pathname); }catch(e){}
     return p.toLowerCase().replace(/^.*\//, '').replace(/-\d{2,4}x\d{2,4}(?=\.)/, '').replace(/\.(jpe?g|png|webp|avif)$/, '').replace(/^(large|medium|small|thumb|xlarge)[-_]/, ''); };
   const SLWHY = {
@@ -1188,8 +1196,21 @@
       fx.innerHTML = '<dt>Profile</dt><dd>' + (m.href ? '<a href="' + enc(m.href) + '" target="_blank" rel="noopener noreferrer">Open on the agency’s site ↗</a>' : '—') + '</dd>' +
         '<dt>Photos</dt><dd>' + (SL.state === 'loading' ? 'Looking…' : n > 1 ? n + ' from the agency’s page' : 'Only the card photo' + (SL.why && SLWHY[SL.why] ? ' — ' + enc(SLWHY[SL.why][0].toLowerCase()) : '')) + '</dd>' +
         (m.boards && m.boards.length ? '<dt>Boards</dt><dd>' + m.boards.map(b => enc(b.d || 'Board')).join(' · ') + '</dd>' : '');
+      mxPaint(C);
     }else if(fx) fx.remove();
+    if(!full){ const w = C.querySelector('.d2mxw'); if(w) w.remove(); C.classList.remove('d2pnon'); }
   }
+  /* 1.2.129 (user, 10 Nov 2026): the full view has the same Booking / Notes / Links as every other expanded card */
+  function mxPaint(C){
+    const m = D2.openM, lc = C && C.querySelector('.litcard'); if(!m || !lc || !window.__illuModelPanel || !window.__illuMxPaint) return;
+    let w = lc.querySelector(':scope > .d2mxw');
+    if(!w){ w = document.createElement('div'); w.className = 'd2mxw'; lc.insertBefore(w, lc.firstChild); }
+    C.classList.add('d2pnon');
+    const n = slN(), dom = (() => { try{ const hit = AG.find(x => x.name === m.ag); return hit ? (hit.domain || hit.name) : ''; }catch(e){ return ''; } })();
+    window.__illuMxPaint(w, window.__illuModelPanel(m.key, {nm: m.nm || '', ag: m.ag || '', agRef: dom, city: m.city || '', country: m.country || '', href: m.href || '', nPhotos: n > 1 ? n : 0,
+      boards: (m.boards || []).map(b => b.d || 'Board').filter((x, i, A) => A.indexOf(x) === i).join(' · '), div: m.div || ''}));
+  }
+  (window.__illuVoteFns = window.__illuVoteFns || []).push(() => { if(SL.full && D2.open){ const C = $('.d2card.d2full'); if(C) mxPaint(C); } });
   window.__illuSlide = () => ({key: SL.key, i: SL.i, n: slN(), state: SL.state, why: SL.why, full: SL.full});
   document.addEventListener('click', e => {
     if(!DV() || !D2.open || !e.target.closest) return;
@@ -1233,9 +1254,15 @@
     else if(e.key === 'Escape' && SL.full){ slFull(false); e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
   /* swipe in full view (the normal card is moved by dragging, so there the arrows do it) */
+  { const st = document.createElement('style'); st.textContent = '@media (pointer:coarse){.d2card .litpic{touch-action:pan-y pinch-zoom}}'; document.head.appendChild(st); }
   let swx = null;
-  document.addEventListener('pointerdown', e => { if(SL.full && e.target.closest && e.target.closest('.d2card.d2full .litpic') && !e.target.closest('button, a')) swx = e.clientX; else swx = null; }, true);
-  document.addEventListener('pointerup', e => { if(swx === null) return; const dx = e.clientX - swx; swx = null; if(Math.abs(dx) > 50) slGo(SL.i + (dx < 0 ? 1 : -1)); }, true);
+  /* 1.2.137: on a touch screen the card is not dragged, so a finger swipes the photos in the normal card too */
+  let swEat = 0;
+  document.addEventListener('pointerdown', e => { const tch = e.pointerType === 'touch'; if((SL.full || tch) && e.target.closest && e.target.closest(SL.full ? '.d2card.d2full .litpic' : '.d2card .litpic') && (tch ? !e.target.closest('a, .ht, [data-heart]') : !e.target.closest('button, a'))) swx = e.clientX; else swx = null; }, true);
+  /* a swipe that started on the ‹ › arrows is a swipe, not also a tap on the arrow */
+  document.addEventListener('click', e => { if(swEat && Date.now() - swEat < 500 && e.target.closest && e.target.closest('.d2card .litpic')){ e.preventDefault(); e.stopPropagation(); swEat = 0; } }, true);
+  document.addEventListener('pointercancel', e => { if(swx === null || e.pointerType !== 'touch') return; const dx = (e.clientX || 0) - swx; swx = null; if(Math.abs(dx) > 50) slGo(SL.i + (dx < 0 ? 1 : -1)); }, true);
+  document.addEventListener('pointerup', e => { if(swx === null) return; const dx = e.clientX - swx; swx = null; if(Math.abs(dx) > 50){ swEat = Date.now(); slGo(SL.i + (dx < 0 ? 1 : -1)); } }, true);
   /* a name too long for its pill rolls sideways inside it, like a ticker sign, instead of breaking onto
      two lines (user chose A, 2026-11-04). The pill keeps its lamp-coloured border; short names stay still. */
   function fitName(row){
@@ -1706,10 +1733,14 @@
     const pc = picCell(m.key, m.nm, minor ? '' : f.photo).replace('<img class="agimg"', '<img class="agimg" loading="lazy" decoding="async"').replace(' fetchpriority="high"', '');
     const band = o.kor ? KB()[m.g === 'M' ? 'M' : 'F'] : null;
     const ht = n1(f.ht), bu = n1(f.bu), wa = n1(f.wa), hp = n1(f.hp), eu = n1(f.eu);
+    /* 1.2.130: the top bar's units (cm / in, one shoe size); the band check still reads centimetres */
+    const UL = (v, h) => { try{ return v == null ? null : (window.__illuLen ? window.__illuLen(v, h) : v); }catch(e){ return v; } };
+    const shoeT = (() => { try{ return window.__illuShoe ? window.__illuShoe(f.eu, f.us, m.g) : eu; }catch(e){ return eu; } })(), shoeU = (() => { try{ return window.__illuShoeUnit ? window.__illuShoeUnit() : 'EU'; }catch(e){ return 'EU'; } })();
     const fg = (v, r) => '<span' + (band && r && v != null && v >= r[0] && v <= r[1] ? ' class="in"' : '') + '>' + (v == null ? '–' : v) + '</span>';
+    const fgU = (v, r, h) => fg(v, r).replace(/>([^<]*)<\/span>$/, (x, t) => '>' + (v == null ? '–' : UL(v, h)) + '</span>');
     const mx = ht == null && bu == null && wa == null && hp == null
       ? '<span class="ucmx none">' + (isKo() ? '사이즈 없음' : 'No measurements') + '</span>'
-      : '<span class="ucmx">' + fg(ht, band && band.ht) + '<i>·</i>' + fg(bu, band && band.bu) + '<i>/</i>' + fg(wa, band && band.wa) + '<i>/</i>' + fg(hp, band && band.hp) + '<i>·</i><span>' + (eu == null ? '–' : eu) + '<small>EU</small></span></span>';
+      : '<span class="ucmx">' + fgU(ht, band && band.ht, 1) + '<i>·</i>' + fgU(bu, band && band.bu) + '<i>/</i>' + fgU(wa, band && band.wa) + '<i>/</i>' + fgU(hp, band && band.hp) + '<i>·</i><span>' + (shoeT == null ? '–' : shoeT) + '<small>' + shoeU + '</small></span></span>';
     const meta = (m.ag || '') + (m.city ? ' · ' + m.city : '');
     const tl = TIERL[m.t] || null;
     const offices = m.boards ? new Set(m.boards.map(b => b.off)).size : 1;
@@ -2188,6 +2219,10 @@ html:has(body.d2fullcard),body.d2fullcard{overflow:hidden!important}
 .d2card.d2full.d2noside > .d2slside{right:114px;box-shadow:0 2px 8px -2px rgba(0,0,0,.35)}
 .d2card.d2full.d2noside .litxc{right:160px!important}
 @media (max-width:760px){.d2card.d2full > .d2slside{display:none}}
+.d2mxw{margin:0 0 14px}.d2mxw .mx{margin-top:0}
+/* 1.2.129: in the full view the details are the shared panel only */
+.d2card.d2full.d2pnon .litcard>*:not(.d2mxw){display:none!important}
+.d2card.d2full.d2pnon .litcard{padding-top:52px!important}
 .d2slfx{display:grid;grid-template-columns:auto 1fr;gap:9px 16px;margin:14px 0 14px;padding:14px 0 0;border-top:1px solid var(--line)}
 .d2slfx dt{font:600 9.5px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding-top:2px}
 .d2slfx dd{margin:0;font-size:13px;color:var(--ink2);min-width:0;overflow-wrap:anywhere}
