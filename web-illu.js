@@ -68,6 +68,30 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
   async function tok() { try { const sb = window.__illuSb; if (!sb) return; const { data } = await sb.auth.getSession(); if (data && data.session) await window.illu.setToken(data.session.access_token); } catch (e) {} }
   setTimeout(tok, 3000); setInterval(tok, 4 * 60 * 1000);
   addEventListener('visibilitychange', () => { if (!document.hidden) tok(); });
+  /* 1.2.138 (user, 11 Nov 2026 - phone screenshots: the viewer's thumbnails stayed blank): an agency's photos are
+     full size (Ego: 10-40 seconds each, tested), and 81 of them at once starve a phone's connection. On the phone
+     the strip, the card slideshow and the big photo use a shrunk copy from the free image service images.weserv.nl
+     (about 7 KB a thumbnail, tested); if that ever fails the picture falls back to the agency's own file. */
+  window.__illuSmall = (u, w) => {
+    u = String(u || '');
+    if (!/^https?:\/\//i.test(u) || /images\.weserv\.nl|supabase\.co|\/_blob\//.test(u) || /\.(gif|svg)(\?|$)/i.test(u)) return u;
+    return 'https://images.weserv.nl/?url=' + encodeURIComponent(u) + '&w=' + (w || 400) + '&we&output=jpg&q=' + ((w || 400) > 900 ? 82 : 72) + '&default=' + encodeURIComponent(u);
+  };
+  /* the cards' agency photos go through the same service (smaller, and agencies that refuse other sites still show) */
+  /* applied as soon as the card code has loaded (build_web puts web-after-s02.js right after s02.js), so the first
+     drawing of the cards already uses the small copies; again at DOMContentLoaded in case */
+  window.__illuWrapPhotos = () => {
+    if (window.__illuWrapped || typeof window.picCell !== 'function') return; window.__illuWrapped = true;
+    /* the booking cards' photos (Booking board, Today, the booking window) likewise */
+    if (typeof window.bkPhoto === 'function') { const bp0 = window.bkPhoto; window.bkPhoto = function (c) { const u = bp0.apply(this, arguments); return /^https?:/i.test(u || '') ? window.__illuSmall(u, 600) : u; }; }
+    const pc0 = window.picCell;
+    window.picCell = function (key, nm, src) {
+      const h = pc0.apply(this, arguments);
+      return h.replace(/<img class="agimg"([^>]*?) src="(https?:[^"]+)"/, (m, a, u) => { const raw = u.replace(/&amp;/g, '&'); return '<img class="agimg"' + a + ' src="' + window.__illuSmall(raw, 700).replace(/&/g, '&amp;') + '"'; });
+    };
+  };
+  addEventListener('DOMContentLoaded', () => window.__illuWrapPhotos());
+  addEventListener('error', e => { const i = e.target; if (i && i.tagName === 'IMG') { const s = i.getAttribute('src') || ''; if (/images\.weserv\.nl/.test(s)) { e.stopImmediatePropagation(); try { i.src = new URL(s).searchParams.get('url'); } catch (er) {} } } }, true);
   /* a photograph the phone cannot open (files kept only on the office computer) shows a quiet blank, not a broken picture */
   const BLANK = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 40"><rect width="30" height="40" fill="#EDE7F0"/><circle cx="15" cy="15" r="6" fill="#D8CDDE"/><path d="M4 40c1-9 6-13 11-13s10 4 11 13z" fill="#D8CDDE"/></svg>');
   addEventListener('error', e => { const i = e.target; if (i && i.tagName === 'IMG' && !i.dataset.illublank && i.getAttribute('src') !== BLANK) { i.dataset.illublank = '1'; i.src = BLANK; } }, true);
