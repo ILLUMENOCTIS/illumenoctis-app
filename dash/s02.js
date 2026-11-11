@@ -5158,6 +5158,8 @@ function litLine(f, key, hit){
     mxCell(key, 'bu', f.g === 'M' ? 'CH' : 'B', L(f.bu), u, false, hit.bu) +
     mxCell(key, 'wa', 'W', L(f.wa), u, false, hit.wa) +
     mxCell(key, 'hp', 'H', L(f.hp), u, false, hit.hp) +
+    /* 1.2.140: her age, typed here like the measurements (illu-vote.js keeps it) */
+    (window.__illuAgeCell ? window.__illuAgeCell(key) : '') +
     (none ? '<span class="mxnote">' + (f.crawled
       ? 'this agency publishes none — type them in'
       : 'not crawled yet — type them in') + '</span>' : '') + '</div>';

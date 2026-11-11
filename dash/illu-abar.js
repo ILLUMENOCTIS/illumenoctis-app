@@ -119,6 +119,11 @@
     btn.addEventListener('click', e => { e.stopPropagation(); toggle(pan.hidden); });
     document.addEventListener('pointerdown', e => { if(!pan.hidden && !pan.contains(e.target) && !btn.contains(e.target) && !e.target.closest('#abunp')) toggle(false); }, true);
     document.addEventListener('keydown', e => { if(e.key === 'Escape' && !pan.hidden) toggle(false); });
+    pan.addEventListener('click', async e => {
+      const b = e.target.closest && e.target.closest('[data-abdbx]'); if(!b) return;
+      if(b.dataset.on){ await window.illu.dropboxDisconnect(); b.dataset.on = ''; b.textContent = ko() ? 'Dropbox 연결' : 'Connect Dropbox'; try{ window.__illuMatForget && window.__illuMatForget(); }catch(er){} }
+      else window.illu.dropboxConnect();
+    });
   }
   function toggle(on){
     if(!pan) return; pan.hidden = !on; btn.setAttribute('aria-expanded', String(on)); btn.classList.toggle('on', on);
@@ -140,6 +145,13 @@
         }
         /* keep the panel's rows in the same order */
         MOVE.forEach(([sel]) => { const r = pan.querySelector('.abmrow[data-sel="' + sel + '"]'); if(r) pan.appendChild(r); });
+        /* 1.2.140 (phone): Dropbox - her folders' photos and videos on the phone need this phone signed in once */
+        if(window.illu && window.illu.web && window.illu.dropboxStatus){
+          let r = pan.querySelector('.abmrow[data-sel="dbx"]');
+          if(!r){ r = document.createElement('div'); r.className = 'abmrow'; r.dataset.sel = 'dbx'; r.innerHTML = '<span data-sel="dbx">Dropbox</span><div class="abmslot"><button type="button" class="abdbx" data-abdbx></button></div>'; }
+          pan.appendChild(r);
+          window.illu.dropboxStatus().then(st => { const b = r.querySelector('[data-abdbx]'); if(!b) return; b.dataset.on = st.connected ? '1' : ''; b.textContent = st.connected ? ((st.name || 'Connected') + ' · ' + (ko() ? '연결 끊기' : 'Disconnect')) : (ko() ? 'Dropbox 연결' : 'Connect Dropbox'); }).catch(() => {});
+        }
         document.body.classList.add('abphone');
       }else{
         pan.querySelectorAll('.abmslot > *').forEach(el => abr.appendChild(el));
@@ -176,6 +188,7 @@ body.abphone #appbar #abme{padding:0 2px;min-width:34px;justify-content:center}
 #abmorep .abmslot>*{height:36px;box-sizing:border-box}
 #abmorep .abmslot>.abib{width:36px;min-width:36px;display:inline-grid;place-items:center;border-radius:10px}
 #abmorep .abmslot svg{width:18px;height:18px}
+#abmorep .abdbx{height:36px;border:1px solid var(--line,#E7E2EC);background:var(--surf,#fff);color:var(--acc,#5A2C57);border-radius:10px;padding:0 12px;font:600 13px/1 var(--sans,Inter,system-ui,sans-serif);max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #abmorep .abmslot>.abib,#abmorep .abmslot>.abun,#abmorep .abmslot>.abglobe{border:1px solid var(--line,#E7E2EC);background:var(--surf,#fff);color:var(--ink,#211C26);border-radius:10px;padding:0 10px;display:inline-flex;align-items:center;gap:6px;font:600 13px/1 var(--sans,Inter,system-ui,sans-serif)}
 #abmorep .abmslot>.abib{padding:0}
 #abmorep .abmslot>.abib svg,#abmorep .abmslot>.abun svg,#abmorep .abmslot>.abglobe svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}

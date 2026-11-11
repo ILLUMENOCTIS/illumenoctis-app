@@ -25,7 +25,7 @@
     if(!r || !r.ok || !r.found) return [];
     return (r.files || []).filter(f => f.rid && ((IMG.test(f.rel) && order(f.rel) < 2) || (VID.test(f.rel) && tabOf(f.rel) === 'videos')))
       .sort((a, b) => order(a.rel) - order(b.rel) || String(a.rel).localeCompare(String(b.rel), undefined, {numeric: true}))
-      .slice(0, 300).map(f => ({u: '/_blob/' + f.rid, t: tabOf(f.rel)}));
+      .slice(0, 300).map(f => ({u: '/_blob/' + f.rid + (window.illu && window.illu.web && !VID.test(f.rel) ? '?w=1400' : ''), t: tabOf(f.rel)}));
   }
   function load(k){
     const e = M.get(k) || {at: 0, photos: []};

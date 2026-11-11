@@ -96,9 +96,16 @@
           '<div class="ncl full ncagw"><label for="ncag"><span>' + L('Agency', '에이전시') + '</span></label><input id="ncag" data-nc="ag" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="ncagl" aria-autocomplete="list" placeholder="' + H(L('Type the agency name…', '에이전시 이름 입력…')) + '"><div class="ncagl" id="ncagl" role="listbox" hidden></div><p class="ncagn" data-ncagn hidden></p></div>' +
           '<label class="ncl"><span>' + L('City', '도시') + '</span><input data-nc="city" autocomplete="off"></label>' +
           '<label class="ncl"><span>' + L('Country', '국가') + '</span><input data-nc="country" autocomplete="off"></label>' +
+          /* 1.2.140: her age (or date of birth) - the same Age as on her card, booking card, contract and visa */
+          '<label class="ncl"><span>' + L('Age', '나이') + '</span><input data-nc="age" inputmode="numeric" autocomplete="off" placeholder="–"></label>' +
+          '<label class="ncl"><span>' + L('Date of birth (if known)', '생년월일 (아는 경우)') + '</span><input data-nc="dob" autocomplete="off" placeholder="DD/MM/YYYY"></label>' +
           '<div class="ncl full"><span>' + L('Female / Male', '여성 / 남성') + '</span><div class="ncseg" role="radiogroup">' +
             '<button type="button" role="radio" aria-checked="true" class="on" data-ncg="F">' + L('Female', '여성') + '</button><button type="button" role="radio" aria-checked="false" data-ncg="M">' + L('Male', '남성') + '</button></div></div>' +
           '<label class="ncl full"><span>' + L('Link to her page (optional)', '모델 페이지 링크 (선택)') + '</span><input data-nc="href" type="url" inputmode="url" placeholder="https://…" autocomplete="off"></label>' +
+          /* 1.2.140 (user, 11 Nov 2026: "if there is no website available for the model, but I have the BOOK(PORTFOLIO)/SNAPS/
+             VIDEOS available, when I create the card, I want you to also create a booking card that also then creates the
+             8 folders"): ticked by itself while no link is typed (untick to leave her without a booking card) */
+          '<label class="ncl full ncmat"><input type="checkbox" data-ncmat checked> <span><b>' + L('No website — her book, snaps and videos go in Dropbox', '웹사이트 없음 — 북·스냅·영상은 Dropbox에') + '</b><br>' + L('Also makes her booking card and its 8 folders (1. BOOK … 8. STATEMENT). What you put in 1. BOOK, 2. SNAPS and 3. VIDEOS is her slideshow on every board.', '부킹 카드와 8개 폴더(1. BOOK … 8. STATEMENT)도 만듭니다. 1. BOOK, 2. SNAPS, 3. VIDEOS에 넣은 파일이 모든 보드에서 슬라이드쇼로 보입니다.') + '</span></label>' +
         '</div>' +
         '<div class="ncms">' + MS.map(([k, en, ko, u]) => '<label><span>' + L(en, ko) + '</span><input data-ncm="' + k + '" inputmode="decimal" placeholder="—"><em>' + u + '</em></label>').join('') + '</div>' +
         '<p class="ncerr" data-ncerr hidden></p>' +
@@ -165,7 +172,13 @@
     if(b && m){ agPick(m, agList[+b.dataset.ncag]); return; }
     if(m && !e.target.closest('.ncagw')){ const box = m.querySelector('#ncagl'); if(box) box.hidden = true; }
   });
-  function close(){ const m = document.getElementById('ncm'); if(m) m.remove(); if(photoURL){ try{ URL.revokeObjectURL(photoURL); }catch(e){} photoURL = ''; } }
+  let matTouched = false;
+  document.addEventListener('change', e => { if(e.target && e.target.matches && e.target.matches('#ncm [data-ncmat]')) matTouched = true; });
+  document.addEventListener('input', e => {
+    if(!e.target || !e.target.matches || !e.target.matches('#ncm [data-nc="href"]') || matTouched) return;
+    const c = document.querySelector('#ncm [data-ncmat]'); if(c) c.checked = !e.target.value.trim();
+  });
+  function close(){ matTouched = false; const m = document.getElementById('ncm'); if(m) m.remove(); if(photoURL){ try{ URL.revokeObjectURL(photoURL); }catch(e){} photoURL = ''; } }
   function setPhoto(f){
     if(!f || !/^image\//i.test(f.type || '')) return;
     photo = f; if(photoURL){ try{ URL.revokeObjectURL(photoURL); }catch(e){} }
@@ -203,10 +216,14 @@
       for(const [f] of MS){ let n = num((m.querySelector('[data-ncm="' + f + '"]') || {}).value); if(f === 'eu' && n != null && window.__illuShoeToEU) n = window.__illuShoeToEU(n); if(n != null) try{ mxSet(k, f, n); }catch(e){} }
       try{ flushEdits(); }catch(e){}
       if(photo) try{ setPic(k, photo); }catch(e){ console.error(e); }
+      try{ if(window.__illuSetAge && (v('age') || v('dob'))) window.__illuSetAge(k, v('age'), v('dob')); }catch(e){ console.error(e); }
       const A = window.__illuVoteAct;
       if(dest === 'fav' && A) A.fav(k, about);
       else if(dest === 'vote' && A) A.vote(k, about);
       else if(dest === 'book' && A) A.book(k, about);
+      /* no website: her booking card (and with it the 8 folders) as well - wherever the card was put */
+      const mat = m.querySelector('[data-ncmat]');
+      if(dest !== 'book' && A && mat && mat.checked && !mat.closest('[hidden]')){ try{ A.book(k, about); }catch(e){ console.error(e); } }
       photo = null; photoURL = '';
       close();
       try{ window.__illuGo && window.__illuGo(dest === 'fav' ? 'fav' : dest === 'vote' ? 'team' : 'bk'); }catch(e){}
@@ -245,6 +262,9 @@
   const css = document.createElement('style');
   css.textContent = `
 .ncm .ncagw{position:relative}
+.ncm .ncmat{display:flex;align-items:flex-start;gap:10px;font-size:12.5px;line-height:1.45;color:var(--mut,#6D6577);background:var(--wash,#F7F3F8);border:1px solid var(--line,#E7E2EC);border-radius:10px;padding:10px 12px;cursor:pointer}
+.ncm .ncmat input{width:18px;height:18px;margin:1px 0 0;flex:none;accent-color:var(--acc,#5A2C57)}
+.ncm .ncmat b{color:var(--ink,#211C26);font-weight:600}
 .ncm .ncagl{position:absolute;z-index:5;left:0;right:0;top:100%;margin-top:4px;background:var(--surf,#fff);border:1px solid var(--line,#E7E2EC);border-radius:12px;box-shadow:0 14px 34px rgba(20,10,30,.18);padding:4px;max-height:min(320px,46vh);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .ncm .ncagl[hidden]{display:none}
 .ncm .ncagl button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;border:0;background:none;text-align:left;padding:9px 10px;border-radius:8px;cursor:pointer;color:var(--ink,#211C26);font:inherit}

@@ -395,7 +395,26 @@
     changed();
     say(L((c.nm || '') + ' is on the Booking board — you are in charge of her card.', (c.nm || '') + ' — 부킹 보드로 보냈습니다. 이 카드는 내가 담당합니다.'), () => { try{ bvOpenFor(c.id); }catch(e){} }, null, L('Open card', '카드 열기'));
   }
-  let MXASK = '', GFASK = '';
+  let MXASK = '', GFASK = '', MXAGE = '';
+  /* her age: the booking card's date of birth or age, else what was typed on her card before she was booked */
+  function ageInfo(k, c){
+    const p = c ? null : (preOf(k) || {});
+    const dob = String((c ? c.dob : p.dob) || '').trim(), typed = String((c ? c.age : p.age) || '').trim();
+    let fromDob = '', dobTxt = '';
+    try{ if(dob && typeof dobParse === 'function'){ const q = dobParse(dob); if(q){ fromDob = String(ageFrom(dob)); dobTxt = typeof dobWords === 'function' ? dobWords(q) : dob; } } }catch(e){}
+    return {age: fromDob !== '' && fromDob !== 'undefined' ? fromDob : typed, dob, typed, dobTxt};
+  }
+  window.__illuSetAge = (k, age, dob) => { if(!k) return; age = String(age || '').replace(/[^\d]/g, '').slice(0, 3); dob = String(dob || '').trim(); if(!age && !dob) return;
+    let c = null; try{ c = bkForKey(k); }catch(e){} if(c){ c.age = age; c.dob = dob; saveBook(c.id, true); changed(); } else savePre(k, {age, dob}); };
+  /* Enter in either box saves (the editor is a form; Save is its submit button) */
+  document.addEventListener('submit', e => { const f = e.target; if(!f || !f.matches || !f.matches('form[data-pnagef]')) return; e.preventDefault(); const b = f.querySelector('[data-pnageok]'); if(b) b.click(); }, true);
+  window.__illuAgeCell = k => { if(!k) return ''; let c = null; try{ c = bkForKey(k); }catch(e){} const A = ageInfo(k, c), lock = !!A.dobTxt;
+    return '<span class="mxc mxage" data-f="age"><i>' + L('AGE', '나이') + '</i><input class="mxi mxagei" type="text" inputmode="numeric" maxlength="3" data-agek="' + H(k) + '" value="' + H(A.age) + '" placeholder="–" aria-label="' + H(L('Age', '나이')) + '"' +
+      (lock ? ' readonly title="' + H(L('Born ', '생년월일 ') + A.dobTxt + L(' — change the date of birth on her card', ' — 카드에서 생년월일을 바꾸세요')) + '"' : ' title="' + H(L('Her age — type it here', '나이 — 여기에 입력')) + '"') + (signedIn() ? '' : ' disabled') + '></span>'; };
+  document.addEventListener('change', e => { const i = e.target; if(!i || !i.matches || !i.matches('.mxagei') || i.readOnly) return;
+    const k = i.dataset.agek, v = i.value.replace(/[^\d]/g, '').slice(0, 3); let c = null; try{ c = bkForKey(k); }catch(er){}
+    if(c){ c.age = v; saveBook(c.id, true); changed(); } else savePre(k, {age: v}); });
+  window.__illuAgeOf = k => { let c = null; try{ c = bkForKey(k); }catch(e){} return ageInfo(k, c).age; };
   /* a link's buttons: Get files (the link's book / snaps / videos into her Booking folder - 1.2.129, an option, never automatic) and remove */
   function linkBtns(k, n, c){
     const can = (() => { try{ return !!SIGNED(); }catch(e){ return false; } })();
@@ -523,6 +542,7 @@
     }
     if(p.avf && empty(c.avf)){ c.avf = p.avf; ch = 1; }
     if(p.age && empty(c.age)){ c.age = p.age; ch = 1; }
+    if(p.dob && empty(c.dob)){ c.dob = p.dob; ch = 1; }
     /* the agency's reply goes into the Email stage's own notes (the card's My notes) */
     if(p.entry || p.anote){ c.s = c.s || {}; c.s.email = c.s.email || {}; if(empty(c.s.email.t)){ c.s.email.t = [p.entry ? L('Entry: ', '입국: ') + p.entry : '', p.anote || ''].filter(Boolean).join('\n'); ch = 1; } }
     /* 1.2.136: the stay is the contract length (one number) */
@@ -650,8 +670,18 @@
     const F = Object.assign({}, f, a.f || {});
     const g = F.g || '';
     const cell = (lab, v, u) => '<div' + (v == null ? ' class="no"' : '') + '><small>' + H(lab) + '</small><b>' + (v == null ? '–' : H(v)) + (v != null && u ? '<em>' + H(u) + '</em>' : '') + '</b></div>';
-    return '<div class="pnmr">' + cell(L('Height', '신장'), uLen(F.ht, true), uL(true)) + cell(L('Bust', '가슴'), uLen(F.bu), uL()) + cell(L('Waist', '허리'), uLen(F.wa), uL()) +
-      cell(L('Hips', '엉덩이'), uLen(F.hp), uL()) + cell(L('Shoe', '신발'), uShoe(F.eu, F.us, g), uS()) + '</div>';
+    /* 1.2.140 (user, 11 Nov 2026: "I need a part to input the age on the cards (not just on the booking cards)"): Age sits
+       with the measurements on every card; tap it to type the age or the date of birth. With a booking card it is the
+       booking card's own Age / Date of birth (the contract and visa read those); before that it is kept with her card
+       and goes onto the booking card when she is booked. */
+    const A = ageInfo(k, c), can = signedIn();
+    const ageCell = '<button type="button" class="pnage' + (A.age === '' ? ' no' : '') + '" data-pnage' + (can ? '' : ' disabled') + ' aria-label="' + H(L('Age — tap to change', '나이 — 눌러서 바꾸기')) + '" title="' + H(A.dobTxt ? L('Born ', '생년월일 ') + A.dobTxt : L('Tap to type her age or date of birth', '눌러서 나이나 생년월일 입력')) + '"><small>' + L('Age', '나이') + '</small><b>' + (A.age === '' ? '–' : H(A.age)) + '</b></button>';
+    const ed = MXAGE === k && can ? '<form class="pnaged" data-pnagef><label><span>' + L('Age', '나이') + '</span><input data-mxin="age-v" inputmode="numeric" placeholder="–" value="' + H(A.typed) + '"></label>' +
+      '<label><span>' + L('Date of birth', '생년월일') + '</span><input data-mxin="age-dob" placeholder="DD/MM/YYYY" value="' + H(A.dob) + '"></label>' +
+      '<p>' + L('With a date of birth the age works itself out. The same age is on her booking card, contract and visa.', '생년월일을 넣으면 나이가 자동으로 계산됩니다. 부킹 카드·계약서·비자에도 같은 나이가 들어갑니다.') + '</p>' +
+      '<div><button type="button" class="mxb" data-pnagex>' + L('Cancel', '취소') + '</button><button type="submit" class="mxb pri" data-pnageok>' + L('Save', '저장') + '</button></div></form>' : '';
+    return '<div class="pnmr pnmr6">' + cell(L('Height', '신장'), uLen(F.ht, true), uL(true)) + cell(L('Bust', '가슴'), uLen(F.bu), uL()) + cell(L('Waist', '허리'), uLen(F.wa), uL()) +
+      cell(L('Hips', '엉덩이'), uLen(F.hp), uL()) + cell(L('Shoe', '신발'), uShoe(F.eu, F.us, g), uS()) + ageCell + '</div>' + ed;
   }
   function pnSecH(title, right){ return '<div class="pnsh"><h3>' + title + '</h3>' + (right || '') + '</div>'; }
   function pnStatus(k, a, c, st, can, nm){
@@ -854,7 +884,7 @@
     for(const x of keep){ const n = host.querySelector(x.sel); if(!n) continue; n.value = x.v; if(x.f){ try{ n.focus({preventScroll: true}); n.setSelectionRange(x.a, x.b); }catch(e){} } }
   };
   document.addEventListener('click', e => {
-    const t = e.target.closest && e.target.closest('.mx [data-pnv],.mx [data-pnfav],.mx [data-pnag],.mx [data-mxvote],.mx [data-mxget],.mx [data-mxsend],.mx [data-mxsendyes],.mx [data-mxsendno],.mx [data-gfyes],.mx [data-gfno],.mx [data-mxnote],.mx [data-mxlink],.mx [data-mxdel],.mx [data-mxopen]'); if(!t) return;
+    const t = e.target.closest && e.target.closest('.mx [data-pnage],.mx [data-pnagex],.mx [data-pnageok],.mx [data-pnv],.mx [data-pnfav],.mx [data-pnag],.mx [data-mxvote],.mx [data-mxget],.mx [data-mxsend],.mx [data-mxsendyes],.mx [data-mxsendno],.mx [data-gfyes],.mx [data-gfno],.mx [data-mxnote],.mx [data-mxlink],.mx [data-mxdel],.mx [data-mxopen]'); if(!t) return;
     e.preventDefault(); e.stopPropagation();
     const box = t.closest('.mx'), k = box.dataset.mxk, d = t.dataset;
     if(d.mxsend != null){ if(!signedIn()) return; MXASK = k; changed(); return; }
@@ -870,6 +900,14 @@
       sendBook(gk, ab); let n = 0; const go = () => { let c1 = null; try{ c1 = bkForKey(gk); }catch(err){} if(c1){ getFilesFor(gk, gu); return; } if(++n < 30) setTimeout(go, 100); }; setTimeout(go, 100); return; }
     if(d.gfno != null){ GFASK = ''; changed(); return; }
     if(d.mxsendno != null){ MXASK = ''; changed(); return; }
+    if(d.pnage != null){ MXAGE = MXAGE === k ? '' : k; changed(); setTimeout(() => { const i = document.querySelector('[data-mxin="age-v"]'); if(i) try{ i.focus(); i.select(); }catch(er){} }, 30); return; }
+    if(d.pnagex != null){ MXAGE = ''; changed(); return; }
+    if(d.pnageok != null){
+      const av = ((box.querySelector('[data-mxin="age-v"]') || {}).value || '').replace(/[^\d]/g, '').slice(0, 3), dv = ((box.querySelector('[data-mxin="age-dob"]') || {}).value || '').trim();
+      if(dv && typeof dobParse === 'function' && !dobParse(dv)){ const i = box.querySelector('[data-mxin="age-dob"]'); if(i){ i.setCustomValidity && i.setCustomValidity('DD/MM/YYYY'); i.reportValidity && i.reportValidity(); i.style.borderColor = '#C0303C'; } return; }
+      let c = null; try{ c = bkForKey(k); }catch(err){}
+      if(c){ c.age = av; c.dob = dv; saveBook(c.id, true); } else savePre(k, {age: av, dob: dv});
+      MXAGE = ''; changed(); try{ window.__illuRefreshCards && window.__illuRefreshCards(); }catch(err){} return; }
     if(d.mxsendyes != null){ const ab = (() => { try{ return JSON.parse(box.dataset.mxab || 'null'); }catch(err){ return null; } })(); sendBook(k, ab); return; }
     if(d.mxopen){ try{ const fv = document.getElementById('illufv'); if(fv && !fv.hidden){ const x = fv.querySelector('.fvx'); if(x) x.click(); } }catch(err){} try{ bvOpenFor(d.mxopen); }catch(err){} return; }
     if(d.mxdel){ const i = d.mxdel.indexOf('|'); dropAny(k, d.mxdel.slice(0, i), d.mxdel.slice(i + 1)); return; }
@@ -1727,6 +1765,17 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .pnmr b{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pn2 .pnmr em{font-style:normal;font-size:10px;font-weight:500;color:var(--faint);margin-left:1px}
 .pn2 .pnmr .no b{color:var(--faint);font-weight:500}
+.pn2 .pnmr.pnmr6{grid-template-columns:repeat(6,minmax(0,1fr))}
+.mxc.mxage .mxagei{width:3ch;text-align:center}
+.pn2 .pnmr .pnage{border:0;border-left:1px solid var(--line);background:none;padding:7px 3px;text-align:center;min-width:0;font:inherit;color:inherit;cursor:pointer}
+.pn2 .pnmr .pnage:hover:not(:disabled){background:var(--surf2,#F6F3F8)}
+.pn2 .pnmr .pnage:disabled{cursor:default}
+.pn2 .pnmr .pnage.no b{color:var(--faint);font-weight:500}
+.pn2 .pnaged{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px 10px;border:1px solid var(--line);background:var(--surf2,#FAF8FB);border-radius:12px;padding:10px 12px;margin:6px 0 4px}
+.pn2 .pnaged label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--mut)}
+.pn2 .pnaged input{height:36px;box-sizing:border-box;border:1px solid var(--line);border-radius:9px;padding:0 10px;font:500 14px var(--sans);color:var(--ink);background:var(--surf,#fff);min-width:0}
+.pn2 .pnaged p{grid-column:1/-1;margin:0;font-size:12px;color:var(--mut);line-height:1.45}
+.pn2 .pnaged > div{grid-column:1/-1;display:flex;justify-content:flex-end;gap:8px}
 .pn2 .pns{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-top:1px solid var(--line)}
 .pn2 .pns:first-of-type{border-top:0}
 .pn2 .pnsh{display:flex;align-items:center;gap:8px;min-height:22px}

@@ -79,9 +79,11 @@
   function paintSide(){
     const on = sideOn();
     box.classList.toggle('fvnoside', !on);
+    setTimeout(fitPill, 0);
     box.querySelector('.fvsti').textContent = on ? '›' : '‹';
     box.querySelector('.fvstl').textContent = L('Details', '정보');
-    if(!on || !S){ side.innerHTML = ''; return; }
+    /* 1.2.140: forget what was drawn, or the next opening (same model) drew nothing - the empty white sheet on the phone */
+    if(!on || !S){ side.innerHTML = ''; side.__pnh = ''; return; }
     const keep = [...side.querySelectorAll('[data-mxin],[data-ntin]')].map(n => [n.dataset.mxin ? '[data-mxin="' + n.dataset.mxin + '"]' : '[data-ntin="' + CSS.escape(n.dataset.ntin) + '"]', n.value, n === document.activeElement, n.selectionStart || 0, n.selectionEnd || 0]), sTop = side.scrollTop;
     const {i, f, bk} = facts();
     const nm = S.name || i.nm || (bk && bk.nm) || '';
@@ -177,17 +179,68 @@
       dy = Math.max(0, d);
       if(e.cancelable) e.preventDefault();
       side.style.transition = 'none'; side.style.transform = 'translateY(' + dy + 'px)';
+      box.classList.add('fvdrag'); box.style.setProperty('--fvsh', Math.max(0, side.offsetHeight - dy) + 'px');
     }, {passive: false});
     const end = () => {
       if(!on) return; on = false;
-      side.style.transition = ''; side.style.transform = '';
+      side.style.transition = ''; side.style.transform = ''; box.classList.remove('fvdrag');
       const fast = dy > 40 && Date.now() - t0 < 250;
       if(dy > side.offsetHeight * 0.25 || fast){ narrowOn = false; paintSide(); }
-      dy = 0;
+      dy = 0; fitPill();
     };
     side.addEventListener('touchend', end); side.addEventListener('touchcancel', end);
   })();
-  box.querySelector('.fvsidet').addEventListener('click', () => { if(narrow()) narrowOn = !narrowOn; else { try{ localStorage.setItem(SIDEK, sideOn() ? '0' : '1'); }catch(e){} } paintSide(); });
+  /* 1.2.140 (user, 11 Nov 2026: "I want to be able to slide that info panel up by holding and sliding, not just pushing the
+     detail button"): on a phone the sheet also comes up with the finger - hold the Details button (or the strip of photos
+     under the picture) and slide up; let go past a quarter of its height, or flick, and it stays open. The same button
+     pulled down closes it again. The Details button always sits right on top of the sheet. */
+  function fitPill(){ if(!narrow() || box.classList.contains('fvdrag')) return; box.style.setProperty('--fvsh', (sideOn() ? side.offsetHeight : 0) + 'px'); }
+  try{ new ResizeObserver(fitPill).observe(side); }catch(e){}
+  let pillDragAt = 0;
+  (function sheetPull(){
+    const pill = box.querySelector('.fvsidet');
+    let g = null;
+    const start = e => {
+      if(!narrow() || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      g = {x0: t.clientX, y0: t.clientY, t0: Date.now(), from: e.currentTarget, wasOn: !!narrowOn, H: 0, d: 0, live: false};
+    };
+    const move = e => {
+      if(!g) return;
+      const t = e.touches[0], dx = t.clientX - g.x0, dyy = t.clientY - g.y0;
+      if(!g.live){
+        if(Math.abs(dyy) < 8) return;
+        if(Math.abs(dx) > Math.abs(dyy)){ g = null; return; }             // a sideways swipe on the strip stays a swipe
+        if(!g.wasOn && dyy > 0){ g = null; return; }                       // closed: only up opens it
+        if(g.from !== pill && g.wasOn){ g = null; return; }                // open: the sheet itself handles down
+        g.live = true;
+        if(!g.wasOn){ side.style.transition = 'none'; narrowOn = true; paintSide(); }
+        side.style.transition = 'none'; g.H = side.offsetHeight; box.classList.add('fvdrag');
+      }
+      if(e.cancelable) e.preventDefault();
+      /* how far below its open place the sheet is now */
+      const off = g.wasOn ? Math.max(0, Math.min(g.H, dyy)) : Math.max(0, Math.min(g.H, g.H + dyy));
+      g.d = off; side.style.transform = 'translateY(' + off + 'px)';
+      box.style.setProperty('--fvsh', (g.H - off) + 'px');
+    };
+    const end = () => {
+      if(!g) return; const G = g; g = null;
+      if(!G.live) return;
+      pillDragAt = Date.now();
+      const fast = Date.now() - G.t0 < 260, shown = G.H - G.d;
+      const open = G.wasOn ? !(G.d > G.H * 0.25 || (fast && G.d > 40)) : (shown > G.H * 0.25 || (fast && shown > 40));
+      side.style.transition = ''; side.style.transform = ''; box.classList.remove('fvdrag');
+      if(!open){ narrowOn = false; paintSide(); }
+      fitPill();
+    };
+    for(const el of [pill, box.querySelector('.fvstrip')]){
+      if(!el) continue;
+      el.addEventListener('touchstart', start, {passive: true});
+      el.addEventListener('touchmove', move, {passive: false});
+      el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
+    }
+  })();
+  box.querySelector('.fvsidet').addEventListener('click', () => { if(Date.now() - pillDragAt < 400) return; if(narrow()) narrowOn = !narrowOn; else { try{ localStorage.setItem(SIDEK, sideOn() ? '0' : '1'); }catch(e){} } paintSide(); });
   box.addEventListener('click', e => {
     const b = e.target.closest && e.target.closest('[data-fvmain], [data-fvunmain]'); if(!b || !S) return;
     e.preventDefault(); e.stopPropagation();
@@ -381,9 +434,11 @@
   #illufv .fvsidet{top:auto;right:auto;left:50%;bottom:calc(var(--fvstrip,0px) + 14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:auto;flex-direction:row;gap:6px;padding:9px 18px;border:1px solid rgba(255,255,255,.25);border-radius:999px;z-index:5;writing-mode:horizontal-tb}
   #illufv .fvsidet .fvstl{writing-mode:horizontal-tb;transform:none;font-size:13px;letter-spacing:.06em}
   #illufv .fvsidet .fvsti{transform:rotate(-90deg)}
-  #illufv:not(.fvnoside) .fvsidet{bottom:calc(76vh + 10px);background:var(--surf,#fff);color:var(--ink,#211C26);border-color:var(--line,#E7E2EC)}
+  #illufv:not(.fvnoside) .fvsidet{bottom:calc(var(--fvsh,76vh) + 10px);background:var(--surf,#fff);color:var(--ink,#211C26);border-color:var(--line,#E7E2EC)}
   #illufv:not(.fvnoside) .fvsidet *{color:inherit}
   #illufv:not(.fvnoside) .fvsidet .fvsti{transform:rotate(90deg)}
+  #illufv.fvdrag .fvsidet{bottom:calc(var(--fvsh,0px) + 10px);transition:none}
+  #illufv .fvsidet{touch-action:none}
 }
 @media (max-width:900px) and (prefers-reduced-motion:reduce){#illufv .fvside{transition:none}}
 
@@ -392,4 +447,30 @@
 #illufv .fvmainw:empty{display:none}
 `;
   document.head.appendChild(css);
+})();
+
+/* 1.2.140 (phone): a model with a booking card has her own folder in Dropbox; when this phone is not signed in to Dropbox yet
+   the viewer says so with one button (the person signs in on dropbox.com themselves) */
+(function(){
+  if(!(window.illu && window.illu.web && window.illu.dropboxStatus) || typeof window.illuPhotoFull !== 'function') return;
+  const ko = () => typeof LANG !== 'undefined' && LANG === 'ko';
+  const open0 = window.illuPhotoFull;
+  window.illuPhotoFull = function(first, nm, href, k){
+    const r = open0.apply(this, arguments);
+    (async () => {
+      let c = null; try{ c = bkForKey(k); }catch(e){}
+      const box = document.getElementById('illufv'); if(!box) return;
+      const old = box.querySelector('.fvdbx'); if(old) old.remove();
+      if(!c) return;
+      const st = await window.illu.dropboxStatus(); if(st.connected) return;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'fvdbx';
+      b.textContent = ko() ? '이 모델의 Dropbox 폴더 · Dropbox 연결' : 'Her Dropbox folder · Connect Dropbox';
+      b.addEventListener('click', e => { e.stopPropagation(); window.illu.dropboxConnect(); });
+      const top = box.querySelector('.fvtop'); if(top) top.appendChild(b);
+    })();
+    return r;
+  };
+  const st = document.createElement('style');
+  st.textContent = '#illufv .fvdbx{margin-left:8px;height:30px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;font:600 12px/1 var(--sans,Inter,system-ui,sans-serif);cursor:pointer}';
+  document.head.appendChild(st);
 })();

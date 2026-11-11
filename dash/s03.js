@@ -1212,7 +1212,8 @@ function bvDrawSide(c, got){
   if(pr && top) pr.scrollTop = top;
   const nl = bvSide.querySelector('.stgl');
   if(nl){ const op = sk && nl.querySelector('.stgi.open');
-    if(op && bv.stjump !== sk){ nl.scrollTop = Math.max(0, op.offsetTop - nl.offsetTop - 6); bv.stjump = sk; }
+    if(nl.classList.contains('stgone')){ const cur = (nl.querySelector('.stgi.open') || {}).dataset; const kk = cur ? cur.stg : ''; if(bv.stjump !== kk){ nl.scrollTop = 0; const sc = nl.closest('.bvprof, .bvside'); if(sc && sc !== nl) sc.scrollTop = 0; bv.stjump = kk; } else nl.scrollTop = ltop; }
+    else if(op && bv.stjump !== sk){ nl.scrollTop = Math.max(0, op.offsetTop - nl.offsetTop - 6); bv.stjump = sk; }
     else nl.scrollTop = ltop;
     if(!sk) bv.stjump = ''; }
 }
@@ -1237,6 +1238,22 @@ function bvStageSum(c, k, o){
 }
 const BVSTCHEV = '<svg class="stgc" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 function bvStageList(c, open){
+  /* 1.2.140 (user, 11 Nov 2026: "Stages individually on the right panel"): the stages are listed once, in the left
+     column; here ONE stage has the whole panel - ‹ › step through them, its status sits beside its name. With no
+     stage chosen it shows the first one not done yet. */
+  if(!open){ const nd = BKSEC.find(([k]) => bvStageOf(c, k).pv !== 'g'); open = (nd || BKSEC[0])[0]; }
+  const i0 = Math.max(0, BKSEC.findIndex(x => x[0] === open)), k0 = BKSEC[i0][0], l0 = BKSEC[i0][1], o0 = bvStageOf(c, k0);
+  const prv = BKSEC[(i0 + BKSEC.length - 1) % BKSEC.length][0], nxt = BKSEC[(i0 + 1) % BKSEC.length][0];
+  return '<div class="stgl stgone">' +
+    '<div class="stgnav" data-p="' + o0.pv + '"><button type="button" class="stgar" data-bvsec="' + prv + '" aria-label="' + esc(bvL('Previous stage', '이전 단계')) + '">\u2039</button>' +
+      '<span class="stgnt"><small>' + esc(bvL('Stage ' + (i0 + 1) + ' of ' + BKSEC.length, (i0 + 1) + ' / ' + BKSEC.length + ' 단계')) + '</small><b>' + esc(bvT(l0)) + '</b></span>' +
+      '<button type="button" class="stgar" data-bvsec="' + nxt + '" aria-label="' + esc(bvL('Next stage', '다음 단계')) + '">\u203a</button></div>' +
+    '<div class="stgsw stgsw1" role="radiogroup" aria-label="' + esc(bvL('Status of ' + l0, bvT(l0) + ' 상태')) + '">' +
+      [['', bvL('Not started', '시작 전')], ['y', bvL('In process', '진행 중')], ['g', bvL('Done', '완료')]].map(([v, t]) =>
+      '<button type="button" role="radio" class="stgsb' + (v ? ' ' + v : ' o') + '" aria-checked="' + (o0.pv === v) + '" data-bpset="' + esc(c.id + '|' + k0 + '|' + v) + '"><i></i>' + t + '</button>').join('') + '</div>' +
+    '<section class="stgi open" data-p="' + o0.pv + '" data-stg="' + k0 + '"><div class="stgb">' + bvStagePane(c, k0) + '</div></section></div>';
+}
+function bvStageListAll(c, open){
   return '<div class="stgl">' + BKSEC.map(([k, label], i) => {
     const o = bvStageOf(c, k), on = k === open, miss = k === 'contract' ? bvCtMiss(c) : 0;
     const st = o.pv === 'g' ? bvL('Done', '완료') : o.pv === 'y' ? bvL('In process', '진행 중') : bvL('Not started', '시작 전');

@@ -69,7 +69,11 @@
   const litFacts0 = window.litFacts;
   window.litFacts = litFacts = function(m){
     const f = litFacts0(m);
-    const pm = PMAIN.get(m.key); if(pm && !expired(pm.u)){ f.photo = pmSrc(pm); return f; }
+    const pm = PMAIN.get(m.key);
+    /* 1.2.140: on the phone, a card photo that is a file on the PC (bk.<id>, not yet uploaded by the PC) is shown from her
+       Dropbox folder instead (1. BOOK), when this phone is signed in to Dropbox; otherwise the agency's photo */
+    if(pm && window.illu && window.illu.web && /^\/_blob\/bk\./.test(pm.u)){ const cv = window.__illuMatCover ? window.__illuMatCover(m.key) : ''; if(cv){ f.photo = cv; return f; } return f; }
+    if(pm && !expired(pm.u)){ f.photo = pmSrc(pm); return f; }
     if(f.photo && expired(f.photo)) f.photo = '';
     const u = PLINK.get(m.key);
     if(u && (!f.photo || BROKEN.has(f.photo))) f.photo = u;

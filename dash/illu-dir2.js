@@ -1058,11 +1058,12 @@
   }
   function cardEnter(C){
     const k = D2.open;
-    if(D2.shownKey !== k){                       // just opened (not a redraw while open)
+    const fresh = D2.shownKey !== k, ph = fresh && PHONE();
+    if(fresh){                                   // just opened (not a redraw while open)
       D2.shownKey = k; D2.openedAt = Date.now();
       document.body.classList.add('d2opening'); clearTimeout(D2.openT);
       D2.openT = setTimeout(() => document.body.classList.remove('d2opening'), 1200);
-      if(!CALM()){
+      if(!CALM() && !ph){
         /* user, 2026-11-04: the card appears right where it always sat (centre of the window), it no
            longer flies in from the tile - it grows in place with the same slight spring */
         const from = 'translateX(-50%) translateY(12px) scale(.9)';
@@ -1072,6 +1073,7 @@
       }
     }
     try{ slideApply(C); }catch(e){}
+    if(ph && !SL.full) try{ slFull(true); }catch(e){}
     /* the photo keeps drifting from where it was, even when the card is redrawn (a lamp click) */
     C.style.setProperty('--d2age', -((Date.now() - (D2.openedAt || Date.now())) % 28000) + 'ms');
     /* a lamp that was just lit pops */
@@ -1128,7 +1130,13 @@
   /* slide 0 is the card's own photo; 1.. are the agency's other pictures */
   const slN = () => 1 + ((SL.photos && SL.photos.length) || 0);
   function slGo(i){ const n = slN(); if(n < 2) return; SL.i = ((i % n) + n) % n; const C = $('.d2card'); if(C) slideApply(C); }
+  /* 1.2.140 (user, 11 Nov 2026: "For mobile, I want to the card to directly just open without having to select the
+     floating card again ... This goes for all cards in whichever board that has the floating function"):
+     on a phone a tapped tile opens straight into the full card (slideshow + details); leaving it closes the card */
+  { const st = document.createElement('style'); st.textContent = '@media (max-width:760px), (pointer:coarse) and (max-width:1024px){.d2card.d2full .d2slf{display:none!important}}'; document.head.appendChild(st); }
+  function PHONE(){ return matchMedia('(max-width:760px), (pointer:coarse) and (max-width:1024px)').matches; }
   function slFull(on){
+    if(!on && SL.full && PHONE() && D2.open){ closeCard(); return; }
     /* the details panel on the right always opens with the full view (user, 6 Nov 2026); its button
        still hides it for the moment, but that is no longer remembered */
     if(on && !SL.full) SL.side = true;
@@ -1237,6 +1245,8 @@
   window.addEventListener('pointerdown', e => { pdx = (e.button === 0 && DV() && D2.open) ? [e.clientX, e.clientY] : null; }, true);
   window.addEventListener('click', e => {
     if(e.button !== 0 || !DV() || !D2.open || !e.target.closest || !e.target.closest('.d2card')) return;
+    /* a click on a control (or the details panel) is that control's, even one made by the program (no pointer place) */
+    if(e.target.closest('.mx, button, a, input, select, textarea, label, form')) return;
     const cell = picAt(e.clientX, e.clientY); if(!cell) return;
     e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation();
     if(pdx && Math.hypot(e.clientX - pdx[0], e.clientY - pdx[1]) > 6) return;      // the card was dragged
@@ -1504,6 +1514,57 @@
      the Directory. */
   const RB = {F: [167, 179], M: [183, 191]}, RN = 50;
   const RC = {pool: null, pv: '', st: null, shown: [], loading: false, busy: false};
+  /* 1.2.140 phone: how many cards in a row (1 or 2), remembered on this phone */
+  function rcPer(){ if(!RC.per){ let v = 2; try{ v = +(localStorage.getItem('illu.rcper') || 2); }catch(e){} RC.per = v === 1 ? 1 : 2; } return RC.per; }
+  /* the Both / New faces / Development list closes on a tap anywhere else */
+  document.addEventListener('click', e => { if(RC.ddOpen && !(e.target.closest && e.target.closest('.rcdd'))){ RC.ddOpen = false; setTimeout(() => { if(VIEW === 'arr') recoRender(); }, 0); } }, true);
+  /* 1.2.140 phone: the search and filter box above Suggestiones opens and closes (closed to start with) */
+  function fbTog(){
+    const fb = document.getElementById('fbar'); if(!fb) return;
+    let t = fb.querySelector(':scope > .fbtog');
+    if(!t){ t = document.createElement('button'); t.type = 'button'; t.className = 'fbtog'; fb.insertBefore(t, fb.firstChild);
+      t.addEventListener('click', () => { const on = !fb.classList.contains('fbopen'); fb.classList.toggle('fbopen', on); t.setAttribute('aria-expanded', String(on)); paint(); }); }
+    function paint(){ const c = document.getElementById('count'), n = c ? c.textContent.trim() : '', on = fb.classList.contains('fbopen');
+      const q = document.getElementById('q'), act = (q && q.value.trim()) || fb.querySelector('.fbf.on, .fbf[aria-pressed="true"], .fbchip');
+      const h = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg><b>Search &amp; filters</b>' + (n ? '<span>· ' + esc(n) + '</span>' : '') + (act ? '<i>on</i>' : '') + '<em></em><svg class="fbch" viewBox="0 0 24 24" aria-hidden="true"><path d="' + (on ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6') + '"/></svg>';
+      if(t.__h !== h){ t.__h = h; t.innerHTML = h; } t.setAttribute('aria-expanded', String(on)); }
+    paint(); fbTog.paint = paint;
+  }
+  setInterval(() => { if(document.body.dataset.view === 'arr' && PHONE()){ if(!document.querySelector('#fbar > .fbtog')) fbTog(); else if(fbTog.paint) fbTog.paint(); } }, 700);
+  { const st = document.createElement('style'); st.textContent = `
+#fbar > .fbtog{display:none}
+@media (max-width:760px), (pointer:coarse) and (max-width:1024px){
+  body[data-view="arr"] #fbar > .fbtog{display:flex;align-items:center;gap:8px;width:100%;height:46px;border:0;background:none;padding:0 4px;font:500 14px var(--sans,Inter,system-ui,sans-serif);color:var(--ink,#211C26);cursor:pointer;text-align:left}
+  body[data-view="arr"] #fbar > .fbtog svg{width:18px;height:18px;fill:none;stroke:var(--acc,#5A2C57);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  body[data-view="arr"] #fbar > .fbtog .fbch{stroke:var(--ink,#211C26)}
+  body[data-view="arr"] #fbar > .fbtog b{font-weight:500}
+  body[data-view="arr"] #fbar > .fbtog span{color:var(--mut,#6D6577);font-size:13px;white-space:nowrap}
+  body[data-view="arr"] #fbar > .fbtog i{font-style:normal;font-size:11px;font-weight:700;color:var(--acc,#5A2C57);background:var(--accbg,#F3ECF3);border-radius:999px;padding:2px 7px}
+  body[data-view="arr"] #fbar > .fbtog em{flex:1}
+  body[data-view="arr"] #fbar:not(.fbopen) > :not(.fbtog){display:none!important}
+  body[data-view="arr"] #fbar:not(.fbopen){padding-top:2px!important;padding-bottom:2px!important}
+  #pane-arr.rcphone .rchd{padding-top:10px!important;padding-bottom:8px!important;gap:8px}
+  #pane-arr.rcphone .rchd > div{display:flex;flex-direction:column;gap:10px;width:100%;min-width:0}
+  #pane-arr.rcphone .rchd > .illufs, #pane-arr.rcphone .rchd > .rcbtn{display:none!important}
+  #pane-arr .rcph{display:flex;align-items:center;gap:5px;position:relative;z-index:6}
+  #pane-arr .rcph .rcsp{flex:1}
+  #pane-arr .rcphb{width:40px;height:40px;flex:none;border:1px solid var(--line,#E7E2EC);border-radius:14px;background:var(--surf,#fff);display:grid;place-items:center;cursor:pointer;color:var(--ink,#211C26);padding:0}
+  #pane-arr .rcphb svg,#pane-arr .rcper svg,#pane-arr .rcddb svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  #pane-arr .rcper{display:flex;height:40px;box-sizing:border-box;border:1px solid var(--line,#E7E2EC);border-radius:14px;padding:3px;gap:2px;flex:none;background:var(--surf,#fff)}
+  #pane-arr .rcper button{width:30px;border:0;border-radius:10px;background:none;color:var(--mut,#6D6577);display:grid;place-items:center;cursor:pointer;padding:0}
+  #pane-arr .rcper button[aria-pressed="true"]{background:var(--acc,#5A2C57);color:#fff}
+  #pane-arr .rcdd{position:relative;flex:none}
+  #pane-arr .rcddb{height:40px;border-radius:14px;border:1px solid #D9CCDC;background:var(--surf,#fff);padding:0 9px;display:flex;align-items:center;gap:4px;font:600 13.5px var(--sans,Inter,system-ui,sans-serif);color:var(--acc,#5A2C57);cursor:pointer;white-space:nowrap}
+  #pane-arr .rcddb[aria-expanded="true"]{border-color:var(--acc,#5A2C57);background:var(--accbg,#F3ECF3)}
+  #pane-arr .rcddl{position:absolute;right:0;top:46px;min-width:140px;background:var(--surf,#fff);border:1px solid var(--line,#E7E2EC);border-radius:12px;box-shadow:0 14px 34px rgba(20,10,30,.18);padding:4px;display:flex;flex-direction:column;gap:2px;z-index:30}
+  #pane-arr .rcddl button{border:0;background:none;border-radius:8px;padding:10px 12px;font:500 14px var(--sans,Inter,system-ui,sans-serif);color:var(--ink,#211C26);text-align:left;cursor:pointer;white-space:nowrap}
+  #pane-arr .rcddl button[aria-selected="true"]{background:var(--acc,#5A2C57);color:#fff;font-weight:600}
+  #pane-arr .rcph .rcbtn{height:40px;flex:none;padding:0 12px;white-space:nowrap;box-shadow:none}
+  #pane-arr.rcper2 .rc2grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+  #pane-arr.rcper1 .rc2grid{grid-template-columns:minmax(0,1fr)!important;gap:12px!important}
+  /* full screen on the phone: only the cards and the row of buttons */
+  body.rcfull #fbar, body.rcfull #appbar, body.rcfull #illubnav, body.rcfull .bnav{display:none!important}
+}`; document.head.appendChild(st); }
   const fp = k => { let h = 2166136261; for(let i = 0; i < k.length; i++){ h ^= k.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
   const rkey = (seed, k) => { let h = 2166136261; const t = seed + '|' + k; for(let i = 0; i < t.length; i++){ h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
   function recoPool2(){
@@ -1824,10 +1885,13 @@
       : !ms.length ? '<div class="d2empty"><p>No model in these heights has measurements yet.</p></div>'
       : '<div class="rc2grid">' + ms.map(m => tile2(m)).join('') + '</div>';
     const nfN = nfAll.length, nfF = nfAll.filter(m => m.t === 'newfaces').length;
+    /* 1.2.140 (phone, the user's approved demo, 11 Nov 2026): no heading or description; one row - full screen, 1 / 2 cards
+       in a row, then Both / New faces / Development as a list that opens downward, right beside New picks */
+    const PH = PHONE();
     const subSeg = '<div class="rc2seg" role="group" aria-label="Board type">' + [['both', 'Both'], ['newfaces', 'New faces'], ['development', 'Development']].map(([k, l]) => '<button type="button" data-rcnf="' + k + '" aria-pressed="' + (RC.nfSub === k) + '">' + l + '</button>').join('') + '</div>';
     const body2 = !ready ? body
       : tab === 'kor' ? (list.length ? '<p class="rc2note">The best 9 by the Korean-market bands (women ' + KB().F.ht.join('–') + ' cm, men ' + KB().M.ht.join('–') + ' cm, plus bust, waist and hips). Green figures are inside the band. New picks shows the next 9.</p><div class="rc2grid">' + list.map(m => tile2(m, true)).join('') + '</div>' : '<div class="d2empty"><p>Nothing left to suggest for the Korean market under these filters. Change the filters, or press New picks to start again from the top.</p></div>')
-      : tab === 'nf' ? '<div class="rc2bar">' + subSeg + '<span class="rc2note">' + nfN.toLocaleString() + ' models with a photo on New face and Development boards' + (fon ? ' match your filters' : '') + ' · under 18s are never shown</span></div>' +
+      : tab === 'nf' ? (PH ? '' : '<div class="rc2bar">' + subSeg + '<span class="rc2note">' + nfN.toLocaleString() + ' models with a photo on New face and Development boards' + (fon ? ' match your filters' : '') + ' · under 18s are never shown</span></div>') +
           (list.length ? '<div class="rc2grid">' + list.map(m => tile2(m)).join('') + '</div>' + (nfPages > 1 ? '<nav class="rc2pg" aria-label="Pages"><button type="button" class="rcnb" data-rcpg="' + (RC.nfPg - 1) + '"' + (RC.nfPg ? '' : ' disabled') + '>‹ Previous</button><span>Page <b>' + (RC.nfPg + 1).toLocaleString() + '</b> of ' + nfPages.toLocaleString() + ' · ' + (RC.nfPg * 60 + 1).toLocaleString() + '–' + (RC.nfPg * 60 + list.length).toLocaleString() + ' of ' + nfN.toLocaleString() + '</span><button type="button" class="rcnb" data-rcpg="' + (RC.nfPg + 1) + '"' + (RC.nfPg < nfPages - 1 ? '' : ' disabled') + '>Next page ›</button></nav>' : '') : '<div class="d2empty"><p>No model on these boards matches your filters.</p></div>')
       : body + (strip.length ? '<section class="rc2nf" aria-label="From New face and Development boards"><div class="rc2bar"><div><b>From New face &amp; Development boards</b><span class="rc2note">' + nfN.toLocaleString() + ' models · ' + nfF.toLocaleString() + ' New face · ' + (nfN - nfF).toLocaleString() + ' Development</span></div>' + subSeg + '<button type="button" class="rcnb" data-rctab="nf">See all</button></div><div class="rc2strip">' + strip.map(m => tile2(m)).join('') + '</div></section>' : '');
     const G0 = $('.d2body'), gTop = G0 ? G0.scrollTop : 0;
@@ -1835,7 +1899,16 @@
       [['you', 'For you', ready ? ms.length : ''], ['nf', 'New faces & Development', ready ? nfN.toLocaleString() : '']].map(([k, l, n]) =>
         '<button type="button" role="tab" data-rctab="' + k + '" aria-selected="' + (tab === k) + '">' + esc(l) + (n !== '' ? ' <s>' + n + '</s>' : '') + '</button>').join('') + '</div>';
     const sub2 = tab === 'you' ? sub : tab === 'kor' ? 'Measured models from the whole Directory that best fit the Korean-market bands' : 'Models on the agencies\' New face and Development boards';
-    pane.innerHTML = '<div class="rcwrap"><div class="rchd"><div><h2>Suggestiones</h2>' + tabs + '<p>' + esc(sub2) + '</p>' + (tab === 'you' ? '<p class="rcprog">' + esc(prog) + '</p>' : '') + '</div>' +
+    const NFL = {both: 'Both', newfaces: 'New faces', development: 'Development'};
+    const phRow = !PH ? '' : '<div class="rcph">' +
+      '<button type="button" class="rcphb" data-rcfull aria-pressed="' + !!RC.full + '" aria-label="' + (RC.full ? 'Exit full screen' : 'Full screen') + '" title="' + (RC.full ? 'Exit full screen' : 'Full screen') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (RC.full ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>') + '</svg></button>' +
+      '<span class="rcper" role="group" aria-label="Cards in a row">' + [1, 2].map(n => '<button type="button" data-rcper="' + n + '" aria-pressed="' + (rcPer() === n) + '" aria-label="' + n + (n === 1 ? ' card' : ' cards') + ' in a row" title="' + n + (n === 1 ? ' card' : ' cards') + ' in a row"><svg viewBox="0 0 24 24" aria-hidden="true">' + (n === 1 ? '<rect x="5" y="4" width="14" height="16" rx="2"/>' : '<rect x="3" y="4" width="7.5" height="16" rx="1.5"/><rect x="13.5" y="4" width="7.5" height="16" rx="1.5"/>') + '</svg></button>').join('') + '</span>' +
+      '<span class="rcsp"></span>' +
+      (tab === 'nf' ? '<span class="rcdd"><button type="button" class="rcddb" data-rcdd aria-haspopup="listbox" aria-expanded="' + !!RC.ddOpen + '">' + (NFL[RC.nfSub] || 'Both') + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + (RC.ddOpen ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6') + '"/></svg></button>' +
+        (RC.ddOpen ? '<span class="rcddl" role="listbox" aria-label="Board type">' + Object.keys(NFL).map(k => '<button type="button" role="option" data-rcnf="' + k + '" aria-selected="' + (RC.nfSub === k) + '">' + NFL[k] + '</button>').join('') + '</span>' : '') + '</span>' : '') +
+      '<button type="button" class="rcbtn" data-rcref' + (!ready || !pool.length ? ' disabled' : '') + '>New picks</button></div>';
+    pane.classList.toggle('rcper1', PH && rcPer() === 1); pane.classList.toggle('rcper2', PH && rcPer() === 2); pane.classList.toggle('rcphone', PH);
+    pane.innerHTML = '<div class="rcwrap"><div class="rchd"><div>' + (PH ? '' : '<h2>Suggestiones</h2>') + tabs + (PH ? phRow : '<p>' + esc(sub2) + '</p>' + (tab === 'you' ? '<p class="rcprog">' + esc(prog) + '</p>' : '')) + '</div>' +
       '<button type="button" class="illufs" data-rcfull aria-pressed="' + !!RC.full + '" title="' + (RC.full ? 'Exit full screen (Esc)' : 'Show Suggestiones on the whole screen') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (RC.full ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>') + '</svg><span>' + (RC.full ? 'Exit full screen' : 'Full screen') + '</span></button>' +
       (tab === 'you' && RC.sets && RC.sets.length > 1 ? '<div class="rcnav" role="group" aria-label="Earlier sets">' +
         '<button type="button" class="rcnb" data-rcstep="-1"' + (RC.at > 0 ? '' : ' disabled') + ' title="The set shown before this one (Alt ←)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Back</span></button>' +
@@ -1903,7 +1976,7 @@
   document.addEventListener('click', e => {
     if(VIEW !== 'arr' || !e.target.closest) return;
     const tb2 = e.target.closest('[data-rctab]'); if(tb2){ e.preventDefault(); RC.tab = tb2.dataset.rctab; try{ localStorage.setItem('illu.rctab', RC.tab); }catch(er){} D2.open = ''; recoRender(); const G = $('.d2body'); if(G) G.scrollTop = 0; return; }
-    const nfb = e.target.closest('[data-rcnf]'); if(nfb){ e.preventDefault(); RC.nfSub = nfb.dataset.rcnf; RC.nfN = 60; RC.nfPg = 0; try{ localStorage.setItem('illu.rcnfsub', RC.nfSub); }catch(er){} recoRender(); return; }
+    const nfb = e.target.closest('[data-rcnf]'); if(nfb){ e.preventDefault(); RC.ddOpen = false; RC.nfSub = nfb.dataset.rcnf; RC.nfN = 60; RC.nfPg = 0; try{ localStorage.setItem('illu.rcnfsub', RC.nfSub); }catch(er){} recoRender(); return; }
     if(e.target.closest('[data-rcmore]')){ e.preventDefault(); RC.nfN += 60; recoRender(); return; }
     const pg = e.target.closest('[data-rcpg]'); if(pg){ e.preventDefault(); if(pg.disabled) return; RC.nfPg = Math.max(0, +pg.dataset.rcpg || 0); recoRender(); const G = $('.d2body'); if(G) G.scrollTop = 0; const P = $('#pane-arr'); if(P && P.scrollIntoView) P.scrollIntoView({block: 'start'}); return; }
     if(e.target.closest('[data-rcref]')){ e.preventDefault();
@@ -1912,7 +1985,9 @@
       if(RC.tab === 'nf'){ RC.nfSeed++; RC.nfN = 60; RC.nfPg = 0; recoRender(); const G = $('.d2body'); if(G) G.scrollTop = 0; return; }
       recoRefresh(); return; }
     const stp = e.target.closest('[data-rcstep]'); if(stp){ e.preventDefault(); if(!stp.disabled) recoStep(+stp.dataset.rcstep); return; }
-    if(e.target.closest('[data-rcfull]')){ e.preventDefault(); RC.full = !RC.full; document.body.classList.toggle('rcfull', RC.full); recoRender(); return; }
+    if(e.target.closest('[data-rcfull]')){ e.preventDefault(); RC.full = !RC.full; RC.ddOpen = false; document.body.classList.toggle('rcfull', RC.full); recoRender(); return; }
+    const per = e.target.closest('[data-rcper]'); if(per){ e.preventDefault(); try{ localStorage.setItem('illu.rcper', per.dataset.rcper); }catch(er){} RC.per = +per.dataset.rcper; recoRender(); return; }
+    if(e.target.closest('[data-rcdd]')){ e.preventDefault(); RC.ddOpen = !RC.ddOpen; recoRender(); return; }
     if(e.target.closest('[data-d2close]') || (e.target.classList && e.target.classList.contains('d2body') && D2.open)){ closeCard(); return; }
   });
   /* the tab's name */

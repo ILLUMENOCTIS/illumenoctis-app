@@ -56,6 +56,10 @@
       {k: 'ctfn', en: 'Model full name (as on the passport)', ko: '모델 전체 이름 (여권과 동일)', ph: c.nm || ''},
       {k: 'nat', en: 'Nationality', ko: '국적', shared: true},
       {k: 'ppn', en: 'Passport number', ko: '여권 번호', shared: true},
+      /* 1.2.140: the rest of the passport, kept on the card (Profile) and used by the visa - optional for the contract */
+      {k: 'dob', en: 'Date of birth', ko: '생년월일', shared: true, opt: true, date: true},
+      {k: 'ppi', en: 'Passport issued', ko: '여권 발급일', shared: true, opt: true, date: true},
+      {k: 'ppe', en: 'Passport expires', ko: '여권 만료일', shared: true, opt: true, date: true},
       {k: 'ctsex', en: 'Female or male (her / his)', ko: '여성 / 남성', auto: f.g === 'F' ? 'F' : f.g === 'M' ? 'M' : '', sel: [['F', L('Female', '여성')], ['M', L('Male', '남성')]]},
       {k: 'ctag', en: 'Mother agency', ko: '마더 에이전시', auto: ag},
       {k: 'ctad1', en: 'Mother agency address, line 1', ko: '마더 에이전시 주소 1'},
@@ -147,6 +151,7 @@
     for(const r of R){ V[r.k] = val(c, r); if(!r.opt && !has(V[r.k])) bad.add(r.k); }
     const ad = pdate(V.ctdate), st = pdate(V.ctst), days = parseInt(V.ctdays, 10);
     if(has(V.ctdate) && !ad) bad.add('ctdate');
+    for(const k of ['dob', 'ppi', 'ppe']) if(has(V[k]) && !pdate(V[k])) bad.add(k);
     if(has(V.ctst) && !st) bad.add('ctst');
     if(has(V.ctdays) && !(days > 0)) bad.add('ctdays');
     if('ctjobs' in V && has(V.ctjobs) && !(parseInt(V.ctjobs, 10) > 0)) bad.add('ctjobs');
@@ -228,7 +233,11 @@
     h += '<div class="cthead"><b>' + L(KINDS[gty].en, KINDS[gty].ko) + '</b><span class="ctcount ' + (miss.length ? 'y' : 'g') + '" data-ctcount>' +
       H(miss.length ? L(miss.length + ' missing', miss.length + '개 누락') : L('Ready', '준비 완료')) + '</span></div>';
     h += missBar(miss, b.R.some(r => r.k === 'ctwt'));
-    h += '<div class="ctgrid">' + b.R.map(r => {
+    /* 1.2.140 (user's approved demo): the same fields, grouped - Model · Terms · Mother agency · Measurements · Allowances */
+    const GRP = [['m', L('Model', '모델'), ['ctfn', 'nat', 'ppn', 'dob', 'ppi', 'ppe', 'ctsex']], ['t', L('Terms', '조건'), ['ctdate', 'ctst', 'ctdays', 'ctguar', 'ctgm', 'ctjobs', 'ctglow', 'ctpm', 'ctpa', 'ctpo']],
+      ['a', L('Mother agency', '마더 에이전시'), ['ctag', 'ctad1', 'ctad2']], ['x', L('Measurements', '사이즈'), ['cthl', 'hcol', 'ctht', 'ctwt', 'ctbu', 'ctwa', 'cthp', 'cteu']],
+      ['w', L('Allowances', '수당'), ['ctacc', 'cttr', 'ctpick', 'ctpock', 'ctflt']]];
+    const rowHtml = r => {
       const typed = has(c[r.k]), v = typed ? c[r.k] : '';
       const auto = !typed && has(r.auto) ? r.auto : '';
       const ph = auto ? auto : (r.ph ? r.ph : (r.date ? 'DD/MM/YYYY' : ''));
@@ -244,7 +253,19 @@
       return pick + '<label class="ctrow' + (b.bad.has(r.k) ? ' miss' : '') + '" data-ctk="' + r.k + '"><span>' + H(L(r.en, r.ko)) +
         (r.shared ? '<em>' + L('card', '카드') + '</em>' : auto ? '<em>' + (r.k === 'ctdate' ? L('today', '오늘') : L('from the card', '카드에서')) + '</em>' : '') +
         (auto && b.bad.has(r.k) ? '<em class="ctbad">' + (r.date ? L('not a DD/MM/YYYY date — type it here', 'DD/MM/YYYY 날짜가 아님 — 여기에 입력') : L('check this', '확인 필요')) + '</em>' : '') + '</span>' + input + ((r.k === 'ctgm' || r.k === 'ctglow') && gcur(c) !== 'KRW' ? '<em class="ctgx" data-ctgw="' + r.k + '">' + H(wonNote(c, money(c[r.k])).replace(/^ · /, '')) + '</em>' : '') + '</label>';
-    }).join('') + '</div>';
+    };
+    const done = new Set();
+    for(const [gk, gl, keys] of GRP){
+      const rs = b.R.filter(r => keys.includes(r.k)); if(!rs.length) continue; rs.forEach(r => done.add(r.k));
+      const nb = rs.filter(r => b.bad.has(r.k)).length, nf = rs.filter(r => !b.bad.has(r.k) && (has(c[r.k]) || has(r.auto))).length;
+      const head = '<b>' + H(gl) + '</b><em class="' + (nb ? 'y' : 'g') + '">' + H(nb ? L(nb + ' missing', nb + '개 누락') : L(nf + ' / ' + rs.length, nf + ' / ' + rs.length)) + '</em>';
+      const body = '<div class="ctgrid">' + rs.map(rowHtml).join('') + '</div>';
+      /* the allowances are the standard figures - folded away unless one is wrong */
+      h += gk === 'w' ? '<details class="ctgrp" data-ctg="w"' + (nb ? ' open' : '') + '><summary class="ctgh">' + head + '<span class="ctgs">' + H(rs.map(r => { const v = has(c[r.k]) ? c[r.k] : r.auto; return v ? v : ''; }).filter(Boolean).slice(0, 4).join(' · ')) + '</span></summary>' + body + '</details>'
+        : '<div class="ctgrp" data-ctg="' + gk + '"><div class="ctgh">' + head + '</div>' + body + '</div>';
+    }
+    const rest = b.R.filter(r => !done.has(r.k));
+    if(rest.length) h += '<div class="ctgrp"><div class="ctgrid">' + rest.map(rowHtml).join('') + '</div></div>';
     if(b.warn) h += '<p class="ctwarn">' + H(b.warn) + '</p>';
     if(b.ok) h += '<p class="ctsum">' + H(L('Runs ' + b.V.ctst + ' to ' + pad(b.end.getDate()) + '/' + pad(b.end.getMonth() + 1) + '/' + b.end.getFullYear() + ' · ' + b.months + ' months' + (b.tokens.GUAR ? ' · guarantee ' + b.tokens.GCUR_SYM + b.tokens.GUAR : '') + (b.tokens.GUARM ? ' · ₩' + b.tokens.GUARM + ' a month with ' + b.tokens.JOBS + ' full days, else ₩' + b.tokens.GUARLOWS.replace(/ /g, ',') : ''),
       b.V.ctst + ' ~ ' + pad(b.end.getDate()) + '/' + pad(b.end.getMonth() + 1) + '/' + b.end.getFullYear() + ' · ' + b.months + '개월' + (b.tokens.GUAR ? ' · 개런티 ' + b.tokens.GCUR_SYM + b.tokens.GUAR : '') + (b.tokens.GUARM ? ' · 풀데이 ' + b.tokens.JOBS + '회 시 월 ₩' + b.tokens.GUARM + ', 미달 시 ₩' + b.tokens.GUARLOWS.replace(/ /g, ',') : ''))) + '</p>';
@@ -473,6 +494,15 @@
 .ctpanel .ctcount{font-size:12px;font-weight:700;border-radius:7px;padding:2px 8px}
 .ctpanel .ctcount.y{background:#FDE3E7;color:#A8323C}.ctpanel .ctcount.g{background:#e6f3ea;color:#24603a}
 .ctpanel .ctgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:6px 10px}
+.ctpanel .ctgrp{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surf,#fff);display:flex;flex-direction:column;gap:8px;margin:0 0 8px}
+.ctpanel .ctgh{display:flex;align-items:center;gap:8px;font-size:13px}
+.ctpanel .ctgh b{font-weight:600;color:var(--ink)}
+.ctpanel .ctgh em{font-style:normal;font-size:11.5px;font-weight:600;margin-left:auto;color:#2E7A44}
+.ctpanel .ctgh em.y{color:#9A6A00}
+.ctpanel details.ctgrp > summary{cursor:pointer;list-style:none}
+.ctpanel details.ctgrp > summary::-webkit-details-marker{display:none}
+.ctpanel details.ctgrp > summary .ctgs{font-size:11.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 0;order:2}
+.ctpanel details.ctgrp > summary em{order:3}
 .ctpanel .ctrow{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--faint)}
 .ctpanel .ctrow span{display:flex;gap:6px;align-items:baseline}
 .ctpanel .ctrow em{font-style:normal;font-size:10px;color:var(--acc)}

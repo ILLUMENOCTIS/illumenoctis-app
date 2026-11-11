@@ -215,6 +215,19 @@
 .bvside .stgc{flex:none;width:16px;height:16px;fill:none;stroke:var(--faint);stroke-width:2;transition:transform .2s}
 .bvside .stgi.open .stgc{transform:rotate(180deg)}
 .bvside .stgb{padding:0 12px 12px}
+.bvside .stgone{display:flex;flex-direction:column;gap:10px}
+.bvside .stgnav{display:flex;align-items:center;gap:10px;padding:2px 0}
+.bvside .stgnav .stgnt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.bvside .stgnav small{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+.bvside .stgnav b{font:600 18px/1.2 var(--sans);color:var(--ink)}
+.bvside .stgar{width:34px;height:34px;flex:none;border:1px solid var(--line);border-radius:10px;background:var(--surf,#fff);color:var(--ink);font:600 18px/1 var(--sans);cursor:pointer;display:grid;place-items:center;padding:0}
+.bvside .stgar:hover{border-color:var(--acc);color:var(--acc)}
+.bvside .stgsw1{align-self:flex-start}
+.bvside .stgone .stgi.open{border:0;box-shadow:none;background:none}
+.bvside .stgone .stgb{padding:0}
+.bvside .ctpanel,.bvside .ctpanel .ctrow{text-align:left}
+.bvside .ctpanel .ctrow{align-items:stretch}
+.bvside .ctpanel .ctrow > span{justify-content:flex-start}
 .bvside .stgb .bvnotep{display:block;height:auto!important;min-height:0!important;overflow:visible!important;padding:0!important}
 .bvside .stgb .bvnbar,.bvside .stgb .bvnchips{display:none!important}
 .bvside .stgb .bvnsec{border:0!important;padding:0!important;background:none!important;height:auto!important;display:flex;flex-direction:column;gap:10px}
