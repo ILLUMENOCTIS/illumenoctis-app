@@ -2308,6 +2308,13 @@ html:has(body.d2fullcard),body.d2fullcard{overflow:hidden!important}
   .d2card.d2full .litcard{grid-column:1;grid-row:3;border-left:0;overflow:visible;padding-top:22px!important}
   .d2card.d2full .litxc{right:16px!important}
 }
+/* 1.2.141 (user, 12 Nov): on the phone the full card is one page that scrolls under the finger: the info slides up over the photo and back down.
+   .d2card{touch-action:none} (for dragging the small card on the PC) was blocking that, so the panel felt locked. */
+@media (max-width:760px),(pointer:coarse) and (max-width:1024px){
+  .d2card.d2card.d2full{touch-action:pan-y pinch-zoom!important;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;cursor:auto}
+  .d2card.d2full .litcard,.d2card.d2full .litcard *{touch-action:pan-y pinch-zoom}
+  .d2card.d2full .d2slstrip{touch-action:pan-x pan-y}
+}
 @media (prefers-reduced-motion:reduce){.d2card .litpic .d2sli,.d2slst i{animation:none!important}.d2sln,.d2slf,.d2slt{transition:none!important}}
 /* ---------- Recommendations page: the Directory's grid, full width ---------- */
 body[data-view="arr"] .shell.shell,html body[data-view="arr"][data-railoff] .shell.shell{grid-template-columns:minmax(0,1fr)!important}
