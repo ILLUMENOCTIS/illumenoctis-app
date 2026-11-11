@@ -7,9 +7,34 @@ self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 const START = 'illu-start-v1';
 /* stored photographs (/_blob/<id>): fetched from the shared database with the person's sign-in, kept on the phone */
 self.window = self; try { importScripts('config.js'); } catch (e) {}
-async function blob(id) {
+/* 1.2.140: a model's own folder in Dropbox (/_blob/bk.<id>, listed by web-dbx.js): a photo is Dropbox's preview in
+   the size asked (?w=300 for the strip, larger for the big photo), a video goes to a short-lived Dropbox link */
+const VIDX = /\.(mp4|mov|m4v|webm)$/i;
+async function dbxKey() { try { const r = await (await caches.open('illu-auth')).match('/__illu_dbx'); const j = r ? await r.json() : null; return j && j.t && j.exp > Date.now() ? j.t : ''; } catch (e) { return ''; } }
+async function dbxFile(id, w, req) {
+  let map = {}; try { const r = await (await caches.open('illu-auth')).match('/__illu_bkmap'); map = r ? await r.json() : {}; } catch (e) {}
+  const f = map[id]; if (!f) return new Response('', { status: 404 });
+  const size = !w || w > 1100 ? 'w2048h1536' : w > 500 ? 'w1024h768' : w > 300 ? 'w640h480' : 'w256h256';
+  const ck = '/_blob/' + id + '?s=' + (VIDX.test(f.n) ? 'v' : size);
+  const kept = await caches.open('illu-blob');
+  if (!VIDX.test(f.n)) { const hit = await kept.match(ck); if (hit) return hit; }
+  const t = await dbxKey(); if (!t) return new Response('', { status: 401 });
+  if (VIDX.test(f.n)) {
+    const r = await fetch('https://api.dropboxapi.com/2/files/get_temporary_link', { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify({ path: f.p }) });
+    if (!r.ok) return new Response('', { status: r.status });
+    return Response.redirect((await r.json()).link, 302);
+  }
+  const arg = JSON.stringify({ resource: { '.tag': 'path', path: f.p }, format: 'jpeg', size, mode: 'fitone_bestfit' }).replace(/[\u007f-\uffff]/g, c => '\\u' + ('000' + c.charCodeAt(0).toString(16)).slice(-4));
+  const r = await fetch('https://content.dropboxapi.com/2/files/get_thumbnail_v2', { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Dropbox-API-Arg': arg } });
+  if (!r.ok) return new Response('', { status: r.status });
+  const out = new Response(await r.blob(), { headers: { 'content-type': 'image/jpeg', 'cache-control': 'max-age=31536000' } });
+  try { await kept.put(ck, out.clone()); } catch (e) {}
+  return out;
+}
+async function blob(id, w, req) {
+  if (id.startsWith('bk.')) return dbxFile(id, w, req);
   const kept = await caches.open('illu-blob'), hit = await kept.match('/_blob/' + id); if (hit) return hit;
-  if (!/^[A-Za-z0-9._-]{4,120}$/.test(id) || id.startsWith('bk.')) return new Response('', { status: 404 });
+  if (!/^[A-Za-z0-9._-]{4,120}$/.test(id)) return new Response('', { status: 404 });
   const t = await (await caches.open('illu-auth')).match('/__illu_token'); const tk = t ? await t.text() : '';
   const C = self.ILLU_CONFIG || {}; if (!tk || !C.url) return new Response('', { status: 401 });
   const r = await fetch(C.url + '/storage/v1/object/authenticated/assets/' + encodeURIComponent(id), { headers: { Authorization: 'Bearer ' + tk, apikey: C.key } });
@@ -36,7 +61,7 @@ self.addEventListener('message', e => {
 });
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
-  if (u.origin === self.location.origin && u.pathname.startsWith('/_blob/')) { e.respondWith(blob(decodeURIComponent(u.pathname.slice(7)))); return; }
+  if (u.origin === self.location.origin && u.pathname.startsWith('/_blob/')) { e.respondWith(blob(decodeURIComponent(u.pathname.slice(7)), +(u.searchParams.get('w') || 0), e.request)); return; }
   if (e.request.method === 'GET' && u.origin === self.location.origin && /^[\d.]+$/.test(u.searchParams.get('v') || '') && /\.(js|css|webmanifest)$/.test(u.pathname)) { e.respondWith(versioned(e.request)); return; }
   if (e.request.mode !== 'navigate') return;
   e.respondWith(fetch(e.request).then(r => {
