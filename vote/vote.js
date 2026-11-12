@@ -134,6 +134,9 @@
     return '<article class="vc' + (st.open ? '' : ' closed') + '" data-h="' + H(hash(o.k)) + '">' +
       '<div class="top"><span>' + H(sentBy ? L('Sent by ', '보낸 사람: ') + sentBy : '') + '</span><span>' + H(st.open ? L(st.n + ' of ' + st.of + ' voted', st.of + '명 중 ' + st.n + '명 투표') + (st.round > (o.base || 1) ? L(' · tie-breaker', ' · 타이브레이커') : '') : '') + '</span></div>' +
       '<div class="img">' + (p.ph ? '<img src="' + H(p.ph) + '" alt="" loading="lazy">' : '') + '<div class="nm"><b>' + H(o.nm || '') + '</b></div></div>' +
+      /* 1.2.149: who has voted and who is still to vote (never how) */
+      (st.open ? (() => { const nm = id => id === ME ? L('You', '나') : (pname(id) || '?'); const dn = st.voters.filter(id => voteOf(id, o.k, st.round)), wt = st.voters.filter(id => !voteOf(id, o.k, st.round));
+        return '<div class="who">' + (dn.length ? '<span class="wd">✓ ' + H(L('Voted: ', '투표함: ') + dn.map(nm).join(', ')) + '</span>' : '') + (wt.length ? '<span class="ww">' + H(L('Waiting for: ', '대기 중: ') + wt.map(nm).join(', ')) + '</span>' : '') + '</div>'; })() : '') +
       '<div class="meta"><span>' + H(o.ag || '') + '</span>' + meas.map(([l, v]) => '<span>' + (l ? H(l) + ' ' : '') + '<b>' + H(v) + '</b></span>').join('') +
       (o.href ? '<a href="' + H(o.href) + '" target="_blank" rel="noopener">' + H(L('Agency page ↗', '에이전시 페이지 ↗')) + '</a>' : '') + '</div></article>';
   }

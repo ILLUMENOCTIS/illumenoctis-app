@@ -43,3 +43,8 @@ h2{font-size:18px;margin:6px 0 0;text-align:center}
 .sec{display:block;text-align:center;text-decoration:none;border:1px solid var(--line);border-radius:12px;padding:12px;color:var(--ink);font-weight:600;background:var(--panel)}
 .pin input.uname{letter-spacing:.02em;font-size:18px;text-align:left}
 .people button.on{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc) inset}
+
+/* 1.2.149: who has voted */
+.vc .who{display:flex;flex-direction:column;gap:3px;padding:8px 14px;font-size:13px;line-height:1.35;border-top:1px solid rgba(0,0,0,.06)}
+.vc .who .wd{color:#2E7A45}
+.vc .who .ww{color:#9A5B12;font-weight:600}
