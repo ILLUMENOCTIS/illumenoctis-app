@@ -1738,7 +1738,7 @@ p.pnag{cursor:default}
   /* 1.2.130: the clean side panel (Side Panel Demo, approved 10 Nov 2026) */
   const pncss = document.createElement('style');
   pncss.textContent = `
-.ivcw .uc .ucph{position:relative}.uc .ucimg{position:relative}.uc .ucimg > .ucph:has(> .ivmat){position:absolute;inset:0;height:auto}.uc .ucimg,.uc .ucimg .ivstrip,.uc .ucimg .litpic[data-pic]{cursor:pointer}/* 11 Nov 2026: her Book photo fills the whole photo area - it sat inside the agency photo's box, 0 px high when that photo fails */.uc .ucimg .ivmat{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 20%;z-index:1;pointer-events:none;background:#1b1724}
+/* 1.2.148: the photo frame fills the card's photo area (position:relative here left it 0 px high, so every photo on My / Member Favorites, Team Vote and Today was dark) */.ivcw .uc .ucph,.uc .ucimg > .ucph.d2t{position:absolute;inset:0;height:auto}.uc .ucimg{position:relative}.uc .ucimg > .ucph:has(> .ivmat){position:absolute;inset:0;height:auto}.uc .ucimg,.uc .ucimg .ivstrip,.uc .ucimg .litpic[data-pic]{cursor:pointer}/* 11 Nov 2026: her Book photo fills the whole photo area - it sat inside the agency photo's box, 0 px high when that photo fails */.uc .ucimg .ivmat{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 20%;z-index:1;pointer-events:none;background:#1b1724}
 .ivcw .uc .ucov .ucag,.ivcw .uc .ucov .ucmx{display:none}
 /* 1.2.132 (user): cards keep one size, so zooming out shows more of them and zooming in fewer - about 5 a row at 100% */
 .ivgrid,.ivgrid.ivtv,.ivgrid.tight,.ivtoday .ivgrid.tight{grid-template-columns:repeat(auto-fill,minmax(var(--ivcw,240px),1fr));gap:14px}

@@ -1174,6 +1174,8 @@
     const PH = window.__illuPhoto, picked = PH && PH.PMAIN && PH.PMAIN.get(m.key);
     if(cur && PH && PH.setMain) h += '<button type="button" class="d2slmain" data-d2slmain title="Show this photo on the model’s card, for everyone (the photo is not saved — only which one to show)">★ Use as card photo</button>';
     else if(!cur && picked && PH.clearMain) h += '<button type="button" class="d2slmain back" data-d2slunmain title="Go back to the photo the program found">↺ Back to the original photo</button>';
+    /* 1.2.148: turn the photo shown (for everyone) */
+    if((cur || pic.querySelector(':scope > img')) && window.__illuRotBtns) h += window.__illuRotBtns('d2rot');
     if(n > 1){
       h += '<button type="button" class="d2sln prev" data-d2sl="-1" aria-label="Previous photo"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg></button>' +
         '<button type="button" class="d2sln next" data-d2sl="1" aria-label="Next photo"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg></button>' +
@@ -1620,6 +1622,9 @@
      tier, lamp, measurements - narrow which models are suggested. The set on screen shows the ones
      that pass, topped up from the models that pass and this ID has not seen yet. */
   function recoSig(){
+    /* 1.2.147 (user, 12 Nov 2026: "I requested height 170-175cm but it doesn't seem to be filtering"): the bounds were only
+       read from the Measurements boxes when the Directory redrew, so on Suggestiones a new height did nothing */
+    try{ if(typeof readBounds === 'function') readBounds(); }catch(e){}
     const term = ((($('#q') || {}).value) || '').trim().toLowerCase();
     const byMeas = !!(typeof BND !== 'undefined' && BND && BND.any) && (typeof measState === 'undefined' || measState === 'ready');
     return {term, regions: checked('region'), tiers: checked('tier'), sexes: checked('sex'), marks: checked('mark'), byMeas,
@@ -2725,5 +2730,93 @@ body.d2max #d2bar{margin-top:0}
 #d2locpop .d2locb2{display:flex;gap:8px;justify-content:flex-end}
 #d2locpop .d2locb2 button{height:34px;border-radius:9px;padding:0 14px;font:600 13px var(--sans,Inter,system-ui,sans-serif);cursor:pointer;border:1px solid var(--line,#E7E2EC);background:var(--surf,#fff);color:var(--ink,#211C26)}
 #d2locpop .d2locb2 .d2locok{background:var(--acc,#5A2C57);border-color:var(--acc,#5A2C57);color:#fff}`;
+  document.head.appendChild(st);
+})();
+
+/* 1.2.148 (user, 12 Nov 2026: "allow me to rotate the photos on all slideshow displays"): ⟲ ⟳ on the model card's
+   slideshow (card and full view) and on the full-screen photo view of the other boards. A turn is kept for everyone in
+   docs prot/<id> {u, r, by, at} - u is the photo's own address (without the program's cache wrapper or size), r is
+   0/90/180/270 - and every picture of that photo on any board (card photo, slides, thumbnails) is shown turned. */
+(function(){
+  const ROT = new Map();
+  /* the same photo, whichever size or wrapper it is asked in */
+  function rkey(u){
+    let s = String(u || '');
+    const m = /^illuimg:\/\/p\/([^?]+)/.exec(s); if(m){ try{ s = decodeURIComponent(m[1]); }catch(e){} }
+    const ws = /^https:\/\/images\.weserv\.nl\/\?url=([^&]+)/.exec(s); if(ws){ try{ s = decodeURIComponent(ws[1]); }catch(e){} }
+    if(/^\/_blob\//.test(s)) return s.split('?')[0];
+    const w = /static\.wixstatic\.com\/media\/([^/?#]+)/.exec(s); if(w) return 'wix:' + w[1];
+    return s.replace(/^https?:\/\//i, '').split('#')[0].split('?')[0];
+  }
+  const idOf = k => { let h = 0x811c9dc5; for(let i = 0; i < k.length; i++){ h ^= k.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return 'r' + h.toString(36) + k.length.toString(36); };
+  const keyOfImg = im => rkey(im.dataset.orig || im.getAttribute('src') || '');
+  /* turned inside its own box: a quarter turn swaps width and height, so the picture is scaled to still fit (contain)
+     or still fill (cover) the same box */
+  function apply(im){
+    if(!im || !im.isConnected) return;
+    const r = ROT.get(keyOfImg(im)) || 0;
+    const ew = im.offsetWidth, eh = im.offsetHeight;
+    const sig = r + '|' + ew + 'x' + eh + '|' + im.naturalWidth;
+    if(im.dataset.rotsig === sig) return;
+    im.dataset.rotsig = sig;
+    if(!r){ if(im.dataset.rotd){ im.style.removeProperty('transform'); delete im.dataset.rotd; } return; }
+    let s = 1;
+    if(r % 180 && ew && eh){
+      const fit = getComputedStyle(im).objectFit;
+      if(fit === 'cover') s = Math.max(ew / eh, eh / ew);
+      else if(im.naturalWidth && im.naturalHeight){
+        const k = Math.min(ew / im.naturalWidth, eh / im.naturalHeight), cw = im.naturalWidth * k, ch = im.naturalHeight * k;
+        s = Math.min(ew / ch, eh / cw);
+      }else s = Math.min(ew / eh, eh / ew);
+    }
+    im.style.setProperty('transform', 'rotate(' + r + 'deg)' + (s !== 1 ? ' scale(' + s.toFixed(4) + ')' : ''), 'important');
+    im.dataset.rotd = '1';
+  }
+  const SEL = '.d2card .litpic img, #illufv .fvimg, #illufv .fvt img, .d2slstrip img, .litpic img.agimg, .litpic.has > img, .ucimg img';
+  function applyAll(){ if(!ROT.size && !document.querySelector('[data-rotd]')) return; document.querySelectorAll(SEL).forEach(apply); }
+  setInterval(applyAll, 700);
+  addEventListener('resize', () => { document.querySelectorAll('[data-rotsig]').forEach(im => { delete im.dataset.rotsig; }); applyAll(); });
+  document.addEventListener('load', e => { if(e.target && e.target.tagName === 'IMG' && e.target.matches(SEL)){ delete e.target.dataset.rotsig; apply(e.target); } }, true);
+  /* the picture the ⟲ ⟳ buttons turn: the photo shown in that viewer */
+  function shownImg(btn){
+    const fv = btn.closest('#illufv'); if(fv){ const im = fv.querySelector('.fvimg'); return im && !im.hidden ? im : null; }
+    const pic = btn.closest('.litpic'); if(!pic) return null;
+    return pic.querySelector('.d2sl .d2sli') || pic.querySelector(':scope > img');
+  }
+  async function turn(im, d){
+    const k = keyOfImg(im); if(!k) return;
+    const r = (((ROT.get(k) || 0) + d) % 360 + 360) % 360;
+    if(r) ROT.set(k, r); else ROT.delete(k);
+    delete im.dataset.rotsig; applyAll();
+    try{ if(typeof DB !== 'undefined' && DB) await DB.doc('prot/' + idOf(k)).set({u: k, r, by: typeof ME !== 'undefined' ? ME : '', at: new Date().toISOString()}); }catch(e){}
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-illurot]'); if(!b) return;
+    e.preventDefault(); e.stopPropagation();
+    const im = shownImg(b); if(im) turn(im, +b.dataset.illurot || 90);
+  }, true);
+  const IC_L = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v5h5"/><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/></svg>';
+  const IC_R = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7v5h-5"/><path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/></svg>';
+  window.__illuRotBtns = cls => '<span class="illurot ' + (cls || '') + '"><button type="button" data-illurot="-90" title="Rotate left (for everyone)" aria-label="Rotate left">' + IC_L + '</button><button type="button" data-illurot="90" title="Rotate right (for everyone)" aria-label="Rotate right">' + IC_R + '</button></span>';
+  window.__illuRot = {get: u => ROT.get(rkey(u)) || 0, key: rkey, apply, applyAll};
+  (async function load(){
+    for(let i = 0; i < 60 && (typeof DB === 'undefined' || !DB); i++) await new Promise(r => setTimeout(r, 500));
+    if(typeof DB === 'undefined' || !DB) return;
+    const take = docs => { const seen = new Map(); for(const d of docs || []){ let x = null; try{ x = typeof docOf === 'function' ? docOf(d) : (d && typeof d.data === 'function' ? d.data() : d); }catch(e){} if(x && x.u && +x.r) seen.set(x.u, +x.r % 360); } return seen; };
+    try{ const s = await DB.collection('prot').limit(20000).get(); for(const [k, r] of take((s && s.docs) || s)) ROT.set(k, r); }catch(e){}
+    applyAll();
+    try{ DB.collection('prot').onSnapshot(sn => { const seen = take(sn.docs); ROT.clear(); for(const [k, r] of seen) ROT.set(k, r); document.querySelectorAll('[data-rotsig]').forEach(im => { delete im.dataset.rotsig; }); applyAll(); }, () => {}); }catch(e){}
+  })();
+  const st = document.createElement('style');
+  st.textContent = `
+.illurot{display:inline-flex;gap:4px}
+.illurot button{width:32px;height:30px;border-radius:999px;border:0;display:grid;place-items:center;cursor:pointer;background:rgba(20,14,24,.78);color:#fff;padding:0}
+.illurot button:hover{background:var(--acc,#5A2C57)}
+.illurot svg{width:16px;height:16px}
+.d2sl .illurot.d2rot{position:absolute;right:12px;bottom:44px;z-index:4;pointer-events:auto}
+.d2card.d2full .d2sl .illurot.d2rot{bottom:20px}
+#illufv .illurot.fvrot button{background:rgba(255,255,255,.14)}
+#illufv .illurot.fvrot button:hover{background:rgba(255,255,255,.3)}
+.d2sli,.fvimg,.litpic img{transition:transform .2s ease}`;
   document.head.appendChild(st);
 })();

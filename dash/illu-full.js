@@ -25,7 +25,7 @@
   box.id = 'illufv'; box.hidden = true; box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
   box.innerHTML = '<div class="fvstage"><img class="fvimg" alt=""></div>' +
     '<button type="button" class="fvnav fvp" data-fv="-1" aria-label="Previous">‹</button><button type="button" class="fvnav fvn" data-fv="1" aria-label="Next">›</button>' +
-    '<div class="fvtop"><b class="fvnm"></b><span class="fvct"></span><span class="fvmsg"></span><span class="fvmainw"></span><span class="fvtabs" role="group"></span></div>' +
+    '<div class="fvtop"><b class="fvnm"></b><span class="fvct"></span><span class="fvmsg"></span><span class="fvmainw"></span><span class="fvrotw"></span><span class="fvtabs" role="group"></span></div>' +
     '<div class="fvstrip" aria-label="All photos"></div>' +
     '<aside class="fvside"></aside>' +
     '<button type="button" class="fvsidet" aria-label="Details"><span class="fvsti">›</span><span class="fvstl"></span></button>' +
@@ -62,6 +62,9 @@
     const PH = window.__illuPhoto, mw = box.querySelector('.fvmainw');
     mw.innerHTML = !(PH && PH.setMain && S.key && !S.bid) ? '' : S.i > 0 && S.raw && S.raw[S.i] ? '<button type="button" class="fvmain" data-fvmain title="' + esc(L('Show this photo on the model’s card, for everyone (the photo is not saved — only which one to show)', '이 사진을 모델 카드에 표시합니다 (사진은 저장되지 않고, 어떤 사진을 보일지만 기록)')) + '">★ ' + esc(L('Use as card photo', '카드 사진으로 사용')) + '</button>'
       : S.i === 0 && PH.PMAIN.has(S.key) ? '<button type="button" class="fvmain back" data-fvunmain>↺ ' + esc(L('Back to the original photo', '원래 사진으로')) + '</button>' : '';
+    /* 1.2.148: rotate the photo shown (for everyone) */
+    const rw = box.querySelector('.fvrotw'); if(rw){ const want = n && !isV(cur) && window.__illuRotBtns ? 1 : 0; if(rw.dataset.on !== String(want)){ rw.dataset.on = want; rw.innerHTML = want ? window.__illuRotBtns('fvrot') : ''; } }
+    try{ if(window.__illuRot){ delete img.dataset.rotsig; window.__illuRot.apply(img); } }catch(e){}
     paintStrip();
     paintSide();
   }
