@@ -1209,6 +1209,33 @@
     if(!list.length) return head + empty(L('My Favorites is empty', '내 즐겨찾기가 비어 있습니다'), L('Tap the ♡ on any card — in Suggestiones, the Directory or Compare boards — and the model lands here. Press Send to Team Vote on her card when you want the team to vote.', '추천, 디렉터리, 보드 비교의 아무 카드에서 ♡를 누르면 여기에 들어옵니다. 팀 투표를 받으려면 카드의 팀 투표로 보내기를 누르세요.'));
     return head + '<div class="ivgrid ivtv">' + list.map(x => '<div class="ivcw">' + mcard(x.k) + '<div class="ivcap">♥ ' + H(when(x.at)) + '</div>' + stPill(x.k) + offBox(x.k) + '</div>').join('') + '</div>';
   }, () => myFav().size || '', ['Favorites', '즐겨찾기']);
+  /* 1.2.146 (user, 12 Nov 2026): Member Favorites - every member's favourites on one board. A model two or more
+     members liked is marked (a plum ring and "♥ N members" on her photo); under each card, who liked her and when. */
+  function memberFavs(){
+    const by = new Map();
+    for(const [p, m] of FAV){ if(!m || !m.size) continue; for(const [k, v] of m){ let e = by.get(k); if(!e){ e = {k, who: [], at: ''}; by.set(k, e); } e.who.push({p, at: (v && v.at) || ''}); if(String((v && v.at) || '') > e.at) e.at = (v && v.at) || ''; } }
+    for(const e of by.values()) e.who.sort((a, b) => String(a.at).localeCompare(String(b.at)));
+    return [...by.values()];
+  }
+  add('mfav', ['Member Favorites', '멤버 즐겨찾기'], () => {
+    let list = memberFavs();
+    const multi = list.filter(e => e.who.length > 1).length;
+    if((VS.mfwho || 'all') === 'multi') list = list.filter(e => e.who.length > 1);
+    if((VS.mfsort || 'most') === 'most') list.sort((a, b) => (b.who.length - a.who.length) || String(b.at).localeCompare(String(a.at)));
+    else list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    const head = '<div class="ivhead"><span class="ivbig">' + list.length + '</span><span class="ivkick">' + L('Every member’s favorites', '모든 멤버의 즐겨찾기') + '</span><span class="ivdot"></span><span class="ivkick">' + H(L(multi + ' liked by more than one', multi + '명은 2명 이상이 좋아함')) + '</span><span class="ivsp"></span>' +
+      seg('mfwho', [['all', L('Everyone', '전체')], ['multi', L('Liked by 2+', '2명 이상')]]) + seg('mfsort', [['most', L('Most liked', '많이 좋아한 순')], ['new', L('Newest', '최신 순')]]) + '</div>';
+    if(!list.length) return head + empty(L('No favorites yet', '아직 즐겨찾기가 없습니다'), L('When any member taps the ♡ on a card, the model shows here with who liked her.', '멤버가 카드의 ♡를 누르면 누가 좋아했는지와 함께 여기에 나옵니다.'));
+    const mine = myFav();
+    return head + '<div class="ivgrid ivtv">' + list.map(e => {
+      const n = e.who.length, rib = n > 1 ? '<span class="ivmrib">♥ ' + n + ' ' + L('members', '명') + '</span>' : '';
+      const card = mcard(e.k).replace('<div class="ucimg">', '<div class="ucimg">' + rib);
+      const names = e.who.map(w => w.p === me() ? L('You', '나') : (pname(w.p) || '?'));
+      return '<div class="ivcw' + (n > 1 ? ' ivmulti' : '') + '" data-mfn="' + n + '">' + card +
+        '<div class="ivcap ivmwho" title="' + H(e.who.map(w => (w.p === me() ? L('You', '나') : pname(w.p)) + ' · ' + when(w.at)).join('\n')) + '"><span class="ivmdiscs">' + e.who.slice(0, 6).map(w => disc(w.p, 'xs')).join('') + '</span><span class="ivmnames">' + H(names.join(', ')) + '</span></div>' +
+        '<div class="ivcap">♥ ' + H(when(e.at)) + (mine.has(e.k) ? ' · ' + L('in your favorites', '내 즐겨찾기에 있음') : '') + '</div>' + stPill(e.k) + '</div>';
+    }).join('') + '</div>';
+  }, () => memberFavs().length || '', ['Member Favorites', '멤버 즐겨찾기']);
   /* the Team Vote: every card someone sent. 1.2.117 (user, 9 Nov 2026): two tabs - Waiting for my vote, and
      I voted (a card moves there the moment I vote); the same two tabs are on Today */
   const myAt = k => { const t = ((VT.get(me()) || {}).t || {})[k]; return t ? Object.values(t).sort().pop() || '' : ''; };
@@ -1597,6 +1624,10 @@ p.pnag{cursor:default}
 .ivgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(186px,1fr));gap:16px}
 .ivgrid.tight{grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}
 .ivcw{display:flex;flex-direction:column;gap:5px;min-width:0}
+.ivmulti .uc{box-shadow:0 0 0 2px var(--acc,#5A2C57),0 10px 24px -12px rgba(90,44,87,.45)!important}
+.ivmrib{position:absolute;left:8px;top:34px;z-index:6;display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;background:var(--acc,#5A2C57);color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.02em;box-shadow:0 4px 12px rgba(0,0,0,.25);pointer-events:none}
+.ivmwho{gap:6px;color:var(--mut)}.ivmdiscs{display:inline-flex;flex:none}.ivmdiscs > *{margin-left:-5px;box-shadow:0 0 0 2px var(--surf,#fff);border-radius:50%}.ivmdiscs > *:first-child{margin-left:0}
+.ivmulti .ivmwho{color:var(--acc,#5A2C57);font-weight:600}.ivmnames{overflow:hidden;text-overflow:ellipsis}
 .ivcap{font-size:12px;color:var(--faint);display:flex;align-items:center;gap:5px;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ivst{align-self:flex-start;margin:0 4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;background:var(--surf2,#f3f3f4);color:var(--faint)}
 .ivst.me{background:#FBF0D6;color:#8A6410}.ivst.appr{background:color-mix(in srgb,var(--ivg) 18%,var(--surf,#fff));color:var(--ivgt)}.ivst.cxl{background:color-mix(in srgb,var(--ivr) 16%,var(--surf,#fff));color:var(--ivrt)}

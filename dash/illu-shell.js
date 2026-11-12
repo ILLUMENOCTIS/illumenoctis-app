@@ -38,7 +38,7 @@
      A place with several pages shows them as tabs along the top and remembers the last one. */
   const GROUPS = {
     'g-atlas': {label: ['Atlas', '아틀라스'], icon: 'atl', tabs: ['atl', 'dir', 'cmpb', 'ig', 'favag']},
-    'g-opus': {label: ['Opus', '오푸스'], icon: 'bk', tabs: ['fav', 'team', 'appr', 'tie', 'cxl', 'bk', 'cmp']},
+    'g-opus': {label: ['Opus', '오푸스'], icon: 'bk', tabs: ['fav', 'mfav', 'team', 'appr', 'tie', 'cxl', 'bk', 'cmp']},
     'g-404': {label: ['404 · Blind spots', '404 · 크롤 불가'], icon: '404', tabs: ['404', 'bld']}
   };
   const TABLAB = {atl: ['Map', '지도'], '404': ['404 · left their board', '404 · 보드에서 내려감'], bld: ['Blind spots', '크롤 불가']};

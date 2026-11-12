@@ -75,7 +75,7 @@
     if(pm && window.illu && window.illu.web && /^\/_blob\/bk\./.test(pm.u)){ const cv = window.__illuMatCover ? window.__illuMatCover(m.key) : ''; if(cv){ f.photo = cv; return f; } return f; }
     if(pm && !expired(pm.u)){ f.photo = pmSrc(pm); return f; }
     if(f.photo && expired(f.photo)) f.photo = '';
-    const u = PLINK.get(m.key);
+    const u0 = PLINK.get(m.key), u = u0 && window.illuPhotoFix ? window.illuPhotoFix(u0) : u0;
     if(u && (!f.photo || BROKEN.has(f.photo))) f.photo = u;
     return f;
   };

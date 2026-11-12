@@ -99,7 +99,7 @@
     const keepMine = ME && FIRST.get(ME) && (Date.now() - (LIVE.mineAt || 0)) < (typeof LIVEHOLD !== 'undefined' ? LIVEHOLD : 4000);
     const mineF = keepMine ? new Map(FIRST.get(ME)) : null;
     let snap;
-    try{ snap = await DB.collection('pmarks').limit(200).get(); }catch(e){ return; }
+    try{ snap = await DB.collection('pmarks').limit(20000).get(); }catch(e){ return; }
     const next = new Map(), nextF = new Map();
     for(const d of ((snap && snap.docs) ? snap.docs : (snap || []))){
       const v = docOf(d);

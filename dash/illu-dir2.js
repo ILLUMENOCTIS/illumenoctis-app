@@ -51,7 +51,7 @@
   const REMOVED = new Map();
   const canRemove = () => { try{ return isAdmin(); }catch(e){ return false; } };
   async function loadRemoved(){
-    try{ const snap = await DB.collection('agdel').limit(5000).get(); const ds = (snap && snap.docs) ? snap.docs : (snap || []);
+    try{ const snap = await DB.collection('agdel').limit(20000).get(); const ds = (snap && snap.docs) ? snap.docs : (snap || []);
       for(const d of ds){ const v = docOf(d); REMOVED.set(String(d.id), v || {}); } }catch(e){}
     try{ if(VIEW === 'dir') refresh(); }catch(e){}
   }
@@ -487,7 +487,8 @@
     const isFav = window.ATLFAV && ATLFAV.has(a.domain);
     const head = '<div class="d2ph"><div class="d2ph1"><h2>' + esc(a.name) + '</h2>' + illuAtChips(a) +
       '<span class="d2pm">' + (a.domain ? '<a class="agsite" href="https://' + esc(a.domain) + '" target="_blank" rel="noopener noreferrer">' + esc(a.domain) + ' ↗</a> · ' : '') +
-        esc(a.offices && a.offices.length > 1 ? a.allCities.join(' · ') + ' · ' + a.offices.length + ' offices' : [a.city, a.country].filter(Boolean).join(', ')) + ' · ' + dirN(r.n) + ' models</span>' +
+        (a.domain && !a.country ? '<button type="button" class="d2locset" data-d2loc="' + esc(a.domain) + '">+ Set country</button>' :
+          (a.domain ? '<button type="button" class="d2locedit" data-d2loc="' + esc(a.domain) + '" title="Change the country or city">' : '<span>') + esc(a.offices && a.offices.length > 1 ? a.allCities.join(' · ') + ' · ' + a.offices.length + ' offices' : [a.city, a.country].filter(Boolean).join(', ')) + (a.domain ? '</button>' : '</span>')) + ' · ' + dirN(r.n) + ' models</span>' +
       '<span class="d2sp"></span><span class="agct">' + ctsChip(a.domain) + '</span>' +
       '<button type="button" class="d2hb' + (isFav ? ' on' : '') + '" data-d2heart aria-pressed="' + !!isFav + '">' + (isFav ? '♥' : '♡') + ' Favorite</button>' +
       '</div>' +
@@ -987,6 +988,7 @@
             : '<div class="d2agw' + (D2.showRemoved ? ' rmd' : '') + '"><button type="button" class="d2ag' + (x === r ? ' on' : '') + '" data-d2ag="' + esc(x.id) + '">' +
           '<span class="d2agt"><b>' + esc(x.a.name) + '</b><s>' + esc(([x.a.city, x.a.country].filter(Boolean).join(', ') || 'Location not stated') + (x.a.offices.length > 1 ? ' · ' + x.a.offices.length + ' offices' : '')) + '</s></span>' +
           '<span class="d2agn">' + (byMeas ? '<b>' + dirN(x.fit) + '</b><s>of ' + dirN(x.n) + '</s>' : '<b>' + dirN(x.n) + '</b>') + '</span></button>' +
+          (!x.a.country && x.a.domain && !D2.showRemoved ? '<button type="button" class="d2locb" data-d2loc="' + esc(x.a.domain) + '" title="Set this agency’s country">+ Set country</button>' : '') +
           (canRemove() ? (D2.showRemoved ? '<button type="button" class="d2rs" data-d2restore="' + esc(x.id) + '">Put back</button>'
             : '<button type="button" class="d2rm" data-d2rm="' + esc(x.id) + '" title="Remove from the Directory" aria-label="Remove ' + esc(x.a.name) + ' from the Directory"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg></button>') : '') + '</div>');
         }).join('') +
@@ -2647,4 +2649,69 @@ body.d2max #d2bar{margin-top:0}
 .d2card.d2full .d2sl .d2slmain{bottom:20px}
 `;
   document.head.appendChild(css);
+})();
+
+/* 1.2.146 (user, 12 Nov 2026): "I asked to be able to input the Country for the agency in the event you weren't able to
+   determine it". An agency with no country shows "+ Set country" on its row in the list and in its header; a placed
+   agency's place in the header opens the same form to change it. Saved for everyone in agloc/<domain> (agLocSave,
+   the same as the Contacts box fields); the region follows from the country. */
+(function(){
+  const E = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
+  function close(){ const p = document.getElementById('d2locpop'); if(p) p.remove(); }
+  function open(btn){
+    close();
+    const dom = btn.dataset.d2loc; if(!dom) return;
+    let v = {country: '', city: ''}; try{ v = agLocOf(dom); }catch(e){}
+    const p = document.createElement('form'); p.id = 'd2locpop'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Agency place');
+    p.innerHTML = '<b>Where is this agency?</b><s>' + E(dom) + '</s>' +
+      '<label><span>Country</span><input name="country" list="worldcc" autocomplete="off" placeholder="e.g. Denmark" value="' + E(v.country) + '"></label>' +
+      '<label><span>City</span><input name="city" autocomplete="off" placeholder="e.g. Copenhagen" value="' + E(v.city) + '"></label>' +
+      '<em class="d2locrg"></em><div class="d2locb2"><button type="button" class="d2locx">Cancel</button><button type="submit" class="d2locok">Save</button></div>';
+    document.body.appendChild(p);
+    const r = btn.getBoundingClientRect(), W = 300;
+    p.style.left = Math.max(8, Math.min(innerWidth - W - 8, r.left)) + 'px';
+    p.style.top = Math.max(8, Math.min(innerHeight - 260, r.bottom + 6)) + 'px';
+    const c = p.querySelector('[name=country]'), rg = p.querySelector('.d2locrg');
+    const paintRg = () => { try{ rg.textContent = c.value.trim() ? 'Region: ' + regionFor(worldName(c.value)) : ''; }catch(e){} };
+    c.addEventListener('input', paintRg); paintRg(); c.focus(); c.select();
+    p.querySelector('.d2locx').addEventListener('click', close);
+    p.addEventListener('submit', async e => {
+      e.preventDefault();
+      const cv = c.value.trim(), ct = p.querySelector('[name=city]').value.trim();
+      if(!cv){ c.focus(); return; }
+      try{ if(typeof SIGNED === 'function' && !SIGNED()){ try{ nudgeSignIn(btn); }catch(_){} return; } }catch(_){}
+      p.querySelector('.d2locok').disabled = true;
+      try{ await agLocSave(dom, 'country', cv); await agLocSave(dom, 'city', ct); }catch(err){ console.error(err); }
+      close();
+    });
+    p.addEventListener('keydown', e => { if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); close(); } });
+  }
+  document.addEventListener('pointerdown', e => {
+    const b = e.target.closest && e.target.closest('[data-d2loc]');
+    if(b){ e.stopPropagation(); return; }                // not the background click that closes cards or the board
+    const p = document.getElementById('d2locpop'); if(p && !p.contains(e.target)) close();
+  }, true);
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-d2loc]');
+    if(b){ e.preventDefault(); e.stopPropagation(); open(b); }
+  }, true);
+  const st = document.createElement('style');
+  st.textContent = `
+.d2locset{border:1px dashed var(--acc,#5A2C57);background:var(--accbg,#F3ECF3);color:var(--acc,#5A2C57);font:600 12px var(--sans,Inter,system-ui,sans-serif);border-radius:999px;padding:2px 10px;cursor:pointer}
+.d2locset:hover{background:var(--acc,#5A2C57);color:#fff}
+.d2locedit{border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.d2locedit:hover{color:var(--acc,#5A2C57)}
+.d2agw .d2locb{position:absolute;right:44px;bottom:7px;z-index:2;border:1px dashed currentColor;background:var(--surf,#fff);color:var(--acc,#5A2C57);font:600 11px var(--sans,Inter,system-ui,sans-serif);border-radius:999px;padding:1px 8px;cursor:pointer;line-height:16px}
+.d2agw .d2ag.on ~ .d2locb{border-color:#fff}
+.d2agw .d2locb:hover{background:var(--acc,#5A2C57);color:#fff;border-style:solid}
+#d2locpop{position:fixed;z-index:3000;width:300px;box-sizing:border-box;background:var(--surf,#fff);border:1px solid var(--line,#E7E2EC);border-radius:14px;box-shadow:0 18px 44px rgba(20,10,30,.22);padding:14px;display:flex;flex-direction:column;gap:9px;font:13px var(--sans,Inter,system-ui,sans-serif);color:var(--ink,#211C26)}
+#d2locpop > s{text-decoration:none;color:var(--mut,#6D6577);font-size:12px;margin-top:-6px}
+#d2locpop label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--mut,#6D6577)}
+#d2locpop input{height:36px;box-sizing:border-box;border:1px solid var(--line,#E7E2EC);border-radius:9px;padding:0 10px;font:500 14px var(--sans,Inter,system-ui,sans-serif);color:var(--ink,#211C26);background:var(--surf,#fff)}
+#d2locpop input:focus{outline:2px solid var(--acc,#5A2C57);outline-offset:-1px}
+#d2locpop .d2locrg{font-style:normal;font-size:12px;color:var(--acc,#5A2C57);min-height:14px}
+#d2locpop .d2locb2{display:flex;gap:8px;justify-content:flex-end}
+#d2locpop .d2locb2 button{height:34px;border-radius:9px;padding:0 14px;font:600 13px var(--sans,Inter,system-ui,sans-serif);cursor:pointer;border:1px solid var(--line,#E7E2EC);background:var(--surf,#fff);color:var(--ink,#211C26)}
+#d2locpop .d2locb2 .d2locok{background:var(--acc,#5A2C57);border-color:var(--acc,#5A2C57);color:#fff}`;
+  document.head.appendChild(st);
 })();

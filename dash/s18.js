@@ -731,7 +731,7 @@ var ATLAS_CITY={"United Kingdom|London":[51.5085,-0.1257],"Czech Republic|Prague
   async function loadGeo(){
     if(typeof DB === 'undefined' || !DB) return;
     try{
-      const snap = await DB.collection('geo').limit(5000).get();
+      const snap = await DB.collection('geo').limit(20000).get();
       const docs = (snap && snap.docs) ? snap.docs : (snap || []);
       for(const d of docs){
         const v = typeof docOf === 'function' ? docOf(d) : d;

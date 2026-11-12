@@ -130,11 +130,19 @@ async function fetchDoc(pathv) {
 }
 async function fetchColl(coll) {
   const out = [];
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await sb.from('docs').select('path,id,data').eq('coll', coll).order('id').range(from, from + 999);
-    if (error) throw err('unavailable', error.message);
+  /* 1.2.146 (12 Nov 2026): pages of 200, each tried up to 4 times - one page of 1000 big documents (the
+     measurements) ran past the database's time limit and the whole collection came back empty */
+  const PG = 200;
+  for (let from = 0; ; from += PG) {
+    let data = null, last = null;
+    for (let t = 0; t < 4 && !data; t++) {
+      if (t) await new Promise(r => setTimeout(r, 800 * t * t));
+      const r = await sb.from('docs').select('path,id,data').eq('coll', coll).order('id').range(from, from + PG - 1);
+      if (r.error) last = r.error; else data = r.data;
+    }
+    if (!data) throw err('unavailable', last && last.message);
     out.push(...data);
-    if (data.length < 1000) break;
+    if (data.length < PG) break;
   }
   return out;
 }

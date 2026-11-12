@@ -174,7 +174,7 @@
         const h = hrefOf(b, m); if(!/^https?:/i.test(h)) continue;
         const k = normKey(h); if(seen.has(k)) continue; seen.add(k);
         const pk = String(m[0] || '').toLowerCase().replace(/[^a-z0-9\u00c0-\u024f]+/g, '') + '|' + core(h);
-        const rec = MEAS.get(k), done = !!(rec && rec.slice(0, 6).some(v => v != null));
+        const rec = MEAS.get(k), done = !!(rec && (rec[0] != null || rec[1] != null));   // 1.2.146: only a shoe size on file (2pm.dk) is read again
         const p = person.get(pk) || {done: false, todo: null};
         if(done) p.done = true; else if(!p.todo) p.todo = [k, h];
         person.set(pk, p);

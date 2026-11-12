@@ -401,7 +401,7 @@ const agDocId = d => String(d || '').toLowerCase().replace(/[^a-z0-9.\-]/g, '_')
 async function loadAgDel(){
   if(!DB) return;
   try{
-    const snap = await DB.collection('agdel').limit(500).get();
+    const snap = await DB.collection('agdel').limit(20000).get();
     AGDEL.clear();
     for(const d of ((snap && snap.docs) ? snap.docs : (snap || []))){
       const v = docOf(d);
@@ -498,7 +498,7 @@ document.addEventListener('keydown', e => { const t = e.target; if(t && t.classL
 async function loadSiteStat(){
   if(!DB) return;
   try{
-    const snap = await DB.collection('sitestat').limit(500).get();
+    const snap = await DB.collection('sitestat').limit(20000).get();
     SITESTAT.clear();
     for(const d of ((snap && snap.docs) ? snap.docs : (snap || []))){
       const v = docOf(d);
@@ -681,7 +681,7 @@ const mdelIs = k => { const r = MDEL.get(k); return !!(r && r.st === 'del'); };
 async function loadMDel(){
   if(!DB) return;
   try{
-    const snap = await DB.collection('mdel').limit(1000).get();
+    const snap = await DB.collection('mdel').limit(20000).get();
     MDEL.clear();
     for(const d of ((snap && snap.docs) ? snap.docs : (snap || []))){
       const v = docOf(d);
@@ -907,7 +907,7 @@ async function loadPeerMarks(){
   if(!DB) return;
   PEERMARKS.clear();
   try{
-    const snap = await DB.collection('pmarks').limit(200).get();
+    const snap = await DB.collection('pmarks').limit(20000).get();
     for(const d of ((snap && snap.docs) ? snap.docs : (snap || []))){
       const v = docOf(d);
       const pid = realPid(d.id);
@@ -925,7 +925,7 @@ async function loadLegacyMarks(){
   if(!DB) return;
   LEGACY.e.clear(); LEGACY.t.clear();
   try{
-    const snap = await DB.collection('marks').limit(400).get();
+    const snap = await DB.collection('marks').limit(20000).get();
     for(const d of ((snap && snap.docs) ? snap.docs : (snap || []))){
       const data = docOf(d);
       for(const [k, v] of Object.entries((data && data.e) || {})) if(v) LEGACY.e.set(k, v);
@@ -1530,7 +1530,7 @@ function queueSaveContacts(dom){
 async function loadContacts(){
   if(!DB) return;
   try{
-    const snap = await DB.collection('contacts').limit(5000).get();
+    const snap = await DB.collection('contacts').limit(20000).get();
     const docs = (snap && snap.docs) ? snap.docs : (snap || []);
     for(const d of docs){
       const data = docOf(d);
@@ -2033,7 +2033,7 @@ async function loadMeas(){
   if(!DB){ if(logSettled) measState = 'off'; return; }
   measState = 'loading';
   try{
-    const snap = await DB.collection('meas').limit(5000).get();
+    const snap = await DB.collection('meas').limit(20000).get();
     const docs = (snap && snap.docs) ? snap.docs : (snap || []);
     for(const d of docs){
       const data = docOf(d);
@@ -2041,7 +2041,12 @@ async function loadMeas(){
     }
     await loadEdits();
     measState = 'ready';
-  }catch(e){ measState = 'off'; }
+  }catch(e){
+    /* 1.2.146: a failed load is tried again (it used to leave every card with "No measurements" until a restart) */
+    loadMeas.tries = (loadMeas.tries || 0) + 1;
+    if(loadMeas.tries < 6){ measState = 'idle'; setTimeout(() => { loadMeas(); }, 15000 * loadMeas.tries); return; }
+    measState = 'off';
+  }
   /* The first nine can only be chosen once the figures are in. Yesterday's draw is put
      back if there is one, so the morning list does not reshuffle under the scout. */
   try{
@@ -2209,7 +2214,7 @@ const bound = k => {
 async function loadEdits(){
   if(!DB) return;
   try{
-    const snap = await DB.collection('medits').limit(400).get();
+    const snap = await DB.collection('medits').limit(20000).get();
     const docs = (snap && snap.docs) ? snap.docs : (snap || []);
     for(const d of docs){
       const data = docOf(d);
@@ -3995,7 +4000,7 @@ const goneShard = k => 'x' + shard128(k).toString(16);
 async function loadGone(){
   if(!DB) return;
   try{
-    const snap = await DB.collection('gone').limit(200).get();
+    const snap = await DB.collection('gone').limit(20000).get();
     for(const d of ((snap && snap.docs) ? snap.docs : (snap || []))){
       const v = docOf(d);
       for(const [k, r] of Object.entries((v && v.e) || {})){
@@ -4078,7 +4083,7 @@ function renderGone(){
 async function loadMIG(){
   if(!DB) return;
   try{
-    const snap = await DB.collection('mig').limit(200).get();
+    const snap = await DB.collection('mig').limit(20000).get();
     for(const d of ((snap && snap.docs) ? snap.docs : (snap || []))){
       const v = docOf(d);
       for(const [k, h] of Object.entries((v && v.e) || {})) if(h) MIG.set(k, h);
@@ -4680,7 +4685,7 @@ async function loadPics(){
   ASSETS = (await use('assets').catch(() => null)) || ASSETS;
   if(!DB){ picsReady = true; return; }
   try{
-    const snap = await DB.collection('photos').limit(400).get();
+    const snap = await DB.collection('photos').limit(20000).get();
     const docs = (snap && snap.docs) ? snap.docs : (snap || []);
     for(const d of docs){
       const data = docOf(d);
@@ -5095,6 +5100,18 @@ document.addEventListener('click', async e => {
    morning scan read off the profile, then the board the name was listed on. */
 let ARRBY = null, LITDAY = null;
 const litDayOf = key => LITDAY.get(key) || (MARKAT.get(key) || '').slice(0, 10) || '';
+/* 1.2.146 (user, 12 Nov 2026 - 2pm Model Management cards empty): Wix sites put a 1 x 1 pixel stand-in in the page
+   until the photo is scrolled to ("/v1/fill/w_1,h_1,..."); the crawler kept that. Any Wix address asking for a tiny
+   picture asks for the photo itself, at most 1000 px. */
+function illuPhotoFix(u){
+  u = String(u || '');
+  if(!/static\.wixstatic\.com\/media\//i.test(u)) return u;
+  const m = u.match(/\/v1\/(?:fill|fit|crop)\/([^/]*)\//i); if(!m) return u;
+  const w = +((m[1].match(/(?:^|,)w_(\d+)/) || [])[1] || 0), h = +((m[1].match(/(?:^|,)h_(\d+)/) || [])[1] || 0);
+  if(w >= 300 || h >= 300) return u;
+  return u.replace(/\/v1\/(?:fill|fit|crop)\/[^/]*\//i, '/v1/fit/w_1000,h_1000,q_90/');
+}
+window.illuPhotoFix = illuPhotoFix;
 function litFacts(m){
   const rec = measRec(m.key);
   const arr = ARRBY ? ARRBY.get(m.key) : null;
@@ -5110,7 +5127,7 @@ function litFacts(m){
     hp: or(rec ? n1(rec[3]) : null, n1(leadNum(md.H))),
     eu: or(rec ? n1(rec[4]) : null, n1(leadNum(md.SH))),
     us: rec ? n1(rec[5]) : null,
-    photo: (arr && arr.photo) || (rec && rec[6]) || '',
+    photo: illuPhotoFix((arr && arr.photo) || (rec && rec[6]) || ''),
     own: PICS.get(m.key) || '',
     tier: (arr && arr.tier) || m.t || '',
     crawled: !!rec,
@@ -7954,7 +7971,7 @@ function bkForKey(key){
 async function loadBook(){
   if(!DB) return;
   try{
-    const snap = await DB.collection('book').limit(300).get();
+    const snap = await DB.collection('book').limit(20000).get();
     BOOK.clear();
     for(const d of ((snap && snap.docs) ? snap.docs : (snap || []))){
       const v = docOf(d);
