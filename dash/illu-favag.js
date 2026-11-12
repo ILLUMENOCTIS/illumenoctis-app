@@ -153,7 +153,7 @@
       const I = infoOf(k), m = D.C.get(k) || new Map(), n = m.size, last = Math.max(0, ...[...m.values()].map(x => x.w.t));
       return '<div class="fgrow' + (k === S.sel ? ' on' : '') + '" data-fgk="' + H(k) + '" style="grid-template-columns:' + gridCols + '">' +
         (S.tab === 'mine' ? '<button type="button" class="fggrip" data-fggrip="' + i + '" aria-label="' + L('Drag to change the order', '끌어서 순서 바꾸기') + '" title="' + L('Drag to change the order', '끌어서 순서 바꾸기') + '">⋮⋮</button>' : '<span class="fgn">' + (i + 1) + '</span>') +
-        '<button type="button" class="fgag" data-fgsel="' + H(k) + '"><span><b>' + H(I.name) + '</b>' + (n > 1 ? '<i class="fgsh">' + L(n + ' of us', n + '명') + '</i>' : '') + '</span><small>' + H(I.place) + '</small></button>' +
+        '<button type="button" class="fgag" data-fgsel="' + H(k) + '"><span><b' + (k.startsWith('name:') ? '' : ' class="fgagn" data-fgagdir="' + H(k) + '" title="' + H(L('Open this agency in the Directory', '디렉터리에서 이 에이전시 열기')) + '"') + '>' + H(I.name) + '</b>' + (n > 1 ? '<i class="fgsh">' + L(n + ' of us', n + '명') + '</i>' : '') + '</span><small>' + H(I.place) + '</small></button>' +
         P.map(p => cellHTML(m.get(p), p, modsOf(D, k, p))).join('') + '<span class="fglast">' + H(last ? when(new Date(last).toISOString()).s : '—') + '</span></div>';
     }).join('');
     const empty = S.tab === 'mine' ? L('No favorite agencies yet. Tap ★ on any agency in the Directory or on the Map and it comes here.', '즐겨찾는 에이전시가 없습니다. 디렉터리나 지도에서 ★를 누르면 여기에 들어옵니다.')
@@ -224,6 +224,8 @@
   pane.addEventListener('click', e => {
     const fm = e.target.closest('[data-fgmod]'); if(fm){ e.preventDefault(); e.stopPropagation(); const k = fm.dataset.fgmod; let i = {}; try{ i = (window.__illuModelInfo && window.__illuModelInfo(k)) || {}; }catch(er){} if(window.illuPhotoFull) window.illuPhotoFull('', i.nm || fm.innerText.split('\n')[0], i.href || k, k, ''); return; }
     if(drag && drag.moved) return;
+    /* 1.2.151 (user, 12 Nov 2026): the agency's name opens it in the Directory */
+    const gn = e.target.closest('[data-fgagdir]'); if(gn){ e.preventDefault(); e.stopPropagation(); try{ if(window.__illuDirGoAg) window.__illuDirGoAg(gn.dataset.fgagdir); else if(window.__illuGo) window.__illuGo('dir'); }catch(er){} return; }
     const t = e.target.closest('button'); if(!t) return;
     const d = t.dataset;
     if(d.fgtab){ S.tab = d.fgtab; S.sheet = ''; S.log = false; try{ localStorage.setItem('illu.favag.tab', S.tab); }catch(er){} render(); return; }
@@ -329,6 +331,8 @@
 #pane-favag .fgsh1{padding:16px 18px 12px;border-bottom:1px solid var(--line2,#EEE9F1);display:flex;flex-direction:column;gap:4px}
 #pane-favag .fgsh1 > div{display:flex;align-items:center;gap:8px}#pane-favag .fgsh1 b{font-size:18px}#pane-favag .fgsh1 small{font-size:12.5px;color:var(--mut)}
 #pane-favag .fgsec{padding:14px 18px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line2,#EEE9F1)}
+#pane-favag .fgagn{cursor:pointer;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px;transition:text-decoration-color .15s}
+#pane-favag .fgagn:hover{color:var(--acc,#5A2C57);text-decoration-color:currentColor}
 #pane-favag .fgmod{display:block;margin-top:3px;font-size:10.5px;font-weight:600;color:var(--pf,#5A2C57);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #pane-favag .fgcell.monly{background:transparent;border:1.5px dashed var(--pc,#C7B6CC)}
 #pane-favag .fgcell.monly > span{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut,#8A8093)}

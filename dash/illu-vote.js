@@ -1188,37 +1188,27 @@
   function stPill(k){
     const st = stateOf(k);
     if(!st) return '<span class="ivst none">' + L('Not on the Team Vote', '팀 투표에 없음') + '</span>';
-    if(st.open) return '<span class="ivst ' + (needMe(st) ? 'me' : 'others') + '">' + (st.hist.length ? L('Tie-breaker · ', '타이브레이커 · ') : '') + (needMe(st) ? L('Waiting for your vote', '내 투표 대기') : L('Waiting for others', '다른 사람 대기')) + ' · ' + st.n + '/' + st.of + '</span>' + whoRow(st);
+    if(st.open) return '<span class="ivst ' + (needMe(st) ? 'me' : 'others') + '">' + (st.hist.length ? L('Tie-breaker · ', '타이브레이커 · ') : '') + (needMe(st) ? L('Waiting for your vote', '내 투표 대기') : L('Waiting for others', '다른 사람 대기')) + ' · ' + st.n + '/' + st.of + whoRow(st) + '</span>';
     return '<span class="ivst ' + st.res + '">' + (st.res === 'appr' ? L('Approved', '승인') : L('Cancelled', '취소')) + ' ' + st.g + '–' + st.r + '</span>';
   }
   /* 1.2.149 (user, 12 Nov 2026, approved demo "Who still has to vote"): on every card that is on the vote, the members
      who have voted (face with a tick) and the ones still to vote (faded), with their names - only WHO voted, never how,
      until everyone has voted */
   function whoRow(st){
+    /* 1.2.151 (user: "too messy and taking up too much space"): one small line of faces right after the status -
+       solid = has voted, faded = still to vote; the names show on hover */
     if(!st || !st.open || !st.voters || !st.voters.length) return '';
-    const done = st.voters.filter(p => voteOf(p, st.k, st.round)), wait = st.voters.filter(p => !voteOf(p, st.k, st.round));
     const nm = p => p === me() ? L('You', '나') : (pname(p) || '?');
-    const face = (p, ok) => '<span class="ivwf' + (ok ? ' ok' : ' wait') + '" title="' + H(nm(p) + (ok ? L(' has voted', ' 투표 완료') : L(' has not voted yet', ' 아직 투표 안 함'))) + '">' + disc(p, 'xs') + (ok ? '<i aria-hidden="true">✓</i>' : '') + '</span>';
-    return '<div class="ivwho" aria-label="' + H(L('Who has voted', '투표 현황')) + '">' +
-      (done.length ? '<div class="ivwr"><span class="ivwl">' + L('Voted', '투표함') + '</span><span class="ivwfs">' + done.map(p => face(p, true)).join('') + '</span></div>' : '') +
-      (wait.length ? '<div class="ivwr"><span class="ivwl ivwlw">' + L('Waiting', '대기') + '</span><span class="ivwfs">' + wait.map(p => face(p, false)).join('') + '</span></div>' +
-        '<div class="ivwn"><b>' + L('Waiting for', '대기 중') + '</b> ' + H(wait.map(nm).join(', ')) + '</div>' : '') + '</div>';
+    const done = st.voters.filter(p => voteOf(p, st.k, st.round)), wait = st.voters.filter(p => !voteOf(p, st.k, st.round));
+    const tip = (done.length ? L('Voted: ', '투표함: ') + done.map(nm).join(', ') : '') + (done.length && wait.length ? '\n' : '') + (wait.length ? L('Waiting for: ', '대기 중: ') + wait.map(nm).join(', ') : '');
+    return '<span class="ivvf" title="' + H(tip) + '" aria-label="' + H(tip) + '">' + done.concat(wait).map(p => '<span class="ivwf' + (done.includes(p) ? '' : ' wait') + '">' + disc(p, 'xs') + '</span>').join('') + '</span>';
   }
   { const st = document.createElement('style'); st.textContent = `
-.ivwho{display:flex;flex-direction:column;gap:5px;margin:6px 0 2px;flex:1 1 100%;width:100%;min-width:0;box-sizing:border-box;align-self:stretch;padding:8px 10px;border-radius:10px;background:var(--surf2,#FBF9FC);border:1px solid var(--line,#EEE9F1);font-size:12px}
-.ivwho{align-items:stretch!important;height:auto!important}
-.ivwr{display:flex;align-items:center;gap:8px;width:100%}
-.ivwho .ivdisc{position:static!important;inset:auto!important;margin:0!important;transform:none!important;flex:none}
-.ivwho .ivwf{width:auto;height:auto}
-.ivwl{width:54px;flex:none;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mut,#6D6577)}
-.ivwl.ivwlw{color:#9A5B12}
-.ivwfs{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
-:has(> .ivwho){flex-wrap:wrap}
-.ivwf{position:relative;display:inline-flex}
-.ivwf.wait{opacity:.45;filter:grayscale(.4)}
-.ivwf i{position:absolute;right:-3px;bottom:-3px;width:11px;height:11px;border-radius:50%;background:#2E9E5B;color:#fff;font-style:normal;font-size:8px;line-height:11px;text-align:center;box-shadow:0 0 0 1.5px #fff}
-.ivwn{color:var(--ink2,#3A3340);line-height:1.35}.ivwn b{color:#9A5B12;font-weight:700}
-[data-theme="dark"] .ivwho{background:rgba(255,255,255,.04)}`; document.head.appendChild(st); }
+.ivst .ivvf{display:inline-flex!important;align-items:center;margin-left:6px;vertical-align:-3px;flex:none}
+.ivst:has(.ivvf){white-space:nowrap}
+.ivvf .ivwf{display:inline-flex;margin-left:-2px}.ivvf .ivwf:first-child{margin-left:0}
+.ivvf .ivdisc{position:static!important;inset:auto!important;margin:0!important;transform:none!important;width:15px!important;height:15px!important;font-size:7px!important;line-height:15px!important;box-shadow:0 0 0 1.5px #fff}
+.ivvf .ivwf.wait{opacity:.35;filter:grayscale(.6)}`; document.head.appendChild(st); }
   const capDisc = p => disc(p, 'xs');
   function add(id, label, render, count, title){
     const el = pageEl(id);

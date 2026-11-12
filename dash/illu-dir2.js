@@ -484,6 +484,8 @@
     if(marks.length) ms = ms.filter(m => marks.includes(lampOf(m.key) || ''));
     const fitN = byMeas ? ms.filter(m => fits(m.key)) : null;
     if(byMeas) ms = fitN;
+    /* 1.2.151 (user, 12 Nov 2026: "I thought the names/cards would be in alphabetical order?"): an agency's models A–Z by name */
+    ms = ms.slice().sort((p, q) => COLL(String(p.nm || '').trim(), String(q.nm || '').trim()));
     const isFav = window.ATLFAV && ATLFAV.has(a.domain);
     const head = '<div class="d2ph"><div class="d2ph1"><h2>' + esc(a.name) + '</h2>' + illuAtChips(a) +
       '<span class="d2pm">' + (a.domain ? '<a class="agsite" href="https://' + esc(a.domain) + '" target="_blank" rel="noopener noreferrer">' + esc(a.domain) + ' ↗</a> · ' : '') +
