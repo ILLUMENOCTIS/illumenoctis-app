@@ -73,7 +73,22 @@
       const k = x.d || keyOfAg(x.an, ''); put(k, x.who, x.them || '', x.role || '', when(x.at), x.what || '', x.what || L('contact', '연락'), L('By hand', '직접 기록') + (x.by && x.by !== x.who ? ' · ' + nmOf(x.by) : ''));
     }
     for(const l of LOG.values()) l.sort((a, b) => b.w.t - a.w.t);
-    return {C, LOG};
+    /* 1.2.149 (user, 12 Nov 2026, approved demo): which models of the agency each person is working on - her booking
+       card, a card they sent to the Team Vote, or a favourite - with where her vote stands */
+    const MOD = new Map();        // agency key -> Map(pid -> Map(model key -> {k, nm, how:[...], at}))
+    const agOfModel = (k, agName) => { let h = ''; try{ h = new URL(k).hostname.replace(/^www\./, ''); }catch(e){} const a = (h && agOf(h)) || (agName && agOf(agName)); return a ? lc(a.domain) : (agName ? 'name:' + lc(agName) : ''); };
+    const mput = (k, pid, nm, ag, how, at) => {
+      if(!k || !pid) return; const ak = agOfModel(k, ag); if(!ak) return;
+      if(!MOD.has(ak)) MOD.set(ak, new Map()); const pm = MOD.get(ak); if(!pm.has(pid)) pm.set(pid, new Map());
+      const mm = pm.get(pid); const o = mm.get(k) || {k, nm: '', how: [], at: ''};
+      if(!o.nm){ let i = {}; try{ i = (window.__illuModelInfo && window.__illuModelInfo(k)) || {}; }catch(e){} o.nm = nm || i.nm || ''; }
+      if(!o.how.includes(how)) o.how.push(how); if(String(at || '') > o.at) o.at = String(at || '');
+      mm.set(k, o);
+    };
+    try{ for(const c of BOOK.values()){ if(c && c.by && c.k) mput(c.k, c.by, c.nm, c.ag, 'book', c.at); } }catch(e){}
+    try{ for(const o of (window.__illuVoteSent ? window.__illuVoteSent() : [])) mput(o.k, o.by, o.nm, o.ag, 'vote', o.at); }catch(e){}
+    try{ for(const p of (window.__illuFavPeople ? window.__illuFavPeople() : [])) for(const f of window.__illuFavsOf(p)) mput(f.k, p, f.nm, f.ag, 'fav', f.at); }catch(e){}
+    return {C, LOG, MOD};
   }
   /* ---------- the shared database ---------- */
   const db = () => { try{ return DB || null; }catch(e){ return null; } };
@@ -91,7 +106,12 @@
     let ks;
     const fav = (window.ATLFAV && ATLFAV.list()) || [];
     if(S.tab === 'mine') ks = fav.map(lc);
-    else if(S.tab === 'shared') ks = [...D.C.entries()].filter(([, m]) => m.size > 1).sort((a, b) => Math.max(...[...b[1].values()].map(x => x.w.t)) - Math.max(...[...a[1].values()].map(x => x.w.t))).map(([k]) => k);
+    else if(S.tab === 'shared'){
+      /* 1.2.149: two or more of us in contact, or working on its models */
+      const who = k => { const s2 = new Set([...((D.C.get(k) || new Map()).keys())]); for(const p of ((D.MOD && D.MOD.get(k)) || new Map()).keys()) s2.add(p); return s2.size; };
+      const last = k => Math.max(0, ...[...((D.C.get(k) || new Map()).values())].map(x => x.w.t));
+      ks = [...new Set([...D.C.keys(), ...((D.MOD && D.MOD.keys()) || [])])].filter(k => who(k) > 1).sort((a, b) => last(b) - last(a));
+    }
     else ks = [];
     return ks;
   }
@@ -103,18 +123,27 @@
     return all.slice(0, 8);
   }
   function head(D){
-    const nShared = [...D.C.values()].filter(m => m.size > 1).length, nMine = ((window.ATLFAV && ATLFAV.list()) || []).length;
+    const nShared = (() => { const t = S.tab; S.tab = 'shared'; const n = rowsFor(D).length; S.tab = t; return n; })(), nMine = ((window.ATLFAV && ATLFAV.list()) || []).length;
     const tab = (k, l) => '<button type="button" data-fgtab="' + k + '" aria-pressed="' + (S.tab === k) + '">' + l + '</button>';
     const ppl = cols(D);
     return '<div class="fghd"><div class="fgseg" role="tablist">' + tab('mine', L('My favorites', '내 즐겨찾기') + ' · ' + nMine) + tab('shared', L('Shared', '공유') + ' · ' + nShared) + tab('team', L('Team favorites', '팀 즐겨찾기')) + '</div>' +
       (S.tab !== 'team' ? '<div class="fgwho"><span>' + L('Show who:', '사람:') + '</span><button type="button" data-fgwho="" aria-pressed="' + !S.who + '">' + L('Everyone', '모두') + '</button>' +
         ppl.map(p => { const c = colOf(p); return '<button type="button" data-fgwho="' + H(p) + '" aria-pressed="' + (S.who === p) + '" style="--pc:' + c.bg + ';--pf:' + c.fg + '">' + av(p, 20) + '<b>' + H(nmOf(p)) + '</b></button>'; }).join('') + '</div>' : '') + '</div>';
   }
-  function cellHTML(x, pid){
-    if(!x) return '<div class="fgcell off"></div>';
+  const modsOf = (D, k, pid) => { const pm = D.MOD && D.MOD.get(k); const mm = pm && pm.get(pid); return mm ? [...mm.values()].sort((a, b) => String(b.at).localeCompare(String(a.at))) : []; };
+  const shortNm = n => { const w = String(n || '').trim().split(/\s+/); return w.length > 1 ? w[0] + ' ' + w[w.length - 1].charAt(0) + '.' : (w[0] || '?'); };
+  const stOf = k => { try{ return window.__illuVoteState ? window.__illuVoteState(k) : ''; }catch(e){ return ''; } };
+  const ST = {open: ['Voting', '투표 중', 'y'], tie: ['Tie-breaker', '타이브레이커', 'y'], appr: ['Approved', '승인', 'g'], cxl: ['Cancelled', '취소', 'r']};
+  const howL = h => h === 'book' ? L('Booking', '부킹') : h === 'vote' ? L('Sent to vote', '투표에 보냄') : L('Favorite', '즐겨찾기');
+  function chip(m){ const s = ST[stOf(m.k)]; return '<button type="button" class="fgmc" data-fgmod="' + H(m.k) + '" title="' + H(m.how.map(howL).join(' · ')) + '"><span>' + H(m.nm || '?') + '</span>' + (s ? '<i class="fgms ' + s[2] + '">' + L(s[0], s[1]) + '</i>' : '') + (m.how.includes('book') ? '<i class="fgms b">' + L('Booking', '부킹') + '</i>' : '') + '</button>'; }
+  function cellHTML(x, pid, ms){
+    ms = ms || [];
+    const mline = ms.length ? '<small class="fgmod">◆ ' + H(shortNm(ms[0].nm)) + (ms.length > 1 ? ' +' + (ms.length - 1) : '') + '</small>' : '';
+    if(!x && !ms.length) return '<div class="fgcell off"></div>';
+    if(!x){ const c = colOf(pid), dim = S.who && S.who !== pid; return '<div class="fgcell monly' + (dim ? ' dim' : '') + '" style="--pc:' + c.bg + ';--pf:' + c.fg + '" title="' + H(nmOf(pid) + ': ' + ms.map(m => m.nm).join(', ')) + '"><span>' + L('models', '모델') + '</span>' + mline + '</div>'; }
     const c = colOf(pid), dim = S.who && S.who !== pid;
     return '<div class="fgcell' + (x.w.fresh ? ' fresh' : '') + (dim ? ' dim' : '') + '" style="--pc:' + c.bg + ';--pf:' + c.fg + '" title="' + H(nmOf(pid) + ' → ' + (x.them || '?') + (x.role ? ' · ' + x.role : '') + (x.about ? ' · ' + x.about : '')) + '">' +
-      '<b>' + H(x.them || L('in contact', '연락 중')) + '</b><span>' + H(x.role || (x.about ? x.about : '')) + '</span><em>' + H(x.w.s) + '</em></div>';
+      '<b>' + H(x.them || L('in contact', '연락 중')) + '</b><span>' + H(x.role || (x.about ? x.about : '')) + '</span><em>' + H(x.w.s) + '</em>' + mline + '</div>';
   }
   function pcHTML(D){
     const ks = rowsFor(D), P = cols(D);
@@ -125,7 +154,7 @@
       return '<div class="fgrow' + (k === S.sel ? ' on' : '') + '" data-fgk="' + H(k) + '" style="grid-template-columns:' + gridCols + '">' +
         (S.tab === 'mine' ? '<button type="button" class="fggrip" data-fggrip="' + i + '" aria-label="' + L('Drag to change the order', '끌어서 순서 바꾸기') + '" title="' + L('Drag to change the order', '끌어서 순서 바꾸기') + '">⋮⋮</button>' : '<span class="fgn">' + (i + 1) + '</span>') +
         '<button type="button" class="fgag" data-fgsel="' + H(k) + '"><span><b>' + H(I.name) + '</b>' + (n > 1 ? '<i class="fgsh">' + L(n + ' of us', n + '명') + '</i>' : '') + '</span><small>' + H(I.place) + '</small></button>' +
-        P.map(p => cellHTML(m.get(p), p)).join('') + '<span class="fglast">' + H(last ? when(new Date(last).toISOString()).s : '—') + '</span></div>';
+        P.map(p => cellHTML(m.get(p), p, modsOf(D, k, p))).join('') + '<span class="fglast">' + H(last ? when(new Date(last).toISOString()).s : '—') + '</span></div>';
     }).join('');
     const empty = S.tab === 'mine' ? L('No favorite agencies yet. Tap ★ on any agency in the Directory or on the Map and it comes here.', '즐겨찾는 에이전시가 없습니다. 디렉터리나 지도에서 ★를 누르면 여기에 들어옵니다.')
       : L('No agency has two or more of us in contact yet.', '두 명 이상이 연락 중인 에이전시가 아직 없습니다.');
@@ -140,8 +169,14 @@
     const I = infoOf(k), m = D.C.get(k) || new Map(), log = (D.LOG.get(k) || []).slice(0, 30);
     return '<aside class="fgside"><div class="fgsh1"><div><b>' + H(I.name) + '</b>' + (m.size > 1 ? '<i class="fgsh">' + L(m.size + ' of us in contact', m.size + '명 연락 중') + '</i>' : '') + '</div><small>' + H(I.place) + '</small></div>' +
       '<div class="fgsec"><span class="fglab">' + L('Who talks to whom', '누가 누구와') + '</span>' +
-      ([...m.entries()].sort((a, b) => b[1].w.t - a[1].w.t).map(([p, x]) => '<div class="fglink">' + av(p) + '<span><b>' + H(nmOf(p)) + '</b> <i>→</i> <b>' + H(x.them || '?') + '</b>' + (x.role ? ' <s>· ' + H(x.role) + '</s>' : '') + (x.about ? '<small>' + H(x.about) + '</small>' : '') + '</span><em>' + H(x.w.s) + '</em></div>').join('') ||
+      ([...m.entries()].sort((a, b) => b[1].w.t - a[1].w.t).map(([p, x]) => '<div class="fglink">' + av(p) + '<span><b>' + H(nmOf(p)) + '</b> <i>→</i> <b>' + H(x.them || '?') + '</b>' + (x.role ? ' <s>· ' + H(x.role) + '</s>' : '') + (x.about ? '<small>' + H(x.about) + '</small>' : '') + (modsOf(D, k, p).length ? '<span class="fgmcs">' + modsOf(D, k, p).slice(0, 6).map(chip).join('') + '</span>' : '') + '</span><em>' + H(x.w.s) + '</em></div>').join('') ||
         '<p class="fgempty">' + L('No one on the team is in contact yet.', '아직 연락 중인 사람이 없습니다.') + '</p>') + '</div>' +
+      (() => { const pm = (D.MOD && D.MOD.get(k)) || new Map(); const byM = new Map();
+        for(const [p, mm] of pm) for(const x of mm.values()){ const e = byM.get(x.k) || {m: x, who: []}; e.who.push(p); if(String(x.at) > String(e.m.at)) e.m = x; byM.set(x.k, e); }
+        if(!byM.size) return '';
+        return '<div class="fgsec"><span class="fglab">' + L('Models from this agency', '이 에이전시의 모델') + ' · ' + byM.size + '</span><div class="fgmods">' +
+          [...byM.values()].sort((a, b) => b.who.length - a.who.length || String(b.m.at).localeCompare(String(a.m.at))).slice(0, 30).map(e => { const s2 = ST[stOf(e.m.k)];
+            return '<button type="button" class="fgmrow" data-fgmod="' + H(e.m.k) + '"><b>' + H(e.m.nm || '?') + '</b><span class="fgmwho">' + e.who.map(p => av(p, 18)).join('') + '</span>' + (s2 ? '<i class="fgms ' + s2[2] + '">' + L(s2[0], s2[1]) + '</i>' : '') + '</button>'; }).join('') + '</div></div>'; })() +
       '<div class="fgsec fglogs"><span class="fglab">' + L('Contact log · newest first', '연락 기록 · 최신순') + '</span><div class="fgtl">' +
       (log.map(h => '<div class="fgev">' + av(h.who) + '<div><small><b>' + H(h.w.s) + '</b> · ' + H(h.how) + '</small><span><b>' + H(nmOf(h.who)) + '</b> <i>→</i> ' + H(h.them || '?') + '</span><p>' + H(h.what) + '</p></div></div>').join('') || '<p class="fgempty">' + L('Nothing logged yet.', '기록이 없습니다.') + '</p>') + '</div></div>' +
       (S.log === k ? logForm(k) : '<div class="fgact"><button type="button" class="fgbtn" data-fglog="' + H(k) + '">+ ' + L('Log a contact by hand', '연락 직접 기록') + '</button>' + (k.startsWith('name:') ? '' : '<button type="button" class="fgbtn pri" data-fgdir="' + H(k) + '">' + L('Open in Directory', '디렉터리에서 열기') + '</button>') + '</div>') + '</aside>';
@@ -187,6 +222,7 @@
   }
   /* ---------- clicks ---------- */
   pane.addEventListener('click', e => {
+    const fm = e.target.closest('[data-fgmod]'); if(fm){ e.preventDefault(); e.stopPropagation(); const k = fm.dataset.fgmod; let i = {}; try{ i = (window.__illuModelInfo && window.__illuModelInfo(k)) || {}; }catch(er){} if(window.illuPhotoFull) window.illuPhotoFull('', i.nm || fm.innerText.split('\n')[0], i.href || k, k, ''); return; }
     if(drag && drag.moved) return;
     const t = e.target.closest('button'); if(!t) return;
     const d = t.dataset;
@@ -293,6 +329,17 @@
 #pane-favag .fgsh1{padding:16px 18px 12px;border-bottom:1px solid var(--line2,#EEE9F1);display:flex;flex-direction:column;gap:4px}
 #pane-favag .fgsh1 > div{display:flex;align-items:center;gap:8px}#pane-favag .fgsh1 b{font-size:18px}#pane-favag .fgsh1 small{font-size:12.5px;color:var(--mut)}
 #pane-favag .fgsec{padding:14px 18px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line2,#EEE9F1)}
+#pane-favag .fgmod{display:block;margin-top:3px;font-size:10.5px;font-weight:600;color:var(--pf,#5A2C57);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pane-favag .fgcell.monly{background:transparent;border:1.5px dashed var(--pc,#C7B6CC)}
+#pane-favag .fgcell.monly > span{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut,#8A8093)}
+#pane-favag .fgmcs{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+#pane-favag .fgmc{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line,#E7E2EC);background:var(--surf,#fff);border-radius:999px;padding:2px 8px;font:600 11.5px var(--sans,Inter,system-ui,sans-serif);color:var(--ink,#211C26);cursor:pointer}
+#pane-favag .fgms{font-style:normal;font-size:10px;font-weight:700;border-radius:999px;padding:1px 6px}
+#pane-favag .fgms.y{background:#FFF4E5;color:#9A5B12}#pane-favag .fgms.g{background:#E8F7EA;color:#2F7A3D}#pane-favag .fgms.r{background:#FBE9EC;color:#A3283F}#pane-favag .fgms.b{background:#EEE7F6;color:#5A2C57}
+#pane-favag .fgmods{display:flex;flex-direction:column;gap:4px}
+#pane-favag .fgmrow{display:flex;align-items:center;gap:8px;border:1px solid var(--line,#EEE9F1);background:var(--surf,#fff);border-radius:10px;padding:6px 10px;cursor:pointer;text-align:left;font:13px var(--sans,Inter,system-ui,sans-serif);color:var(--ink,#211C26)}
+#pane-favag .fgmrow b{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#pane-favag .fgmwho{display:flex}#pane-favag .fgmwho .fgav{margin-left:-4px;box-shadow:0 0 0 2px var(--surf,#fff)}#pane-favag .fgmwho .fgav:first-child{margin-left:0}
 #pane-favag .fglink{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border-radius:12px;background:var(--surf2,#FAF8FB);border:1px solid var(--line2,#EFEAF2);font-size:13px}
 #pane-favag .fglink i,#pane-favag .fgev i,#pane-favag .fglane i{font-style:normal;opacity:.55}
 #pane-favag .fglink s{text-decoration:none;color:var(--mut)}

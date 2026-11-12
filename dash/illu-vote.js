@@ -167,6 +167,11 @@
   window.__illuWhoCounts = pid => ({fav: (FAV.get(pid) || new Map()).size, vote: allStates().filter(s => s.o.by === pid && (s.open || !s.o.off)).length});
   /* 1.2.129: + New card (illu-newcard.js) hands a new card to one of the three places */
   window.__illuVoteAct = {fav: (k, a) => { if(!myFav().has(k)) toggleFav(k, a); }, vote: (k, a) => sendVote(k, a), book: (k, a) => sendBook(k, a), on: k => !!onVote(k)};
+  /* 1.2.149: for Favorite Agencies - each person's favourites, and the cards each person sent to the vote */
+  window.__illuFavsOf = pid => [...(FAV.get(pid) || new Map())].map(([k, v]) => ({k, nm: (v && v.nm) || '', ag: (v && v.ag) || '', at: (v && v.at) || ''}));
+  window.__illuFavPeople = () => [...FAV.keys()];
+  window.__illuVoteSent = () => { const out = []; for(const o of OPEN.values()) if(o && o.k && !o.off) out.push({k: o.k, nm: o.nm || '', ag: o.ag || '', by: o.by || '', at: o.at || ''}); return out; };
+  window.__illuModelInfo = k => { try{ const i = info(k); return {nm: i.nm || '', ag: i.ag || '', href: i.href || ''}; }catch(e){ return {}; } };
   window.__illuVoteState = k => { const s = stateOf(k); return !s ? '' : s.open ? (s.hist.length ? 'tie' : 'open') : s.res; };
 
   /* ---------- actions ---------- */
@@ -1183,9 +1188,37 @@
   function stPill(k){
     const st = stateOf(k);
     if(!st) return '<span class="ivst none">' + L('Not on the Team Vote', '팀 투표에 없음') + '</span>';
-    if(st.open) return '<span class="ivst ' + (needMe(st) ? 'me' : 'others') + '">' + (st.hist.length ? L('Tie-breaker · ', '타이브레이커 · ') : '') + (needMe(st) ? L('Waiting for your vote', '내 투표 대기') : L('Waiting for others', '다른 사람 대기')) + ' · ' + st.n + '/' + st.of + '</span>';
+    if(st.open) return '<span class="ivst ' + (needMe(st) ? 'me' : 'others') + '">' + (st.hist.length ? L('Tie-breaker · ', '타이브레이커 · ') : '') + (needMe(st) ? L('Waiting for your vote', '내 투표 대기') : L('Waiting for others', '다른 사람 대기')) + ' · ' + st.n + '/' + st.of + '</span>' + whoRow(st);
     return '<span class="ivst ' + st.res + '">' + (st.res === 'appr' ? L('Approved', '승인') : L('Cancelled', '취소')) + ' ' + st.g + '–' + st.r + '</span>';
   }
+  /* 1.2.149 (user, 12 Nov 2026, approved demo "Who still has to vote"): on every card that is on the vote, the members
+     who have voted (face with a tick) and the ones still to vote (faded), with their names - only WHO voted, never how,
+     until everyone has voted */
+  function whoRow(st){
+    if(!st || !st.open || !st.voters || !st.voters.length) return '';
+    const done = st.voters.filter(p => voteOf(p, st.k, st.round)), wait = st.voters.filter(p => !voteOf(p, st.k, st.round));
+    const nm = p => p === me() ? L('You', '나') : (pname(p) || '?');
+    const face = (p, ok) => '<span class="ivwf' + (ok ? ' ok' : ' wait') + '" title="' + H(nm(p) + (ok ? L(' has voted', ' 투표 완료') : L(' has not voted yet', ' 아직 투표 안 함'))) + '">' + disc(p, 'xs') + (ok ? '<i aria-hidden="true">✓</i>' : '') + '</span>';
+    return '<div class="ivwho" aria-label="' + H(L('Who has voted', '투표 현황')) + '">' +
+      (done.length ? '<div class="ivwr"><span class="ivwl">' + L('Voted', '투표함') + '</span><span class="ivwfs">' + done.map(p => face(p, true)).join('') + '</span></div>' : '') +
+      (wait.length ? '<div class="ivwr"><span class="ivwl ivwlw">' + L('Waiting', '대기') + '</span><span class="ivwfs">' + wait.map(p => face(p, false)).join('') + '</span></div>' +
+        '<div class="ivwn"><b>' + L('Waiting for', '대기 중') + '</b> ' + H(wait.map(nm).join(', ')) + '</div>' : '') + '</div>';
+  }
+  { const st = document.createElement('style'); st.textContent = `
+.ivwho{display:flex;flex-direction:column;gap:5px;margin:6px 0 2px;flex:1 1 100%;width:100%;min-width:0;box-sizing:border-box;align-self:stretch;padding:8px 10px;border-radius:10px;background:var(--surf2,#FBF9FC);border:1px solid var(--line,#EEE9F1);font-size:12px}
+.ivwho{align-items:stretch!important;height:auto!important}
+.ivwr{display:flex;align-items:center;gap:8px;width:100%}
+.ivwho .ivdisc{position:static!important;inset:auto!important;margin:0!important;transform:none!important;flex:none}
+.ivwho .ivwf{width:auto;height:auto}
+.ivwl{width:54px;flex:none;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mut,#6D6577)}
+.ivwl.ivwlw{color:#9A5B12}
+.ivwfs{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
+:has(> .ivwho){flex-wrap:wrap}
+.ivwf{position:relative;display:inline-flex}
+.ivwf.wait{opacity:.45;filter:grayscale(.4)}
+.ivwf i{position:absolute;right:-3px;bottom:-3px;width:11px;height:11px;border-radius:50%;background:#2E9E5B;color:#fff;font-style:normal;font-size:8px;line-height:11px;text-align:center;box-shadow:0 0 0 1.5px #fff}
+.ivwn{color:var(--ink2,#3A3340);line-height:1.35}.ivwn b{color:#9A5B12;font-weight:700}
+[data-theme="dark"] .ivwho{background:rgba(255,255,255,.04)}`; document.head.appendChild(st); }
   const capDisc = p => disc(p, 'xs');
   function add(id, label, render, count, title){
     const el = pageEl(id);
@@ -1217,14 +1250,118 @@
     for(const e of by.values()) e.who.sort((a, b) => String(a.at).localeCompare(String(b.at)));
     return [...by.values()];
   }
+  /* 1.2.149 (user, 12 Nov 2026, approved demo "Compare favorites per member"; "I want to be able to categorize by USER
+     and compare likes between users ... a toggle filter to choose multiple users at once"): Compare members - a list
+     that opens and closes to pick any number of members (All members / Clear / Done); each picked member gets a column
+     of their favorites (Side by side) or a ✓ column (Table). "Liked by 2+ of them" keeps only the shared ones, which
+     are outlined everywhere. Each model shows where her vote stands: who voted (solid) and who is still to vote (faded),
+     or the result. */
+  const mfMembers = () => people().filter(p => (FAV.get(p) || new Map()).size || p === me());
+  function mfPicked(){ const all = mfMembers(); let v = String(VS.mfp == null ? '' : VS.mfp); if(v === '') return all.slice(0, 3); if(v === '-') return []; return v.split(',').filter(p => all.includes(p)); }
+  function mfSetPicked(list){ const all = mfMembers(); VS.mfp = list.length ? list.filter(p => all.includes(p)).join(',') : '-'; saveVS(); }
+  const mfThumb = k => { let u = ''; try{ u = (factsOf(k).f || {}).photo || ''; }catch(e){} if(!u) return ''; if(/^https?:/i.test(u) && window.illu && window.illu.modelPhotos && !window.illu.web) u = 'illuimg://p/' + encodeURIComponent(u) + '?r=' + encodeURIComponent(info(k).href || '') + '&w=300'; else if(/^https?:/i.test(u) && window.__illuSmall) u = window.__illuSmall(u, 200); return u; };
+  const mfMs = k => { const f = factsOf(k).f || {}; const n = x => x == null || x === '' || isNaN(+x) ? '–' : String(Math.round(+x * 10) / 10); return n(f.ht) + ' · ' + n(f.bu) + ' / ' + n(f.wa) + ' / ' + n(f.hp); };
+  function mfVote(k){
+    const st = stateOf(k); if(!st) return '';
+    if(!st.open) return '<span class="mfvt"><span class="mfvb ' + st.res + '">' + (st.res === 'appr' ? L('Approved', '승인') : L('Cancelled', '취소')) + ' ' + st.g + '–' + st.r + '</span></span>';
+    const f = p => { const ok = !!voteOf(p, st.k, st.round); return '<span class="mfva' + (ok ? '' : ' wait') + '" title="' + H((p === me() ? L('You', '나') : pname(p)) + (ok ? L(' has voted', ' 투표 완료') : L(' has not voted yet', ' 아직 투표 안 함'))) + '">' + disc(p, 'xs') + '</span>'; };
+    return '<span class="mfvt"><span class="mfvb open">' + (st.hist.length ? L('Tie-breaker', '타이브레이커') : L('Team Vote', '팀 투표')) + ' · ' + st.n + '/' + st.of + '</span>' + st.voters.map(f).join('') + '</span>';
+  }
+  function mfCompare(){
+    const all = mfMembers(), picked = mfPicked(), shared = VS.mfshow === 'shared';
+    const nm = p => p === me() ? L('You', '나') : (pname(p) || '?');
+    const favOf = p => [...(FAV.get(p) || new Map())].map(([k, v]) => ({k, at: (v && v.at) || '', nm: (v && v.nm) || '', ag: (v && v.ag) || ''})).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    const likedBy = new Map(); for(const p of picked) for(const x of favOf(p)) likedBy.set(x.k, (likedBy.get(x.k) || 0) + 1);
+    const nShared = [...likedBy.values()].filter(n => n > 1).length;
+    const open = !!VS.mfdd;
+    const label = !picked.length ? L('Pick members', '멤버 선택') : picked.length === all.length ? L('All members', '모든 멤버') : picked.map(nm).join(', ');
+    const dd = '<div class="mfdd"><button type="button" class="mfddb" data-mfdd aria-haspopup="listbox" aria-expanded="' + open + '"><span class="mfddf">' + picked.slice(0, 5).map(p => disc(p, 'xs')).join('') + '</span><span class="mfddl">' + H(label) + '</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + (open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6') + '"/></svg></button>' +
+      (open ? '<div class="mfddp" role="listbox" aria-multiselectable="true" aria-label="' + H(L('Members', '멤버')) + '">' +
+        '<button type="button" class="mfddo" role="option" data-mfall aria-selected="' + (picked.length === all.length) + '"><span class="mfcb">' + (picked.length === all.length ? '✓' : '') + '</span><b>' + L('All members', '모든 멤버') + '</b></button><div class="mfddsep"></div>' +
+        all.map(p => { const on = picked.includes(p); return '<button type="button" class="mfddo" role="option" data-mfpick="' + H(p) + '" aria-selected="' + on + '"><span class="mfcb">' + (on ? '✓' : '') + '</span>' + disc(p, 'xs') + '<b>' + H(nm(p)) + '</b><s>' + (FAV.get(p) || new Map()).size + ' ' + L('favorites', '즐겨찾기') + '</s></button>'; }).join('') +
+        '<div class="mfddft"><button type="button" class="mflnk" data-mfclear>' + L('Clear', '지우기') + '</button><button type="button" class="mfok" data-mfdd>' + L('Done', '완료') + '</button></div></div>' : '') + '</div>';
+    const bar = '<div class="mfbar">' + dd + '<span class="mfsum">' + H(picked.length ? L(picked.length + (picked.length === 1 ? ' member · ' : ' members · ') + nShared + ' liked by 2+ of them', picked.length + '명 · ' + nShared + '명은 2명 이상이 좋아함') : L('Pick the members to compare from the list', '비교할 멤버를 목록에서 고르세요')) + '</span><span class="ivsp"></span>' +
+      seg('mfview', [['side', L('Side by side', '나란히')], ['table', L('Table', '표')]]) + seg('mfshow', [['all', L('All their favorites', '모든 즐겨찾기')], ['shared', L('Liked by 2+ of them', '2명 이상')]]) + '</div>';
+    if(!picked.length) return bar + empty(L('No member picked', '선택한 멤버 없음'), L('Open the list above and tick the members whose favorites you want to compare.', '위 목록을 열어 비교할 멤버를 고르세요.'));
+    const mini = x => { const n = likedBy.get(x.k) || 0, i = info(x.k), th = mfThumb(x.k), others = n > 1 ? picked.filter(p => (FAV.get(p) || new Map()).has(x.k)) : [];
+      return '<div class="mfmini' + (n > 1 ? ' sh' : '') + '" data-mfopen="' + H(x.k) + '" role="button" tabindex="0" title="' + H(L('Open her photos', '사진 보기')) + '"><span class="mfph">' + (th ? '<img src="' + H(th) + '" alt="" loading="lazy" decoding="async">' : '') + '</span><span class="mfmt"><b>' + H(i.nm || x.nm || '') + '</b><span>' + H(i.ag || x.ag || '') + '</span><span class="mfms">' + H(mfMs(x.k)) + '</span>' + mfVote(x.k) + '</span>' + (n > 1 ? '<span class="mftag" title="' + H(others.map(nm).join(', ')) + '">♥ ' + n + '</span>' : '') + '</div>'; };
+    if((VS.mfview || 'side') === 'table'){
+      const keys = [...likedBy.keys()].filter(k => !shared || likedBy.get(k) > 1).sort((a, b) => (likedBy.get(b) - likedBy.get(a)) || String(info(a).nm || '').localeCompare(String(info(b).nm || '')));
+      if(!keys.length) return bar + empty(L('Nothing to show', '표시할 것 없음'), L('None of these members liked the same model yet.', '아직 같은 모델을 좋아한 멤버가 없습니다.'));
+      return bar + '<div class="mftw"><table class="mft"><thead><tr><th class="l">' + L('Model', '모델') + '</th>' + picked.map(p => '<th><span class="mfth">' + disc(p, 'xs') + H(nm(p)) + '</span></th>').join('') + '<th>' + L('Liked by', '좋아함') + '</th></tr></thead><tbody>' +
+        keys.map(k => { const i = info(k), th = mfThumb(k), n = likedBy.get(k); return '<tr class="' + (n > 1 ? 'sh' : '') + '"><td class="l"><span class="mftm" data-mfopen="' + H(k) + '" role="button" tabindex="0"><span class="mfph sm">' + (th ? '<img src="' + H(th) + '" alt="" loading="lazy">' : '') + '</span><span class="mfmt"><b>' + H(i.nm || '') + '</b><span>' + H((i.ag || '') + ' · ' + mfMs(k)) + '</span>' + mfVote(k) + '</span></span></td>' +
+          picked.map(p => { const v = (FAV.get(p) || new Map()).get(k); return '<td>' + (v ? '<span class="mfyes" title="' + H(when(v.at)) + '">♥</span>' : '<span class="mfno">–</span>') + '</td>'; }).join('') + '<td><b>' + n + '</b></td></tr>'; }).join('') + '</tbody></table></div>';
+    }
+    return bar + '<div class="mfcols" style="--mfn:' + Math.min(picked.length, 4) + '">' + picked.map(p => { const items = favOf(p).filter(x => !shared || (likedBy.get(x.k) || 0) > 1);
+      return '<section class="mfcol"><header>' + disc(p, 'sm') + '<b>' + H(nm(p)) + '</b><span>' + items.length + ' ' + L('favorites', '즐겨찾기') + '</span></header><div class="mfcl">' + (items.length ? items.map(mini).join('') : '<p class="mfnone">' + (shared ? L('No favorite shared with the others', '다른 멤버와 겹치는 즐겨찾기 없음') : L('No favorites yet', '아직 즐겨찾기 없음')) + '</p>') + '</div></section>'; }).join('') + '</div>';
+  }
+  document.addEventListener('click', e => {
+    const t = e.target; if(!t || !t.closest) return;
+    const pg = t.closest('#pane-mfav'); if(!pg) { if(VS.mfdd && !t.closest('.mfdd')){ VS.mfdd = false; const P = PAGES.get('mfav'); if(P) P.render(); } return; }
+    const P = PAGES.get('mfav'); const re = () => { if(P) P.render(); };
+    if(t.closest('[data-mfdd]')){ e.preventDefault(); VS.mfdd = !VS.mfdd; re(); return; }
+    const pk = t.closest('[data-mfpick]'); if(pk){ e.preventDefault(); const cur = mfPicked(), p = pk.dataset.mfpick; mfSetPicked(cur.includes(p) ? cur.filter(x => x !== p) : cur.concat([p])); re(); return; }
+    if(t.closest('[data-mfall]')){ e.preventDefault(); const all = mfMembers(); mfSetPicked(mfPicked().length === all.length ? [] : all); re(); return; }
+    if(t.closest('[data-mfclear]')){ e.preventDefault(); mfSetPicked([]); re(); return; }
+    const op = t.closest('[data-mfopen]'); if(op){ e.preventDefault(); const k = op.dataset.mfopen, m = info(k), im = op.querySelector('img'); if(window.illuPhotoFull) window.illuPhotoFull(im && im.naturalWidth ? (im.currentSrc || im.src) : '', m.nm || '', m.href || '', k, ''); return; }
+    if(VS.mfdd && !t.closest('.mfdd')){ VS.mfdd = false; re(); }
+  });
+  { const st = document.createElement('style'); st.textContent = `
+.mfbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 16px}
+.mfdd{position:relative}
+.mfddb{display:flex;align-items:center;gap:10px;height:42px;min-width:260px;max-width:460px;padding:0 12px;border:1px solid var(--line,#E7E2EC);border-radius:12px;background:var(--surf,#fff);color:var(--ink,#211C26);font:500 13.5px var(--sans,Inter,system-ui,sans-serif);cursor:pointer}
+.mfddb[aria-expanded="true"]{border-color:var(--acc,#5A2C57);box-shadow:0 0 0 3px rgba(90,44,87,.12)}
+.mfddb svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;margin-left:auto;flex:none}
+.mfddf{display:flex}.mfddf .ivdisc{margin-left:-5px;box-shadow:0 0 0 2px var(--surf,#fff)}.mfddf .ivdisc:first-child{margin-left:0}
+.mfddl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mfddp{position:absolute;left:0;top:48px;z-index:60;width:300px;max-height:420px;overflow:auto;background:var(--surf,#fff);border:1px solid var(--line,#E7E2EC);border-radius:14px;box-shadow:0 18px 44px rgba(20,10,30,.2);padding:6px;display:flex;flex-direction:column;gap:2px}
+.mfddo{display:flex;align-items:center;gap:10px;border:0;background:none;border-radius:9px;padding:8px;cursor:pointer;text-align:left;font:13.5px var(--sans,Inter,system-ui,sans-serif);color:var(--ink,#211C26)}
+.mfddo:hover{background:var(--surf2,#F6F2F7)}.mfddo b{font-weight:600;flex:1}.mfddo s{text-decoration:none;font-size:12px;color:var(--mut,#8A8093)}
+.mfcb{width:18px;height:18px;border-radius:5px;border:1.5px solid #CDBFD0;display:grid;place-items:center;font-size:12px;color:#fff;flex:none}
+.mfddo[aria-selected="true"] .mfcb{background:var(--acc,#5A2C57);border-color:var(--acc,#5A2C57)}
+.mfddsep{height:1px;background:var(--line,#EEE9F1);margin:4px 2px}
+.mfddft{display:flex;justify-content:space-between;align-items:center;padding:8px 6px 4px;border-top:1px solid var(--line,#EEE9F1);margin-top:4px}
+.mflnk{border:0;background:none;color:var(--acc,#5A2C57);font:600 13px var(--sans,Inter,system-ui,sans-serif);cursor:pointer}
+.mfok{border:0;background:var(--acc,#5A2C57);color:#fff;border-radius:9px;height:32px;padding:0 14px;font:600 13px var(--sans,Inter,system-ui,sans-serif);cursor:pointer}
+.mfsum{font-size:13px;color:var(--mut,#6D6577)}
+.mfcols{display:grid;grid-template-columns:repeat(var(--mfn,3),minmax(0,1fr));gap:16px;align-items:start}
+.mfcol{background:var(--surf2,#FBF9FC);border:1px solid var(--line,#EEE9F1);border-radius:16px;padding:12px;min-width:0}
+.mfcol header{display:flex;align-items:center;gap:8px;margin-bottom:10px}.mfcol header b{font-size:15px}.mfcol header span{font-size:12px;color:var(--mut,#8A8093);margin-left:auto}
+.mfcl{display:flex;flex-direction:column;gap:8px}
+.mfmini{display:flex;gap:10px;align-items:center;padding:8px;border:1px solid var(--line,#EEE9F1);border-radius:12px;background:var(--surf,#fff);cursor:pointer;position:relative;min-width:0}
+.mfmini:hover{border-color:#C9B6CB}
+.mfmini.sh,.mft tr.sh td{box-shadow:inset 0 0 0 1.5px var(--acc,#5A2C57);background:#FCF8FC}
+.mfph{width:46px;height:60px;border-radius:8px;flex:none;overflow:hidden;background:#EDE7F0}.mfph.sm{width:36px;height:46px}
+.mfph img{width:100%;height:100%;object-fit:cover;object-position:50% 20%;display:block}
+.mfmt{display:flex;flex-direction:column;gap:1px;min-width:0;font-size:12px;color:var(--mut,#6D6577)}
+.mfmt b{font-size:13px;color:var(--ink,#211C26);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mfmt > span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mftag{position:absolute;right:8px;top:8px;font-size:10.5px;font-weight:700;color:#fff;background:var(--acc,#5A2C57);border-radius:999px;padding:2px 7px}
+.mfvt{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:3px}
+.mfvb{font-weight:700;border-radius:999px;padding:1px 7px;font-size:10.5px}
+.mfvb.open{background:#FFF4E5;color:#9A5B12}.mfvb.appr{background:#E8F7EA;color:#2F7A3D}.mfvb.cxl{background:#FBE9EC;color:#A3283F}
+.mfva{display:inline-flex}.mfva .ivdisc{position:static!important;margin:0!important;width:16px!important;height:16px!important;font-size:7.5px!important}
+.mfva.wait{opacity:.4;filter:grayscale(.4)}
+.mftw{overflow:auto;border:1px solid var(--line,#EEE9F1);border-radius:14px;background:var(--surf,#fff)}
+.mft{width:100%;border-collapse:collapse}
+.mft th,.mft td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--line,#F0ECF2);font-size:13px}
+.mft th{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut,#8A8093);position:sticky;top:0;background:var(--surf,#fff)}
+.mft .l{text-align:left}
+.mfth{display:inline-flex;align-items:center;gap:6px}
+.mftm{display:flex;align-items:center;gap:10px;cursor:pointer}
+.mfyes{color:#D2557A;font-size:16px}.mfno{color:#C9C0CD}
+.mfnone{font-size:13px;color:var(--mut,#8A8093);margin:6px 2px}
+@media (max-width:760px){.mfcols{grid-template-columns:1fr}.mfddb{min-width:0;width:100%}.mfdd{flex:1 1 100%}}`; document.head.appendChild(st); }
   add('mfav', ['Member Favorites', '멤버 즐겨찾기'], () => {
     let list = memberFavs();
     const multi = list.filter(e => e.who.length > 1).length;
     if((VS.mfwho || 'all') === 'multi') list = list.filter(e => e.who.length > 1);
+    if((VS.mfwho || 'all') === 'cmp') list = list.filter(e => e.who.some(w => mfPicked().includes(w.p)));
     if((VS.mfsort || 'most') === 'most') list.sort((a, b) => (b.who.length - a.who.length) || String(b.at).localeCompare(String(a.at)));
     else list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
     const head = '<div class="ivhead"><span class="ivbig">' + list.length + '</span><span class="ivkick">' + L('Every member’s favorites', '모든 멤버의 즐겨찾기') + '</span><span class="ivdot"></span><span class="ivkick">' + H(L(multi + ' liked by more than one', multi + '명은 2명 이상이 좋아함')) + '</span><span class="ivsp"></span>' +
-      seg('mfwho', [['all', L('Everyone', '전체')], ['multi', L('Liked by 2+', '2명 이상')]]) + seg('mfsort', [['most', L('Most liked', '많이 좋아한 순')], ['new', L('Newest', '최신 순')]]) + '</div>';
+      seg('mfwho', [['all', L('Everyone', '전체')], ['multi', L('Liked by 2+', '2명 이상')], ['cmp', L('Compare members', '멤버 비교')]]) + ((VS.mfwho || 'all') === 'cmp' ? '' : seg('mfsort', [['most', L('Most liked', '많이 좋아한 순')], ['new', L('Newest', '최신 순')]])) + '</div>';
+    if((VS.mfwho || 'all') === 'cmp') return head + mfCompare();
     if(!list.length) return head + empty(L('No favorites yet', '아직 즐겨찾기가 없습니다'), L('When any member taps the ♡ on a card, the model shows here with who liked her.', '멤버가 카드의 ♡를 누르면 누가 좋아했는지와 함께 여기에 나옵니다.'));
     const mine = myFav();
     return head + '<div class="ivgrid ivtv">' + list.map(e => {

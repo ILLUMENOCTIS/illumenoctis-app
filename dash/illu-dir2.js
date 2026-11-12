@@ -1124,6 +1124,8 @@
       const mk = main ? fileKey(main.currentSrc || main.src) : '';
       const ph = ((r && r.photos) || []).filter(x => !mk || fileKey(x.url) !== mk);
       SL.photos = ph; SL.state = ph.length ? 'ok' : 'none';
+      /* 1.2.149: opened from a card that was on another photo - start on that photo */
+      try{ const want = window.__illuTileIdx ? window.__illuTileIdx(key) : ''; if(want){ const j = ph.findIndex(x => fileKey(x.url) === fileKey(want)); if(j >= 0) SL.i = j + 1; } }catch(e){}
       SL.why = ph.length ? '' : ((r && r.why) && SLWHY[r.why] ? r.why : (r && r.photos && r.photos.length ? 'one' : 'none'));
       if(C) slideApply(C);
     }).catch(() => { if(SL.key === key){ SL.state = 'none'; SL.why = 'none'; const C = $('.d2card'); if(C) slideApply(C); } });
@@ -1563,6 +1565,8 @@
   #pane-arr .rcddl button{border:0;background:none;border-radius:8px;padding:10px 12px;font:500 14px var(--sans,Inter,system-ui,sans-serif);color:var(--ink,#211C26);text-align:left;cursor:pointer;white-space:nowrap}
   #pane-arr .rcddl button[aria-selected="true"]{background:var(--acc,#5A2C57);color:#fff;font-weight:600}
   #pane-arr .rcph .rcbtn{height:40px;flex:none;padding:0 12px;white-space:nowrap;box-shadow:none}
+  #pane-arr .rcph .rcclr{height:40px;margin-left:6px;padding:0 10px;font-size:12px}
+  #pane-arr .rcph .rcclr.ask > span{display:none}
   #pane-arr.rcper2 .rc2grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
   #pane-arr.rcper1 .rc2grid{grid-template-columns:minmax(0,1fr)!important;gap:12px!important}
   /* full screen on the phone: only the cards and the row of buttons */
@@ -1604,7 +1608,9 @@
     let d = null;
     try{ if(DB && ME) d = docOf(await DB.doc('recs/p-' + ME).get()); }catch(e){}
     const sp = x => new Set(String(x || '').split(',').filter(Boolean));
-    RC.st = {round: (d && +d.round) || 1, seen: sp(d && d.seen), known: sp(d && d.known), shown: (d && Array.isArray(d.shown)) ? d.shown : [], hist: (d && Array.isArray(d.hist)) ? d.hist.filter(Array.isArray) : [], fresh: !d};
+    RC.st = {round: (d && +d.round) || 1, seen: sp(d && d.seen), known: sp(d && d.known), shown: (d && Array.isArray(d.shown)) ? d.shown : [], hist: (d && Array.isArray(d.hist)) ? d.hist.filter(Array.isArray) : [], fresh: !d,
+      /* 1.2.149: New faces & Development picks, newest last (fingerprints), and every model this person's list already knew */
+      nfh: (d && Array.isArray(d.nfh)) ? d.nfh.map(x => String(x || '').split(',').filter(Boolean)).filter(x => x.length) : [], nfk: sp(d && d.nfk)};
     return RC.st;
   }
   /* one write at a time, and always the newest state (quick Refresh clicks must not land out of order) */
@@ -1614,7 +1620,7 @@
     if(rcSaving){ rcAgain = true; return; }
     rcSaving = true;
     try{ do{ rcAgain = false;
-      try{ await DB.doc('recs/p-' + ME).set({round: st.round, seen: [...st.seen].join(','), known: [...st.known].join(','), shown: (RC.sets && RC.sets.length ? RC.sets[RC.sets.length - 1] : RC.shown.map(m => m.key)), hist: RC.sets || [], at: new Date().toISOString()}); }catch(e){}
+      try{ await DB.doc('recs/p-' + ME).set({round: st.round, seen: [...st.seen].join(','), known: [...st.known].join(','), shown: (RC.sets && RC.sets.length ? RC.sets[RC.sets.length - 1] : RC.shown.map(m => m.key)), hist: RC.sets || [], nfh: (st.nfh || []).map(x => x.join(',')), nfk: [...(st.nfk || [])].join(','), at: new Date().toISOString()}); }catch(e){}
     }while(rcAgain); }finally{ rcSaving = false; }
   }
   /* Filters on Suggestiones (user, 2026-11-05: "apply a filter on the top bar when we go to the
@@ -1630,6 +1636,7 @@
     return {term, regions: checked('region'), tiers: checked('tier'), sexes: checked('sex'), marks: checked('mark'), byMeas,
       key: [term, checked('region'), checked('tier'), checked('sex'), checked('mark'), byMeas ? JSON.stringify([BND.ht, BND.bu, BND.wa, BND.hp, BND.sh]) : ''].join('|')};
   }
+  window.__illuRecoSig = () => { try{ const f = recoSig(); return {term: f.term, regions: f.regions, tiers: f.tiers, sexes: f.sexes, marks: f.marks, byMeas: f.byMeas, ht: typeof BND !== 'undefined' && BND ? BND.ht : null, tab: RC.tab, sub: RC.nfSub}; }catch(e){ return null; } };
   function recoOk(m, f){
     if(f.sexes.length && !f.sexes.includes(m.g)) return false;
     if(f.tiers.length && !f.tiers.includes(m.t || (m.b && m.b.t) || '')) return false;
@@ -1689,7 +1696,7 @@
     const G = $('.d2body'); if(G) G.scrollTop = 0;
   }
   /* Back / Next through the sets already shown (nothing new is picked, nothing is marked again) */
-  const RCSETS = 10;
+  const RCSETS = 30;
   function recoStep(d){
     if(!RC.sets || !RC.sets.length) return;
     const at = Math.max(0, Math.min(RC.sets.length - 1, (RC.at == null ? RC.sets.length - 1 : RC.at) + d));
@@ -1739,10 +1746,50 @@
     RC.nfp = out; RC.nfv = v;
     return out;
   }
-  function nfList(fs){
-    const pool = nfPool().filter(m => (RC.nfSub === 'both' || m.t === RC.nfSub) && (!recoActive(fs) || recoOk(m, fs)));
+  /* 1.2.149 (user, 12 Nov 2026): "have the oldest picks/page move further back on the page list. The newest picks should
+     show first. The refresh button is to show newer models or models the user hasn't seen yet" - the list is this
+     person's picks, newest first (each New picks is 60 more, models new to the Directory first, then ones not shown yet),
+     and after them everyone not picked yet. Clear history starts again from nothing. */
+  function nfOrder(){
+    const all = nfPool(), st = RC.st;
     const seed = String(ME || 'anyone') + ':nf:' + RC.nfSeed;
-    return pool.sort((p, q) => rkey(seed, p.key) - rkey(seed, q.key));
+    const rest = all.slice().sort((p, q) => rkey(seed, p.key) - rkey(seed, q.key));
+    if(!st || !st.nfh || !st.nfh.length) return rest;
+    const byFp = new Map(all.map(m => [m.fp || (m.fp = fp(m.key)), m]));
+    const out = [], took = new Set();
+    for(let i = st.nfh.length - 1; i >= 0; i--) for(const f of st.nfh[i]){ const m = byFp.get(f); if(m && !took.has(f)){ took.add(f); out.push(m); } }
+    for(const m of rest) if(!took.has(m.fp)) out.push(m);
+    return out;
+  }
+  function nfList(fs){
+    return nfOrder().filter(m => (RC.nfSub === 'both' || m.t === RC.nfSub) && (!recoActive(fs) || recoOk(m, fs)));
+  }
+  function nfDraw(){
+    const st = RC.st; if(!st) return 0;
+    const fs = recoSig(), all = nfPool();
+    all.forEach(m => { if(!m.fp) m.fp = fp(m.key); });
+    const had = new Set(); (st.nfh || []).forEach(pg => pg.forEach(f => had.add(f)));
+    const ok = m => !had.has(m.fp) && (RC.nfSub === 'both' || m.t === RC.nfSub) && (!recoActive(fs) || recoOk(m, fs));
+    const seed = String(ME || 'anyone') + ':nf:' + ((st.nfh || []).length + 1);
+    const cand = all.filter(ok).sort((p, q) => rkey(seed, p.key) - rkey(seed, q.key));
+    const fresh = st.nfk && st.nfk.size ? cand.filter(m => !st.nfk.has(m.fp)) : [];
+    const fs2 = new Set(fresh.map(m => m.fp));
+    const pick = fresh.concat(cand.filter(m => !fs2.has(m.fp))).slice(0, 60).map(m => m.fp);
+    if(!pick.length) return 0;
+    st.nfh = (st.nfh || []).concat([pick]).slice(-40);
+    st.nfk = new Set(all.map(m => m.fp));
+    recoSave();
+    return pick.length;
+  }
+  function recoClearHistory(){
+    const st = RC.st; if(!st) return;
+    st.nfh = []; st.nfk = new Set(); st.seen = new Set(); st.known = new Set(); st.hist = []; st.round = (st.round || 1) + 1;
+    RC.sets = []; RC.fx = []; RC.fkey = ''; RC.nfPg = 0; RC.clearAsk = false; D2.open = '';
+    RC.shown = recoNext();
+    RC.sets = [RC.shown.map(m => m.key)]; RC.at = 0;
+    nfDraw();
+    recoSave(); recoRender();
+    const G = $('.d2body'); if(G) G.scrollTop = 0;
   }
   function krPool(){
     nets();
@@ -1825,11 +1872,92 @@
     const offices = m.boards ? new Set(m.boards.map(b => b.off)).size : 1;
     return '<article class="uc" data-uck="' + esc(m.key) + '">' +
       '<div class="ucimg"><div class="d2t ucph" data-d2k="' + esc(m.key) + '" title="' + esc(m.nm) + '">' + pc + '</div>' +
+      (minor || !/^https?:/i.test(m.href || '') ? '' : '<button type="button" class="ucarr l" data-ucarr="-1" aria-label="Previous photo">‹</button><button type="button" class="ucarr r" data-ucarr="1" aria-label="Next photo">›</button><span class="uccnt" aria-live="polite"></span>') +
       '<div class="ucov"><b>' + esc(m.nm) + '</b><span class="ucag">' + esc(meta) + '</span>' + mx + '</div>' +
       (offices > 1 ? '<span class="ucbadge">' + offices + (isKo() ? '개 오피스' : ' offices') + '</span>' : '') + '</div>' +
       '<div class="ucft"><em>' + esc(tl ? (isKo() ? tl[1] : tl[0]) : (m.div || '')) + '</em>' + lamps(m.key, m.nm, meta, m.href) + '</div></article>';
   }
   window.__illuCard = (m, o) => ucard(m, o);
+  /* 1.2.149 (user, 12 Nov 2026, approved demo "Browse her photos right on the card"): ‹ › on every model card go
+     through her slideshow photos without opening the card; a click anywhere else on the photo still opens it - on the
+     photo being looked at. ← → do the same while the mouse is over a card. Photos are read once per model
+     (window.illu.modelPhotos, the same as the card's slideshow) and the card remembers where it was while it is redrawn. */
+  const TS = new Map();   /* key -> {list:[url], i, state} */
+  window.__illuTileIdx = k => { const t = TS.get(k); return t && t.list && t.i > 0 ? t.list[t.i] : ''; };
+  const ucTileOf = el => el && el.closest && el.closest('.uc');
+  const ucTileKey = u => u.dataset.uck || u.dataset.ivk || ((u.querySelector('[data-d2k]') || {}).dataset || {}).d2k || '';
+  function ucTileHref(u, k){ try{ const i = typeof keyInfo === 'function' ? keyInfo(k) : null; if(i && i.href) return i.href; }catch(e){} return /^https?:/i.test(k) ? k : ''; }
+  function ucTilePaint(u){
+    const k = ucTileKey(u), t = TS.get(k); if(!t) return;
+    const im = u.querySelector('.ucph img'), cnt = u.querySelector('.uccnt');
+    const n = t.list ? t.list.length : 0;
+    if(cnt){ cnt.textContent = t.state === 'loading' ? '…' : n > 1 ? (t.i + 1) + ' / ' + n : t.state === 'none' ? '1 / 1' : ''; cnt.classList.toggle('on', !!cnt.textContent); }
+    u.classList.toggle('ucfirst', !t.i); u.classList.toggle('uclast', !!n && t.i >= n - 1);
+    if(!im || !n) return;
+    if(!im.dataset.ucorig) im.dataset.ucorig = im.getAttribute('src') || '';
+    const want = t.i ? slImg(t.list[t.i], 900) : im.dataset.ucorig;
+    if(im.getAttribute('src') !== want){
+      if(t.i && !im.dataset.orig0) im.dataset.orig0 = im.dataset.orig || '';
+      im.dataset.orig = t.i ? t.list[t.i] : (im.dataset.orig0 || im.dataset.orig || '');
+      im.src = want;
+      const c = im.closest('.litpic'); if(c){ c.classList.remove('imgfail'); if(im.complete && im.naturalWidth > 1) c.classList.add('gotimg'); }
+    }
+  }
+  async function ucTileStep(u, d){
+    const k = ucTileKey(u); if(!k) return;
+    let t = TS.get(k);
+    if(!t){
+      const im = u.querySelector('.ucph img');
+      const first = im ? (im.dataset.orig || im.currentSrc || im.src || '') : '';
+      t = {list: first ? [first] : [], i: 0, state: 'loading'}; TS.set(k, t); ucTilePaint(u);
+      const href = ucTileHref(u, k);
+      try{
+        if(!(window.illu && window.illu.modelPhotos) || !href) throw 0;
+        const r = await window.illu.modelPhotos(href);
+        const mk = fileKey(first);
+        const more = ((r && r.photos) || []).map(x => x.url || x).filter(x => x && (!mk || fileKey(x) !== mk));
+        t.list = (first ? [first] : []).concat(more); t.state = t.list.length > 1 ? 'ok' : 'none';
+      }catch(e){ t.state = 'none'; }
+      document.querySelectorAll('.uc').forEach(x => { if(ucTileKey(x) === k) ucTilePaint(x); });
+    }
+    if(t.state === 'loading' || !t.list || t.list.length < 2){ ucTilePaint(u); return; }
+    t.i = Math.max(0, Math.min(t.list.length - 1, t.i + d));
+    document.querySelectorAll('.uc').forEach(x => { if(ucTileKey(x) === k) ucTilePaint(x); });
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-ucarr]'); if(!b) return;
+    e.preventDefault(); e.stopPropagation();
+    const u = ucTileOf(b); if(u) ucTileStep(u, +b.dataset.ucarr);
+  }, true);
+  /* nothing behind the arrows reacts to a press on them (a drag, the card's own photo handlers) */
+  ['pointerdown', 'mousedown', 'dblclick'].forEach(ev => document.addEventListener(ev, e => { if(e.target.closest && e.target.closest('[data-ucarr]')) e.stopPropagation(); }, true));
+  let ucHoverTile = null;
+  document.addEventListener('mouseover', e => { ucHoverTile = ucTileOf(e.target); }, true);
+  document.addEventListener('keydown', e => {
+    if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if(!ucHoverTile || !ucHoverTile.isConnected || !ucHoverTile.matches(':hover')) return;
+    const a = document.activeElement; if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || (a && a.isContentEditable)) return;
+    const fvw = document.getElementById('illufv'); if($('.d2card') || (fvw && !fvw.hidden)) return;
+    if(!ucHoverTile.querySelector('[data-ucarr]')) return;
+    e.preventDefault(); ucTileStep(ucHoverTile, e.key === 'ArrowLeft' ? -1 : 1);
+  });
+  { const st = document.createElement('style'); st.textContent = `
+.uc .ucarr{position:absolute;top:42%;transform:translateY(-50%);z-index:6;width:34px;height:34px;border-radius:50%;border:0;padding:0 0 2px;background:rgba(255,255,255,.94);color:#211C26;font:700 20px/1 var(--sans,Inter,system-ui,sans-serif);display:grid;place-items:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.28);opacity:0;transition:opacity .15s,background .15s}
+.uc .ucarr.l{left:8px}.uc .ucarr.r{right:8px}
+.uc .ucarr:hover{background:#fff}
+.uc .ucimg:hover .ucarr{opacity:1}
+.uc.ucfirst .ucarr.l,.uc.uclast .ucarr.r{opacity:0!important;pointer-events:none}
+.uc .uccnt{position:absolute;right:8px;top:8px;z-index:6;background:rgba(15,10,20,.62);color:#fff;border-radius:999px;padding:2px 8px;font:600 11px var(--sans,Inter,system-ui,sans-serif);display:none;pointer-events:none}
+.uc .uccnt.on{display:block}
+  #pane-arr .rcclr{height:38px;flex:none;padding:0 14px;border-radius:999px;border:1px solid var(--line,#E7E2EC);background:var(--surf,#fff);color:var(--ink2,#5b5263);font:600 13px var(--sans,Inter,system-ui,sans-serif);white-space:nowrap;cursor:pointer;margin-left:8px;align-self:center}
+  #pane-arr .rcclr:hover{border-color:#C9475F;color:#B02F48}
+  #pane-arr .rcclr.ask{display:inline-flex;align-items:center;gap:8px;cursor:default;border-color:#E9B9C3;background:#FFF5F7;color:#7A2335;padding:0 6px 0 12px}
+  #pane-arr .rcclr.ask button{height:28px;border-radius:999px;padding:0 12px;font:600 12.5px var(--sans,Inter,system-ui,sans-serif);cursor:pointer;border:1px solid transparent}
+  #pane-arr .rcclr .rcclry{background:#B02F48;color:#fff}
+  #pane-arr .rcclr .rcclrn{background:transparent;border-color:#E9B9C3;color:#7A2335}
+@media (pointer:coarse){.uc .ucarr{opacity:.85;width:30px;height:30px;font-size:18px}}`; document.head.appendChild(st); }
+  /* a redrawn card keeps the photo it was on */
+  setInterval(() => { if(!TS.size) return; document.querySelectorAll('.uc').forEach(u => { const t = TS.get(ucTileKey(u)); if(t && (t.i || t.state !== 'ok')) ucTilePaint(u); }); }, 600);
   let ucFitT = 0;
   const ucFitAll = () => { ucFitT = 0; document.querySelectorAll('.uc .ucmx:not(.tight):not(.none)').forEach(e => { if(e.scrollWidth > e.clientWidth + 1) e.classList.add('tight'); }); };
   try{ new MutationObserver(() => { if(!ucFitT) ucFitT = requestAnimationFrame(ucFitAll); }).observe(document.body, {childList: true, subtree: true}); }catch(e){}
@@ -1880,6 +2008,7 @@
     const tab = RC.tab;
     let list = ms, strip = [], nfAll = [];
     if(ready && tab === 'kor') list = krList(fs);
+    if(ready && RC.st && !(RC.st.nfh || []).length && nfPool().length) nfDraw();
     if(ready) nfAll = nfList(fs);
     /* 1.2.108 (user, 8 Nov 2026): pages of 60 instead of "Show more" growing the list downward */
     const nfPages = Math.max(1, Math.ceil(nfAll.length / 60)); if(RC.nfPg >= nfPages) RC.nfPg = nfPages - 1; if(!(RC.nfPg >= 0)) RC.nfPg = 0;
@@ -1909,7 +2038,7 @@
     const subSeg = '<div class="rc2seg" role="group" aria-label="Board type">' + [['both', 'Both'], ['newfaces', 'New faces'], ['development', 'Development']].map(([k, l]) => '<button type="button" data-rcnf="' + k + '" aria-pressed="' + (RC.nfSub === k) + '">' + l + '</button>').join('') + '</div>';
     const body2 = !ready ? body
       : tab === 'kor' ? (list.length ? '<p class="rc2note">The best 9 by the Korean-market bands (women ' + KB().F.ht.join('–') + ' cm, men ' + KB().M.ht.join('–') + ' cm, plus bust, waist and hips). Green figures are inside the band. New picks shows the next 9.</p><div class="rc2grid">' + list.map(m => tile2(m, true)).join('') + '</div>' : '<div class="d2empty"><p>Nothing left to suggest for the Korean market under these filters. Change the filters, or press New picks to start again from the top.</p></div>')
-      : tab === 'nf' ? (PH ? '' : '<div class="rc2bar"><span class="rc2note">' + nfN.toLocaleString() + ' models with a photo on New face and Development boards' + (fon ? ' match your filters' : '') + ' · under 18s are never shown</span></div>') +
+      : tab === 'nf' ? (PH ? '' : '<div class="rc2bar"><span class="rc2note">' + nfN.toLocaleString() + ' models with a photo on New face and Development boards' + (fon ? ' match your filters' : '') + ' · your newest picks first · under 18s are never shown</span></div>') +
           (list.length ? '<div class="rc2grid">' + list.map(m => tile2(m)).join('') + '</div>' + (nfPages > 1 ? '<nav class="rc2pg" aria-label="Pages"><button type="button" class="rcnb" data-rcpg="' + (RC.nfPg - 1) + '"' + (RC.nfPg ? '' : ' disabled') + '>‹ Previous</button><span>Page <b>' + (RC.nfPg + 1).toLocaleString() + '</b> of ' + nfPages.toLocaleString() + ' · ' + (RC.nfPg * 60 + 1).toLocaleString() + '–' + (RC.nfPg * 60 + list.length).toLocaleString() + ' of ' + nfN.toLocaleString() + '</span><button type="button" class="rcnb" data-rcpg="' + (RC.nfPg + 1) + '"' + (RC.nfPg < nfPages - 1 ? '' : ' disabled') + '>Next page ›</button></nav>' : '') : '<div class="d2empty"><p>No model on these boards matches your filters.</p></div>')
       : body + (strip.length ? '<section class="rc2nf" aria-label="From New face and Development boards"><div class="rc2bar"><div><b>From New face &amp; Development boards</b><span class="rc2note">' + nfN.toLocaleString() + ' models · ' + nfF.toLocaleString() + ' New face · ' + (nfN - nfF).toLocaleString() + ' Development</span></div>' + subSeg + '<button type="button" class="rcnb" data-rctab="nf">See all</button></div><div class="rc2strip">' + strip.map(m => tile2(m)).join('') + '</div></section>' : '');
     const G0 = $('.d2body'), gTop = G0 ? G0.scrollTop : 0;
@@ -1921,20 +2050,23 @@
     /* Both / New faces / Development: a list that opens and closes (phone row; on the PC beside the two tabs - user, 12 Nov 2026) */
     const ddH = (tab === 'nf' ? '<span class="rcdd"><button type="button" class="rcddb" data-rcdd aria-haspopup="listbox" aria-expanded="' + !!RC.ddOpen + '">' + (NFL[RC.nfSub] || 'Both') + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + (RC.ddOpen ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6') + '"/></svg></button>' +
         (RC.ddOpen ? '<span class="rcddl" role="listbox" aria-label="Board type">' + Object.keys(NFL).map(k => '<button type="button" role="option" data-rcnf="' + k + '" aria-selected="' + (RC.nfSub === k) + '">' + NFL[k] + '</button>').join('') + '</span>' : '') + '</span>' : '');
+    const clearH = !ready ? '' : RC.clearAsk
+      ? '<span class="rcclr ask" role="group" aria-label="Clear history"><span>Clear all your picks and start fresh?</span><button type="button" class="rcclry" data-rcclear>Clear</button><button type="button" class="rcclrn" data-rcclearno>Cancel</button></span>'
+      : '<button type="button" class="rcclr" data-rcclear title="Forget every pick shown to you (For you and New faces &amp; Development) and start fresh">Clear history</button>';
     const phRow = !PH ? '' : '<div class="rcph">' +
       '<button type="button" class="rcphb" data-rcfull aria-pressed="' + !!RC.full + '" aria-label="' + (RC.full ? 'Exit full screen' : 'Full screen') + '" title="' + (RC.full ? 'Exit full screen' : 'Full screen') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (RC.full ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>') + '</svg></button>' +
       '<span class="rcper" role="group" aria-label="Cards in a row">' + [1, 2].map(n => '<button type="button" data-rcper="' + n + '" aria-pressed="' + (rcPer() === n) + '" aria-label="' + n + (n === 1 ? ' card' : ' cards') + ' in a row" title="' + n + (n === 1 ? ' card' : ' cards') + ' in a row"><svg viewBox="0 0 24 24" aria-hidden="true">' + (n === 1 ? '<rect x="5" y="4" width="14" height="16" rx="2"/>' : '<rect x="3" y="4" width="7.5" height="16" rx="1.5"/><rect x="13.5" y="4" width="7.5" height="16" rx="1.5"/>') + '</svg></button>').join('') + '</span>' +
       '<span class="rcsp"></span>' +
       ddH +
-      '<button type="button" class="rcbtn" data-rcref' + (!ready || !pool.length ? ' disabled' : '') + '>New picks</button></div>';
+      '<button type="button" class="rcbtn" data-rcref' + (!ready || !pool.length ? ' disabled' : '') + '>New picks</button>' + clearH + '</div>';
     pane.classList.toggle('rcper1', PH && rcPer() === 1); pane.classList.toggle('rcper2', PH && rcPer() === 2); pane.classList.toggle('rcphone', PH);
     pane.innerHTML = '<div class="rcwrap"><div class="rchd"><div>' + (PH ? '' : '<h2>Suggestiones</h2>') + (PH ? tabs : '<div class="rctabrow">' + tabs + ddH + '</div>') + (PH ? phRow : '<p>' + esc(sub2) + '</p>' + (tab === 'you' ? '<p class="rcprog">' + esc(prog) + '</p>' : '')) + '</div>' +
       '<button type="button" class="illufs" data-rcfull aria-pressed="' + !!RC.full + '" title="' + (RC.full ? 'Exit full screen (Esc)' : 'Show Suggestiones on the whole screen') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (RC.full ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>') + '</svg><span>' + (RC.full ? 'Exit full screen' : 'Full screen') + '</span></button>' +
-      (tab === 'you' && RC.sets && RC.sets.length > 1 ? '<div class="rcnav" role="group" aria-label="Earlier sets">' +
-        '<button type="button" class="rcnb" data-rcstep="-1"' + (RC.at > 0 ? '' : ' disabled') + ' title="The set shown before this one (Alt ←)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Back</span></button>' +
-        '<span class="rcset">Set <b>' + (RC.at + 1) + '</b> of ' + RC.sets.length + '</span>' +
-        '<button type="button" class="rcnb" data-rcstep="1"' + (RC.at < RC.sets.length - 1 ? '' : ' disabled') + ' title="The next set (Alt →)"><span>Next</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></div>' : '') +
-      '<button type="button" class="rcbtn" data-rcref' + (!ready || !pool.length ? ' disabled' : '') + ' title="' + (tab === 'kor' ? 'Show the next 9 for the Korean market' : tab === 'nf' ? 'Draw the New face and Development models in a new order' : 'Show ' + RN + ' models you have not been shown yet') + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>New picks</button></div>' +
+      (tab === 'you' && RC.sets && RC.sets.length > 1 ? '<div class="rcnav" role="group" aria-label="Your picks, newest first">' +
+        '<button type="button" class="rcnb" data-rcstep="1"' + (RC.at < RC.sets.length - 1 ? '' : ' disabled') + ' title="Newer picks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Newer</span></button>' +
+        '<span class="rcset">Page <b>' + (RC.sets.length - RC.at) + '</b> of ' + RC.sets.length + (RC.at === RC.sets.length - 1 ? ' · newest' : '') + '</span>' +
+        '<button type="button" class="rcnb" data-rcstep="-1"' + (RC.at > 0 ? '' : ' disabled') + ' title="Older picks"><span>Older</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></div>' : '') +
+      '<button type="button" class="rcbtn" data-rcref' + (!ready || !pool.length ? ' disabled' : '') + ' title="' + (tab === 'kor' ? 'Show the next 9 for the Korean market' : tab === 'nf' ? 'Draw the New face and Development models in a new order' : 'Show ' + RN + ' models you have not been shown yet') + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>New picks</button>' + clearH + '</div>' +
       '<div class="d2body rcbody">' + body2 + pop + '</div></div>';
     try{ if(typeof countEl !== 'undefined' && countEl) countEl.textContent = ms.length ? ms.length + ' suggestiones' : ''; }catch(e){}
     const vn = document.getElementById('vn-arr'); if(vn) vn.textContent = '';
@@ -1950,7 +2082,7 @@
   window.__rcFull = on => { if(on === undefined) return !!RC.full; RC.full = !!on; document.body.classList.toggle('rcfull', RC.full); if(VIEW === 'arr') recoRender(); return RC.full; };
   window.__illuReco = () => ({pool: (RC.pool || []).length, shown: RC.shown.map(m => m.key), disp: (RC.disp || []).map(m => [m.key, m.g]), round: RC.st && RC.st.round, seen: RC.st ? RC.st.seen.size : 0, known: RC.st ? RC.st.known.size : 0, restarted: !!RC.restarted});
   window.__illuRecoRefresh = recoRefresh;
-  document.addEventListener('keydown', e => { if(VIEW !== 'arr' || !e.altKey || D2.open) return; if(e.key === 'ArrowLeft'){ e.preventDefault(); recoStep(-1); } else if(e.key === 'ArrowRight'){ e.preventDefault(); recoStep(1); } });
+  document.addEventListener('keydown', e => { if(VIEW !== 'arr' || !e.altKey || D2.open) return; if(e.key === 'ArrowLeft'){ e.preventDefault(); recoStep(1); } else if(e.key === 'ArrowRight'){ e.preventDefault(); recoStep(-1); } });
   { const st = document.createElement('style'); st.textContent =
     '.rcnav{display:flex;align-items:center;gap:6px;margin-left:auto;margin-right:4px}.rchd .rcnav+.rcbtn{margin-left:0!important}.rchd>.rcnav{flex:none;min-width:auto}' +
     '.rcnb{display:inline-flex;align-items:center;gap:4px;height:34px;padding:0 13px;border-radius:999px;border:1px solid color-mix(in srgb,var(--acc,#6b2a63) 35%,var(--line,#ddd));background:var(--surf,#fff);color:var(--acc,#6b2a63);font:inherit;font-size:13px;font-weight:600;cursor:pointer}' +
@@ -2010,8 +2142,10 @@
     if(e.target.closest('[data-rcref]')){ e.preventDefault();
       if(RC.tab === 'kor'){ (RC.krCur || []).forEach(k => RC.krSeen.add(k)); const before = RC.krCur; RC.krCur = null; const fs = recoSig(); const nx = krList(fs);
         if(!nx.length && before && before.length){ RC.krSeen = new Set(); RC.krCur = null; } recoRender(); const G = $('.d2body'); if(G) G.scrollTop = 0; return; }
-      if(RC.tab === 'nf'){ RC.nfSeed++; RC.nfN = 60; RC.nfPg = 0; recoRender(); const G = $('.d2body'); if(G) G.scrollTop = 0; return; }
+      if(RC.tab === 'nf'){ const got = nfDraw(); if(!got) RC.nfSeed++; RC.nfN = 60; RC.nfPg = 0; recoRender(); const G = $('.d2body'); if(G) G.scrollTop = 0; return; }
       recoRefresh(); return; }
+    if(e.target.closest('[data-rcclear]')){ e.preventDefault(); if(!RC.clearAsk){ RC.clearAsk = true; recoRender(); clearTimeout(RC.clearT); RC.clearT = setTimeout(() => { if(RC.clearAsk){ RC.clearAsk = false; if(VIEW === 'arr') recoRender(); } }, 8000); return; } recoClearHistory(); return; }
+    if(e.target.closest('[data-rcclearno]')){ e.preventDefault(); RC.clearAsk = false; recoRender(); return; }
     const stp = e.target.closest('[data-rcstep]'); if(stp){ e.preventDefault(); if(!stp.disabled) recoStep(+stp.dataset.rcstep); return; }
     if(e.target.closest('[data-rcfull]')){ e.preventDefault(); RC.full = !RC.full; RC.ddOpen = false; document.body.classList.toggle('rcfull', RC.full); recoRender(); return; }
     const per = e.target.closest('[data-rcper]'); if(per){ e.preventDefault(); try{ localStorage.setItem('illu.rcper', per.dataset.rcper); }catch(er){} RC.per = +per.dataset.rcper; recoRender(); return; }

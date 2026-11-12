@@ -362,7 +362,7 @@
             return {k: String(u.dataset.ivk || u.dataset.uck || '').slice(0, 120), img: im ? im.className : '', src: im ? String(im.getAttribute('src') || '').slice(0, 160) : '', done: !!(im && im.complete), w: im ? im.naturalWidth : 0,
               op: im ? getComputedStyle(im).opacity : '', cell: c ? c.className : '', h: im ? Math.round(im.getBoundingClientRect().height) : 0, n: u.querySelectorAll('.ucimg img').length, pm: PMAIN.has(String(u.dataset.ivk || u.dataset.uck || '')), lazy: im ? im.loading : '', vis: (() => { try{ const r = u.getBoundingClientRect(); return Math.round(r.top) + ',' + Math.round(r.height); }catch(e){ return ''; } })()}; })};
         const id = (typeof ME !== 'undefined' && ME ? String(ME).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) : 'anon') || 'anon';
-        await DB.doc('diag/' + id).set({at: new Date().toISOString(), view: typeof VIEW !== 'undefined' ? VIEW : '', pane: (() => { try{ const pn = [...document.querySelectorAll('.pane')].find(x => !x.hidden && x.offsetParent); return pn ? pn.id : ''; }catch(e){ return ''; } })(), ver: (window.illu && window.illu.version) || '', dom, cache: st});
+        await DB.doc('diag/' + id).set({at: new Date().toISOString(), view: typeof VIEW !== 'undefined' ? VIEW : '', pane: (() => { try{ const pn = [...document.querySelectorAll('.pane')].find(x => !x.hidden && x.offsetParent); return pn ? pn.id : ''; }catch(e){ return ''; } })(), ver: (window.illu && window.illu.version) || '', filt: window.__illuRecoSig ? window.__illuRecoSig() : null, dom, cache: st});
       }catch(e){}
     };
     setInterval(diagNow, 180000); setTimeout(diagNow, 20000);
