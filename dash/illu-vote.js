@@ -63,6 +63,40 @@
   let PUBNOW = {};            // vpub/board .c: {hash: {ph, m}} what the phone vote page shows for each card (1.2.129)
   let DBX = null;
   function db(){ if(DBX) return DBX; try{ if(typeof DB !== 'undefined') DBX = DB; }catch(e){} return DBX; }
+  /* 1.2.157 (user, 12 Nov 2026, approved demo): what an agency said - not available / not for Korea / on hold (maybe later).
+     docs avail/<hash> {k, nm, ag, t: no|nokr|later, why, from, at, remind, by}. Shown on her card everywhere, in the
+     Directory names, on her card's panel (where it is set or cleared), and on the Unavailable / On hold board. */
+  const AV = new Map();
+  const AVT = {no: ['Not available', '불가', '#A3283F'], nokr: ['Not for Korea', '한국 불가', '#A3283F'], later: ['On hold', '보류', '#C97916']};
+  function availOf(k){ if(!k) return null; const v = AV.get(hash(k)); return v && v.t ? v : null; }
+  window.__illuAvailOf = availOf;
+  window.__illuAvailSet = (k, o) => { if(!k) return; const v = Object.assign({k, at: nowIso(), by: me()}, o); AV.set(hash(k), v); save('avail/' + hash(k), v); changed(); };
+  window.__illuAvailLabel = (v, short) => { if(!v || !AVT[v.t]) return ''; const t = AVT[v.t]; let s = L(t[0], t[1]); if(v.t === 'later' && v.remind){ const d = new Date(v.remind); if(!isNaN(d)) s += ' · ' + d.toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {month: 'short', year: short ? undefined : 'numeric'}); } return s; };
+  window.__illuAvailColor = v => (v && AVT[v.t]) ? AVT[v.t][2] : '';
+  function availSec(k, a, can){
+    const v = availOf(k), ed = AVED === k;
+    const btn = (t, l) => '<button type="button" class="avb' + (v && v.t === t ? ' on ' + t : '') + '" data-avset="' + t + '"' + (can ? '' : ' disabled') + '>' + l + '</button>';
+    return '<section class="pns avsec">' + pnSecH(L('Agency said', '에이전시 답변')) +
+      (v ? '<div class="avnow ' + v.t + '"><b>' + H(window.__illuAvailLabel(v)) + '</b>' + (v.why ? '<span>“' + H(v.why) + '”</span>' : '') + '<small>' + H([v.from, v.at ? new Date(v.at).toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short', year: 'numeric'}) : '', v.by ? pname(v.by) : ''].filter(Boolean).join(' · ')) + '</small></div>' : '') +
+      (ed ? '<div class="aved"><input data-mxin="avwhy" placeholder="' + H(L('What the agency said (e.g. exclusive with another Seoul agency)', '에이전시가 한 말 (예: 다른 서울 에이전시와 독점)')) + '" value="' + H((v && v.why) || '') + '">' +
+        (AVPICK === 'later' ? '<label>' + L('Ask again from', '다시 물어볼 날') + ' <input type="month" data-mxin="avrem" value="' + H(((v && v.remind) || '').slice(0, 7)) + '"></label>' : '') +
+        '<div class="avbs"><button type="button" class="ivbtn" data-avok>' + L('Save', '저장') + '</button><button type="button" class="ivbtn" data-avno>' + L('Back', '뒤로') + '</button></div></div>'
+        : '<div class="avbs">' + btn('no', L('Not available', '불가')) + btn('nokr', L('Not for Korea', '한국 불가')) + btn('later', L('On hold', '보류')) + (v ? '<button type="button" class="avb clr" data-avclr' + (can ? '' : ' disabled') + '>' + L('Available again', '다시 가능') + '</button>' : '') + '</div>') + '</section>';
+  }
+  let AVED = '', AVPICK = '';
+  document.addEventListener('click', e => {
+    const t = e.target.closest && e.target.closest('.mx [data-avset],.mx [data-avok],.mx [data-avno],.mx [data-avclr]'); if(!t) return;
+    e.preventDefault(); e.stopPropagation(); if(!signedIn()) return;
+    const box = t.closest('.mx'), k = box.dataset.mxk, ab = (() => { try{ return JSON.parse(box.dataset.mxab || 'null') || {}; }catch(er){ return {}; } })();
+    if(t.dataset.avset){ AVED = k; AVPICK = t.dataset.avset; changed(); setTimeout(() => { const i = document.querySelector('.mx [data-mxin="avwhy"]'); if(i) i.focus(); }, 30); return; }
+    if(t.hasAttribute('data-avno')){ AVED = ''; changed(); return; }
+    if(t.hasAttribute('data-avclr')){ const h = hash(k); AV.delete(h); save('avail/' + h, {k, t: '', at: nowIso(), by: me()}); changed(); return; }
+    if(t.hasAttribute('data-avok')){
+      const why = ((box.querySelector('[data-mxin="avwhy"]') || {}).value || '').trim().slice(0, 300), rem = ((box.querySelector('[data-mxin="avrem"]') || {}).value || '');
+      const m = info(k), o = {k, nm: ab.nm || m.nm || '', ag: ab.ag || m.ag || '', t: AVPICK, why, from: L('Set by hand', '직접 입력'), at: nowIso(), remind: AVPICK === 'later' && rem ? rem + '-01' : '', by: me()};
+      AV.set(hash(k), o); save('avail/' + hash(k), o); AVED = ''; changed();
+    }
+  }, true);
   function listen(){
     const d = db(); if(!d){ setTimeout(listen, 300); return; }
     d.collection('fav').onSnapshot(s => { FAV.clear(); for(const x of s.docs){ const v = x.data() || {}; const m = new Map(); for(const k in (v.e || {})) m.set(k, v.e[k]); FAV.set(x.id, m); } ready |= 1; changed(); }, () => {});
@@ -70,6 +104,7 @@
     d.collection('vopen').onSnapshot(s => { OPEN.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k) OPEN.set(x.id, v); } ready |= 4; changed(); }, () => {});
     d.collection('vpub').onSnapshot(s => { for(const x of s.docs) if(x.id === 'board'){ const v = x.data() || {}; PUBNOW = Object.assign({}, v.c || {}); } }, () => {});
     d.collection('mother').onSnapshot(s => { MOM.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k && v.ag) MOM.set(x.id, v); } changed(); }, () => {});
+    d.collection('avail').onSnapshot(s => { AV.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k && v.t) AV.set(x.id, v); } changed(); }, () => {});
     d.collection('vpre').onSnapshot(s => { PRE.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k) PRE.set(x.id, v); } changed(); }, () => {});
     d.collection('vnote').onSnapshot(s => { NOTE.clear(); for(const x of s.docs){ const v = x.data() || {}; NOTE.set(x.id, Object.assign({}, v.e || {})); NOTEX.set(x.id, Object.assign({}, v.x || {})); } changed(); }, () => {});
   }
@@ -179,7 +214,10 @@
     let i = null; try{ if(typeof agIndex === 'function') agIndex(); }catch(e){}
     try{ i = typeof keyInfo === 'function' ? keyInfo(k) : null; }catch(e){}
     const snap = (OPEN.get(hash(k))) || [...FAV.values()].map(m => m.get(k)).find(Boolean) || {};
-    return Object.assign({key: k, nm: snap.nm || '', ag: snap.ag || '', href: snap.href || (/^https?:/i.test(k) ? k : '')}, i || {}, {key: k});
+    /* 1.2.158: a booking card with no Directory page (the models from the agency server) answers for itself */
+    let bc = null; try{ bc = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : (!i && typeof bkForKey === 'function' ? bkForKey(k) : null); }catch(e){}
+    const bi = bc ? {nm: bc.nm || '', ag: bc.ag || '', city: bc.city || '', country: bc.nat || bc.country || ''} : {};
+    return Object.assign({key: k, nm: snap.nm || bi.nm || '', ag: snap.ag || bi.ag || '', href: snap.href || (/^https?:/i.test(k) ? k : '')}, bi, i || {}, {key: k});
   }
   function signedIn(){ try{ if(!SIGNED()){ nudgeSignIn(); return false; } }catch(e){ return false; } return true; }
   function cast(k, v, about){
@@ -208,9 +246,83 @@
   }
   /* the highest round anyone has voted in on this card - a card sent again starts after it, so old votes don't count */
   function lastRound(k){ let r = 0; for(const v of VT.values()){ const e = v.e && v.e[k]; if(e) for(const n in e) r = Math.max(r, +n || 0); } return r; }
-  function sendVote(k, about){
+  /* 1.2.156 (user, 12 Nov 2026, approved demo "Someone else is already on her"): who else is working on a model -
+     her booking card in someone else's charge (Processing or Completed). Same model = same key, or the same first name
+     at the same agency (cards brought in by hand carry no key). */
+  const lcs = s => String(s || '').trim().toLowerCase();
+  const first = s => lcs(s).split(/\s+/)[0] || '';
+  function bookersOf(k, nm, ag){
+    const out = []; let all = []; try{ all = [...BOOK.values()]; }catch(e){}
+    const f = first(nm), a = lcs(ag);
+    for(const c of all){ if(!c || c.st === 'canc' || !c.by) continue;
+      if((k && c.k && c.k === k) || (f && first(c.nm) === f && sameNm(nm, c.nm) && !twoPages(k, c.k) && a && (lcs(c.ag) === a || (c.agd && a.includes(lcs(c.agd).split('.')[0]))))) out.push(c); }
+    return out;
+  }
+  /* 1.2.168 (user, 13 Nov 2026: Alina Polukhina was taken for Alina B - "Some models will have the same first name. Make sure
+     you don't mix up the models"): same first name is not enough. A second name has to agree ("Alina B" = "Alina Bron",
+     not "Alina Polukhina"), and two different profile pages on the same agency site are two different girls. */
+  function sameNm(x, y){
+    const t = s => lcs(s).replace(/[.,]/g, ' ').split(/\s+/).filter(Boolean), a = t(x), b = t(y);
+    if(!a.length || !b.length || a[0] !== b[0]) return false;
+    if(a.length < 2 || b.length < 2) return true;
+    const p = a[1], q = b[1]; return p.startsWith(q) || q.startsWith(p);
+  }
+  function twoPages(k1, k2){
+    try{ if(!/^https?:/i.test(k1 || '') || !/^https?:/i.test(k2 || '')) return false;
+      const u = new URL(k1), v = new URL(k2), h = x => x.hostname.replace(/^www\./, '');
+      return h(u) === h(v) && u.pathname.replace(/\/+$/, '') !== v.pathname.replace(/\/+$/, ''); }catch(e){ return false; }
+  }
+  window.__illuSameNm = sameNm;
+  function workOf(k, nm, ag){
+    const m = info(k); nm = nm || m.nm; ag = ag || m.ag;
+    const c = bookersOf(k, nm, ag).find(x => x.by !== me()); if(!c) return null;
+    let them = ''; try{ const l = (c.em && c.em.list) || []; const e = l.slice().sort((p, q) => String(q.dt).localeCompare(String(p.dt)))[0]; if(e) them = e.dir === 'in' ? (e.name || e.addr || '') : ''; }catch(e){}
+    return {c, by: c.by, who: pname(c.by), what: c.st === 'done' ? 'booked' : 'booking', since: (() => { const d = new Date(c.at || ''); return isNaN(d) ? '' : d.toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short'}); })(), them};
+  }
+  window.__illuWorkOf = workOf;
+  /* 1.2.170: liked by someone on the team AND her booking card is in progress -> the purple ring on her card */
+  window.__illuBkRing = (k, nm, ag) => {
+    if(!k) return null;
+    let liked = false; try{ for(const [, m] of FAV) if(m && m.has && m.has(k)){ liked = true; break; } }catch(e){}
+    if(!liked) return null;
+    const c = bookersOf(k, nm || '', ag || '').find(x => x.st === 'proc' || !x.st); if(!c) return null;
+    let st = ''; try{ st = window.__illuBkStage ? window.__illuBkStage(c) : ''; }catch(e){}
+    return {who: pname(c.by), st};
+  };
+  /* two of us on the same model: her booking card in one person's charge while another sent her to the Team Vote, or two
+     booking cards of the same girl in different hands */
+  window.__illuOverlaps = () => {
+    const out = [], seen = new Set(); let all = []; try{ all = [...BOOK.values()].filter(c => c && c.st === 'proc' && c.by); }catch(e){}
+    for(const c of all){
+      const others = bookersOf(c.k, c.nm, c.ag).filter(x => x !== c && x.by !== c.by && x.st === 'proc');
+      for(const o of others){ const key = [c.id, o.id].sort().join('|'); if(seen.has(key)) continue; seen.add(key); out.push({nm: c.nm, ag: c.ag, a: c, b: o, people: [c.by, o.by], why: 'two booking cards'}); }
+      if(c.k){ const v = onVote(c.k); if(v && v.by && v.by !== c.by){ const key = c.id + '|vote'; if(!seen.has(key)){ seen.add(key); out.push({nm: c.nm, ag: c.ag, a: c, people: [c.by, v.by], why: 'vote'}); } } }
+    }
+    return out;
+  };
+  const WK = {k: '', go: null};
+  function workAsk(k, w, go, verb){
+    WK.k = k; WK.go = go;
+    let box = document.getElementById('illuwk'); if(!box){ box = document.createElement('div'); box.id = 'illuwk'; document.body.appendChild(box); }
+    box.innerHTML = '<div class="wkveil" data-wkx></div><div class="wkdlg" role="dialog" aria-modal="true"><h4>' + H(L(w.who + ' is already working on ' + (w.c.nm || 'her'), w.who + '님이 이미 ' + (w.c.nm || '') + ' 작업 중입니다')) + '</h4>' +
+      '<p>' + H(L((w.what === 'booked' ? 'Booked' : 'Booking card') + ' since ' + w.since + (w.them ? ' · talking to ' + w.them : '') + ' at ' + (w.c.ag || 'her agency') + '.', (w.what === 'booked' ? '부킹 완료' : '부킹 카드') + ' · ' + w.since + (w.them ? ' · ' + w.them + '와 연락 중' : '') + ' · ' + (w.c.ag || ''))) + '</p>' +
+      '<div class="wkb"><button type="button" class="wkp" data-wkopen>' + H(L('Open her booking card', '부킹 카드 열기')) + '</button><button type="button" data-wkmsg>' + H(L('Message ' + w.who, w.who + '님에게 메시지')) + '</button><button type="button" class="wkm" data-wkgo>' + H(L(verb + ' anyway', '그래도 ' + verb)) + '</button></div>' +
+      '<small>' + H(L('"' + verb + ' anyway" lets ' + w.who + ' know too, so nobody writes twice without knowing.', '그래도 진행하면 ' + w.who + '님에게도 알립니다.')) + '</small></div>';
+    box.hidden = false; try{ box.querySelector('[data-wkopen]').focus(); }catch(e){}
+  }
+  document.addEventListener('click', e => {
+    const box = document.getElementById('illuwk'); if(!box || box.hidden || !box.contains(e.target)) return;
+    const w = workOf(WK.k);
+    if(e.target.closest('[data-wkx]')){ box.hidden = true; return; }
+    if(e.target.closest('[data-wkopen]')){ box.hidden = true; try{ if(w) bvOpenFor(w.c.id); }catch(er){} return; }
+    if(e.target.closest('[data-wkmsg]')){ box.hidden = true; try{ if(window.__illuChatTo) window.__illuChatTo(w.by, (w.c.nm || '') + ' — '); else if(window.__illuGo) window.__illuGo('chat'); }catch(er){} return; }
+    if(e.target.closest('[data-wkgo]')){ box.hidden = true; const go = WK.go; WK.go = null; try{ if(w) save('wknote/' + hash(WK.k) + '-' + Date.now().toString(36), {k: WK.k, nm: w.c.nm || '', to: w.by, by: me(), at: nowIso(), bid: w.c.id}); }catch(er){} if(go) go(); }
+  }, true);
+  document.addEventListener('keydown', e => { const box = document.getElementById('illuwk'); if(e.key === 'Escape' && box && !box.hidden) box.hidden = true; });
+  function sendVote(k, about, sure){
     if(!signedIn()) return;
     if(onVote(k)){ say(L('She is on the Team Vote already.', '이미 팀 투표에 있습니다.')); return; }
+    if(!sure){ const w = workOf(k, about && about.nm, about && about.ag); if(w){ workAsk(k, w, () => sendVote(k, about, true), L('Send to Team Vote', '팀 투표로 보내기')); return; } }
     const h = hash(k), m = info(k), was = OPEN.get(h);
     const o = {k, nm: (about && about.nm) || m.nm || (was && was.nm) || '', ag: m.ag || (about && about.ag) || (was && was.ag) || '', href: m.href || '', by: me(), at: nowIso(), voters: people(), base: lastRound(k) + 1};
     OPEN.set(h, o); save('vopen/' + h, o); changed();
@@ -385,8 +497,8 @@
   }
   function sendBook(k, about){
     if(!signedIn()) return;
-    let c = null; try{ c = bkForKey(k); }catch(e){}
-    if(c){ say(L((c.nm || 'She') + ' is on the Booking board already.', (c.nm || '') + ' — 이미 부킹 보드에 있습니다.')); return; }
+    let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){}
+    if(c){ if(c.by && c.by !== me()){ const w = workOf(k); if(w){ workAsk(k, w, null, L('Open', '열기')); const g = document.querySelector('#illuwk [data-wkgo]'); if(g) g.hidden = true; return; } } say(L((c.nm || 'She') + ' is on the Booking board already.', (c.nm || '') + ' — 이미 부킹 보드에 있습니다.')); return; }
     const i = info(k), a = about || {};
     try{ c = bookFromModel(k, a.nm || i.nm || '', a.ag || i.ag || '', a.city || i.city || '', a.country || i.country || ''); }catch(e){ console.error(e); }
     if(!c) return;
@@ -410,16 +522,16 @@
     return {age: fromDob !== '' && fromDob !== 'undefined' ? fromDob : typed, dob, typed, dobTxt};
   }
   window.__illuSetAge = (k, age, dob) => { if(!k) return; age = String(age || '').replace(/[^\d]/g, '').slice(0, 3); dob = String(dob || '').trim(); if(!age && !dob) return;
-    let c = null; try{ c = bkForKey(k); }catch(e){} if(c){ c.age = age; c.dob = dob; saveBook(c.id, true); changed(); } else savePre(k, {age, dob}); };
+    let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){} if(c){ c.age = age; c.dob = dob; saveBook(c.id, true); changed(); } else savePre(k, {age, dob}); };
   /* Enter in either box saves (the editor is a form; Save is its submit button) */
   document.addEventListener('submit', e => { const f = e.target; if(!f || !f.matches || !f.matches('form[data-pnagef]')) return; e.preventDefault(); const b = f.querySelector('[data-pnageok]'); if(b) b.click(); }, true);
-  window.__illuAgeCell = k => { if(!k) return ''; let c = null; try{ c = bkForKey(k); }catch(e){} const A = ageInfo(k, c), lock = !!A.dobTxt;
+  window.__illuAgeCell = k => { if(!k) return ''; let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){} const A = ageInfo(k, c), lock = !!A.dobTxt;
     return '<span class="mxc mxage" data-f="age"><i>' + L('AGE', '나이') + '</i><input class="mxi mxagei" type="text" inputmode="numeric" maxlength="3" data-agek="' + H(k) + '" value="' + H(A.age) + '" placeholder="–" aria-label="' + H(L('Age', '나이')) + '"' +
       (lock ? ' readonly title="' + H(L('Born ', '생년월일 ') + A.dobTxt + L(' — change the date of birth on her card', ' — 카드에서 생년월일을 바꾸세요')) + '"' : ' title="' + H(L('Her age — type it here', '나이 — 여기에 입력')) + '"') + (signedIn() ? '' : ' disabled') + '></span>'; };
   document.addEventListener('change', e => { const i = e.target; if(!i || !i.matches || !i.matches('.mxagei') || i.readOnly) return;
     const k = i.dataset.agek, v = i.value.replace(/[^\d]/g, '').slice(0, 3); let c = null; try{ c = bkForKey(k); }catch(er){}
     if(c){ c.age = v; saveBook(c.id, true); changed(); } else savePre(k, {age: v}); });
-  window.__illuAgeOf = k => { let c = null; try{ c = bkForKey(k); }catch(e){} return ageInfo(k, c).age; };
+  window.__illuAgeOf = k => { let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){} return ageInfo(k, c).age; };
   /* a link's buttons: Get files (the link's book / snaps / videos into her Booking folder - 1.2.129, an option, never automatic) and remove */
   function linkBtns(k, n, c){
     const can = (() => { try{ return !!SIGNED(); }catch(e){ return false; } })();
@@ -429,7 +541,7 @@
     return b;
   }
   function getFilesFor(k, u){
-    let c = null; try{ c = bkForKey(k); }catch(e){}
+    let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){}
     if(!c) return;
     if(!(window.illu && illu.getFilesPlan) || !window.__illuGetFiles){ say(L('Getting files works in the ILLUMENOCTIS program on a computer.', '파일 받기는 컴퓨터의 ILLUMENOCTIS 프로그램에서 됩니다.')); return; }
     window.__illuGetFiles(u, c.id);
@@ -443,6 +555,10 @@
     try{ if(typeof agIndex === 'function') agIndex(); }catch(e){}
     try{ i = (typeof keyInfo === 'function' && keyInfo(k)) || {}; }catch(e){}
     try{ f = (typeof litFacts === 'function' && litFacts(Object.assign({key: k}, i))) || {}; }catch(e){}
+    /* 1.2.158: measurements typed on her booking card fill what the Directory does not have */
+    try{ const bc = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : (typeof bkForKey === 'function' ? bkForKey(k) : null);
+      if(bc){ const fb = (typeof bkFacts === 'function' && bkFacts(bc)) || {}; f = Object.assign({}, f); for(const x of ['ht', 'bu', 'wa', 'hp', 'eu', 'us', 'wt']) if(f[x] == null && fb[x] != null) f[x] = fb[x];
+        if(!i.name && !i.nm) i = Object.assign({nm: bc.nm, ag: bc.ag, country: bc.nat || ''}, i); } }catch(e){}
     return {i, f};
   }
   const num = v => v == null || v === '' || isNaN(+v) ? null : Math.round(+v * 10) / 10;
@@ -650,6 +766,23 @@
     if(t.dataset.momsave != null){ const v = (box.querySelector('[data-mxin="mom-ag"]') || {}).value || ''; if(!v.trim()) return; let dom = ''; try{ const hit = AG.find(x => lc(x.name) === lc(v)); dom = hit ? hit.domain || '' : ''; }catch(err){} MOMED.delete(k); setMom(k, v.trim(), dom); return; }
     if(t.dataset.momclr != null){ MOMED.delete(k); setMom(k, '', ''); }
   }, true);
+  /* 1.2.168 (user, 13 Nov 2026): like the agency from the side panel -> it goes to Favorite Agencies (the same ★ list as the Directory / Atlas) */
+  function agDomOf(a, ag, href){
+    let A = []; try{ A = AG || []; }catch(e){}
+    const lc = x => String(x || '').trim().toLowerCase().replace(/^www\./, '');
+    const has = d => d && A.some(x => lc(x.domain) === d);
+    if(has(lc(a.agRef))) return lc(a.agRef);
+    if(ag){ const n = lc(ag); const x = A.find(x => lc(x.name) === n); if(x) return lc(x.domain); }
+    try{ const h = lc(new URL(href).hostname); const x = A.find(x => h === lc(x.domain) || h.endsWith('.' + lc(x.domain))); if(x) return lc(x.domain); }catch(e){}
+    return '';
+  }
+  window.__illuAgDomOf = agDomOf;
+  function agFavBtn(a, ag, href){
+    if(!window.ATLFAV) return ''; const d = agDomOf(a, ag, href); if(!d) return '';
+    const on = ATLFAV.has(d);
+    return '<button type="button" class="pnagfav' + (on ? ' on' : '') + '" data-pnagfav="' + H(d) + '" data-pnagnm="' + H(ag) + '" aria-pressed="' + on + '" aria-label="' + H(on ? L(ag + ' is in Favorite Agencies — click to remove', ag + ' 즐겨찾는 에이전시에 있음 — 누르면 뺍니다') : L('Add ' + ag + ' to Favorite Agencies', ag + ' 즐겨찾는 에이전시에 추가')) + '" title="' + H(on ? L('In Favorite Agencies — click to remove', '즐겨찾는 에이전시에 있음 — 누르면 뺍니다') : L('Add this agency to Favorite Agencies', '이 에이전시를 즐겨찾는 에이전시에 추가')) + '">' +
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z"/></svg></button>';
+  }
   function pnHead(k, a, c, fav){
     const {i, f} = a.facts || factsOf(k);
     const F = Object.assign({}, f, a.f || {});
@@ -664,8 +797,11 @@
     const agH = ag ? (href ? '<a class="pnagl" href="' + H(href) + '" target="_blank" rel="noopener" title="' + H(L('Her page on the agency’s site', '에이전시 사이트의 모델 페이지')) + '">' + H(ag) + ' ↗</a>'
       : (a.agRef ? '<button type="button" class="pnagl" data-pnag="' + H(a.agRef) + '" title="' + H(L('Open this agency in the Directory', '디렉터리에서 이 에이전시 열기')) + '">' + H(ag) + ' ›</button>' : '<span class="pnagl">' + H(ag) + '</span>')) : '';
     const mom = (() => { try{ return window.__illuMother && window.__illuMother(k, ag); }catch(e){ return false; } })();
-    return '<div class="pnhd"><div class="pnth">' + pic + '</div><div class="pnhm"><h2>' + H(a.nm || i.nm || '') + '</h2>' +
-      '<div class="pnagr">' + agH + (mom ? '<span class="pnmom">' + L('Mother', '마더') + '</span>' : '') + '</div>' +
+    /* 1.2.168 (user, 13 Nov 2026): her name opens her page on the agency's site */
+    const pg = href || (/^https?:\/\//i.test(k || '') && !/instagram\.com/i.test(k) ? k : '');
+    const nmTxt = H(a.nm || i.nm || '');
+    return '<div class="pnhd"><div class="pnth">' + pic + '</div><div class="pnhm"><h2>' + (pg ? '<a class="pnnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(L('Open her page on the agency’s site', '에이전시 사이트에서 모델 페이지 열기')) + '">' + nmTxt + '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg></a>' : nmTxt) + '</h2>' +
+      '<div class="pnagr">' + agH + agFavBtn(a, ag, href) + (mom ? '<span class="pnmom">' + L('Mother', '마더') + '</span>' : '') + '</div>' +
       (meta ? '<p class="pnmeta">' + H(meta) + '</p>' : '') + momBox(k, a) + '</div>' +
       '<button type="button" class="pnfav' + (fav ? ' on' : '') + '" data-pnfav aria-pressed="' + fav + '" title="' + H(fav ? L('In My Favorites — click to remove', '내 즐겨찾기 — 누르면 뺍니다') : L('Add to My Favorites', '내 즐겨찾기에 추가')) + '">' + HEART + '</button></div>' +
       (a.readNote || '');
@@ -761,7 +897,7 @@
   const GFIELD = {gty: 'gty', amt: 'ctguar', mode: 'ctgmode', cgm: 'ctgm', jobs: 'ctjobs', days: 'ctdays', avf: 'avf'};
   function gSet(k, f, v){
     if(!signedIn()) return;
-    let c = null; try{ c = bkForKey(k); }catch(e){}
+    let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){}
     const before = gOf(k, c); if(String(before[f] || '') === String(v || '')) return;
     const nm = (c && c.nm) || info(k).nm || '';
     if(c){
@@ -792,7 +928,7 @@
     if(g.gty === 'no') rows += '<div class="gscell none"><small>' + L('Guarantee', '개런티') + '</small><span class="gsval">' + L('None. Nothing to fill in.', '없음. 입력할 것이 없습니다.') + '</span></div>';
     rows += cell(1, L('Stay', '체류'), inp('days', g.days, '–', ' inputmode="numeric" class="gsdays" style="width:' + (Math.max(2, (g.days || '–').length) + 0.6) + 'ch"') + '<span class="gsunit">' + L('days', '일') + '</span>',
       '<span class="gschips">' + ['60', '90'].map(d => '<button type="button" data-gdays="' + d + '" aria-pressed="' + (g.days === d) + '"' + dis + '>' + d + L(' days', '일') + '</button>').join('') + '</span>');
-    rows += cell(0, L('Available', '가능'), inp('avf', g.avf, L('e.g. mid-Dec or 15/12', '예: 12월 중순, 15/12'), ' maxlength="40"'), '<span class="gsestn">' + L('Rough estimate. Not in the contract.', '대략적인 예상. 계약서에는 들어가지 않습니다.') + '</span>', 'est');
+    rows += cell(0, L('Available', '가능'), inp('avf', g.avf, '', ' maxlength="40"'), '<span class="gsestn">' + L('Rough estimate. Not in the contract.', '대략적인 예상. 계약서에는 들어가지 않습니다.') + '</span>', 'est');
     let ex = '';
     if(!c){ const p = preOf(k) || {}; const bits = [p.age ? L('Age ', '나이 ') + p.age : '', p.entry ? L('Entry ', '입국 ') + p.entry : ''].filter(Boolean);
       if(bits.length || p.anote) ex = '<div class="pnkvx">' + (bits.length ? '<span>' + H(bits.join(' · ')) + '</span>' : '') + (p.anote ? '<p>' + H(p.anote) + '</p>' : '') + '</div>'; }
@@ -832,7 +968,7 @@
     else if(b.dataset.gmode) gSet(k, 'mode', b.dataset.gmode === 'month' ? 'month' : 'term');
     else gSet(k, 'days', b.dataset.gdays);
   }, true);
-  window.__illuGuar = {get: (k) => { let c = null; try{ c = bkForKey(k); }catch(e){} return gOf(k, c); }, set: gSet};
+  window.__illuGuar = {get: (k) => { let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){} return gOf(k, c); }, set: gSet};
   function pnAgency(k, a){
     const pills = [];
     if(a.nPhotos) pills.push('<span class="pnpill">' + H(L(a.nPhotos + ' photos', '사진 ' + a.nPhotos + '장')) + '</span>');
@@ -856,11 +992,11 @@
   function modelPanel(k, about){
     if(!k) return '';
     const can = signedIn(), a = about || {}, nm = a.nm || info(k).nm || L('her', '모델');
-    let c = null; try{ c = bkForKey(k); }catch(e){}
+    let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){}
     const st = stateOf(k), fav = myFav().has(k);
     const facts = factsOf(k), aa = Object.assign({facts}, a);
     return '<div class="mx pn pn2" data-mxk="' + H(k) + '" data-mxab="' + H(JSON.stringify({nm: a.nm || '', ag: a.ag || '', city: a.city || '', country: a.country || ''})) + '">' +
-      pnHead(k, aa, c, fav) + pnMeas(k, aa, c) + pnStatus(k, aa, c, st, can, nm) + pnGuar(k, c, can) + pnAgency(k, aa) + pnTabs(k, c, nm, can) + '</div>';
+      pnHead(k, aa, c, fav) + pnMeas(k, aa, c) + pnStatus(k, aa, c, st, can, nm) + pnGuar(k, c, can) + pnAgency(k, aa) + availSec(k, aa, can) + pnTabs(k, c, nm, can) + '</div>';
   }
   document.addEventListener('click', e => {
     const t = e.target.closest && e.target.closest('.mx [data-ptab],.mx [data-pedit]'); if(!t) return;
@@ -875,9 +1011,9 @@
   function extras(k, about){
     if(!k) return '';
     const can = signedIn(), a = about || {}, nm = a.nm || info(k).nm || L('her', '모델');
-    let c = null; try{ c = bkForKey(k); }catch(e){}
+    let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){}
     return '<div class="mx" data-mxk="' + H(k) + '" data-mxab="' + H(JSON.stringify({nm: a.nm || '', ag: a.ag || '', city: a.city || '', country: a.country || ''})) + '">' +
-      statusSec(k, a, c, stateOf(k), can, nm) + notesSec(k, nm, can) + linksSec(k, c, can) + '</div>';
+      statusSec(k, a, c, stateOf(k), can, nm) + availSec(k, a, can) + notesSec(k, nm, can) + linksSec(k, c, can) + '</div>';
   }
   window.__illuModelExtras = extras;
   /* 1.2.129: paint the Booking / Notes / Links block into any card's panel; what is being typed (a note, a link,
@@ -889,12 +1025,15 @@
     for(const x of keep){ const n = host.querySelector(x.sel); if(!n) continue; n.value = x.v; if(x.f){ try{ n.focus({preventScroll: true}); n.setSelectionRange(x.a, x.b); }catch(e){} } }
   };
   document.addEventListener('click', e => {
-    const t = e.target.closest && e.target.closest('.mx [data-pnage],.mx [data-pnagex],.mx [data-pnageok],.mx [data-pnv],.mx [data-pnfav],.mx [data-pnag],.mx [data-mxvote],.mx [data-mxget],.mx [data-mxsend],.mx [data-mxsendyes],.mx [data-mxsendno],.mx [data-gfyes],.mx [data-gfno],.mx [data-mxnote],.mx [data-mxlink],.mx [data-mxdel],.mx [data-mxopen]'); if(!t) return;
+    const t = e.target.closest && e.target.closest('.mx [data-pnage],.mx [data-pnagex],.mx [data-pnageok],.mx [data-pnv],.mx [data-pnfav],.mx [data-pnag],.mx [data-pnagfav],.mx [data-mxvote],.mx [data-mxget],.mx [data-mxsend],.mx [data-mxsendyes],.mx [data-mxsendno],.mx [data-gfyes],.mx [data-gfno],.mx [data-mxnote],.mx [data-mxlink],.mx [data-mxdel],.mx [data-mxopen]'); if(!t) return;
     e.preventDefault(); e.stopPropagation();
     const box = t.closest('.mx'), k = box.dataset.mxk, d = t.dataset;
     if(d.mxsend != null){ if(!signedIn()) return; MXASK = k; changed(); return; }
     if(d.pnv){ if(!signedIn()) return; const ab = (() => { try{ return JSON.parse(box.dataset.mxab || 'null'); }catch(err){ return null; } })(); cast(k, d.pnv, ab || {}); return; }
     if(d.pnfav != null){ const ab = (() => { try{ return JSON.parse(box.dataset.mxab || 'null'); }catch(err){ return null; } })(); toggleFav(k, ab || {}); return; }
+    if(d.pnagfav){ if(!signedIn() || !window.ATLFAV) return; const dom = d.pnagfav, nm = d.pnagnm || dom; const added = ATLFAV.toggle(dom);
+      try{ window.__illuFavAg && window.__illuFavAg.render && window.__illuFavAg.render(); }catch(err){} changed();
+      say(added ? L(nm + ' added to Favorite Agencies', nm + ' — 즐겨찾는 에이전시에 추가했습니다') : L(nm + ' removed from Favorite Agencies', nm + ' — 즐겨찾는 에이전시에서 뺐습니다'), () => { ATLFAV.toggle(dom); try{ window.__illuFavAg && window.__illuFavAg.render && window.__illuFavAg.render(); }catch(err){} changed(); }); return; }
     if(d.pnag){ if(window.__illuDirGoAg) window.__illuDirGoAg(d.pnag); return; }
     if(d.mxvote != null){ const ab = (() => { try{ return JSON.parse(box.dataset.mxab || 'null'); }catch(err){ return null; } })(); sendVote(k, ab); return; }
     if(d.mxget){ let c0 = null; try{ c0 = bkForKey(k); }catch(err){}
@@ -1146,7 +1285,7 @@
   }
   function det(k){
     const i = info(k), {f} = factsOf(k), g = f.g || '';
-    let c = null; try{ c = bkForKey(k); }catch(e){}
+    let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){}
     const mom = (() => { try{ return window.__illuMother && window.__illuMother(k, i.ag); }catch(e){ return false; } })();
     const v = (x, h) => { const n = parseFloat(x); const t = uLen(isNaN(n) ? x : (uL(h) === 'cm' ? Math.round(n) : n), h); return t == null ? '–' : H(t); };
     const sh = uShoe(f.eu, f.us, g);
@@ -1204,10 +1343,11 @@
     return '<span class="ivvf" title="' + H(tip) + '" aria-label="' + H(tip) + '">' + done.concat(wait).map(p => '<span class="ivwf' + (done.includes(p) ? '' : ' wait') + '">' + disc(p, 'xs') + '</span>').join('') + '</span>';
   }
   { const st = document.createElement('style'); st.textContent = `
-.ivst .ivvf{display:inline-flex!important;align-items:center;margin-left:6px;vertical-align:-3px;flex:none}
-.ivst:has(.ivvf){white-space:nowrap}
-.ivvf .ivwf{display:inline-flex;margin-left:-2px}.ivvf .ivwf:first-child{margin-left:0}
-.ivvf .ivdisc{position:static!important;inset:auto!important;margin:0!important;transform:none!important;width:15px!important;height:15px!important;font-size:7px!important;line-height:15px!important;box-shadow:0 0 0 1.5px #fff}
+/* 1.2.153 (user: "this part is overlapping"): faces side by side with a gap, never on top of each other; they go under the words when the card is narrow */
+.ivst:has(.ivvf){display:inline-flex;flex-wrap:wrap;align-items:center;column-gap:6px;row-gap:3px;white-space:normal;max-width:100%;box-sizing:border-box}
+.ivst .ivvf{display:inline-flex!important;align-items:center;gap:3px;margin-left:0;flex:none}
+.ivvf .ivwf{display:inline-flex;margin:0}
+.ivvf .ivdisc{position:static!important;inset:auto!important;margin:0!important;transform:none!important;width:15px!important;height:15px!important;font-size:7px!important;line-height:15px!important;box-shadow:none}
 .ivvf .ivwf.wait{opacity:.35;filter:grayscale(.6)}`; document.head.appendChild(st); }
   const capDisc = p => disc(p, 'xs');
   function add(id, label, render, count, title){
@@ -1344,6 +1484,139 @@
 .mfyes{color:#D2557A;font-size:16px}.mfno{color:#C9C0CD}
 .mfnone{font-size:13px;color:var(--mut,#8A8093);margin:6px 2px}
 @media (max-width:760px){.mfcols{grid-template-columns:1fr}.mfddb{min-width:0;width:100%}.mfdd{flex:1 1 100%}}`; document.head.appendChild(st); }
+  /* 1.2.152 (user, 12 Nov 2026): "a New Board called CURRENT/ON-STAY ... the models that are currently On-Stay".
+     A booking card is on stay when it carries stay {a: arrival 'YYYY-MM-DD', d: days} and today is inside it (or stay.on is
+     set by hand). Each card: photo, name, agency, figures, arrival · days · leaving · days left (a bar), and who is in charge.
+     The card opens her booking files (the same viewer as the Booking board). */
+  const stayDay = s2 => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s2 || '')); return m ? Date.UTC(+m[1], m[2] - 1, +m[3]) : NaN; };
+  const today0 = () => { const n = new Date(); return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()); };
+  function stayOf(c){
+    const st = c && c.stay; if(!st) return null;
+    /* 1.2.158 (user, 12 Nov 2026: "The E-Ticket is the actual arrival/departure date"): the flight dates on her card
+       (Arrival / Departure board) come first; the stay from the contract fills in what they do not say */
+    const dmy = v => { const m = String(v || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) : NaN; };
+    const fa = dmy(c.ind), fo = c.outtbd ? NaN : dmy(c.outd);
+    const a = !isNaN(fa) ? fa : stayDay(st.a);
+    if(isNaN(a) && !st.on) return null;
+    const d = !isNaN(fo) && !isNaN(a) && fo >= a ? Math.round((fo - a) / 864e5) + 1 : (+st.d || 0);
+    const end = !isNaN(a) && d ? a + (d - 1) * 864e5 : NaN, t = today0();
+    const on = st.on === true || (!isNaN(a) && t >= a && (isNaN(end) || t <= end));
+    const left = isNaN(end) ? null : Math.round((end - t) / 864e5), done = isNaN(a) ? null : Math.round((t - a) / 864e5) + 1;
+    return {a, d, end, on, left, done, up: !isNaN(a) && t < a};
+  }
+  const fmtD = ms => { if(isNaN(ms)) return '–'; const x = new Date(ms); const M = L(['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][x.getUTCMonth()], (x.getUTCMonth() + 1) + '월'); return isKO() ? M + ' ' + x.getUTCDate() + '일' : x.getUTCDate() + ' ' + M + ' ' + x.getUTCFullYear(); };
+  function stayCards(){ try{ return [...BOOK.values()].map(c => ({c, s: stayOf(c)})).filter(x => x.s && (x.s.on || x.s.up)); }catch(e){ return []; } }
+  window.__illuStayOf = stayOf;
+  add('stay', ['Current / On-Stay', '현재 / 체류 중'], () => {
+    const list = stayCards();
+    const who = VS.stwho || '';
+    const ppl = [...new Set(list.map(x => x.c.by).filter(Boolean))];
+    const shown = list.filter(x => !who || x.c.by === who).sort((p, q) => (p.s.up - q.s.up) || ((p.s.left == null ? 1e9 : p.s.left) - (q.s.left == null ? 1e9 : q.s.left)));
+    const nOn = list.filter(x => x.s.on).length, nUp = list.filter(x => x.s.up).length;
+    const head = '<div class="ivhead"><span class="ivbig">' + nOn + '</span><span class="ivkick">' + L('models on stay now', '명 체류 중') + '</span>' + (nUp ? '<span class="ivdot"></span><span class="ivkick">' + nUp + ' ' + L('arriving soon', '명 입국 예정') + '</span>' : '') + '<span class="ivsp"></span>' +
+      (ppl.length > 1 ? '<div class="ivseg"><button type="button" class="' + (!who ? 'on' : '') + '" data-ivset="stwho=">' + L('Everyone', '전체') + '</button>' + ppl.map(p => '<button type="button" class="' + (who === p ? 'on' : '') + '" data-ivset="stwho=' + H(p) + '">' + H(pname(p) || '?') + '</button>').join('') + '</div>' : '') + '</div>';
+    if(!shown.length) return head + empty(L('No one on stay', '체류 중인 모델 없음'), L('A booking card shows here from her arrival day to her last day. Set the arrival date and the days of stay on her booking card.', '부킹 카드에 입국일과 체류 일수를 넣으면 입국일부터 마지막 날까지 여기에 표시됩니다.'));
+    return head + '<div class="stgrid">' + shown.map(({c, s: st}) => {
+      let ph = ''; try{ ph = typeof bkPhoto === 'function' ? bkPhoto(c) : ''; }catch(e){}
+      if(!ph){ try{ ph = (window.__illuMatCover && (window.__illuMatCover(c.k || ('bid:' + c.id)) || (c.k ? window.__illuMatCover('bid:' + c.id) : ''))) || ''; }catch(e){} }
+      if(ph && /^https?:/i.test(ph) && window.illu && window.illu.modelPhotos && !window.illu.web) ph = 'illuimg://p/' + encodeURIComponent(ph) + '?r=' + encodeURIComponent(c.k || '') + '&w=600';
+      const pct = st.d && st.done != null ? Math.max(0, Math.min(100, Math.round(st.done / st.d * 100))) : 0;
+      const n1 = v => v == null || v === '' || isNaN(+v) ? '–' : String(Math.round(+v * 10) / 10);
+      const late = st.left != null && st.left <= 14 && st.on;
+      return '<article class="stc' + (st.up ? ' up' : '') + '" data-stopen="' + H(c.id) + '" role="button" tabindex="0" title="' + H(L('Open her booking files', '부킹 파일 열기')) + '">' +
+        '<div class="stph" data-stph="' + H(c.id) + '" title="' + H(L('Her photos — pick the card photo here', '사진 보기 — 여기서 카드 사진을 고를 수 있어요')) + '">' + (ph ? '<img src="' + H(ph) + '" alt="" loading="lazy" decoding="async">' : '<span class="stnoph">' + H((c.nm || '?').charAt(0)) + '</span>') +
+          '<span class="stbadge ' + (st.up ? 'up' : 'on') + '">' + (st.up ? L('Arriving', '입국 예정') : L('On stay', '체류 중')) + '</span>' +
+          (c.by ? '<span class="stby" title="' + H(L('In charge: ', '담당: ') + (pname(c.by) || '')) + '">' + disc(c.by, 'xs') + '</span>' : '') +
+          '<b class="stnm">' + H(c.nm || '') + '</b></div>' +
+        '<div class="stbd"><span class="stag">' + (() => { let ref = c.agd || ''; try{ if(!ref && typeof AG !== 'undefined'){ const lc = x => String(x || '').trim().toLowerCase(); const m = AG.find(x => lc(x.name) === lc(c.ag)); if(m) ref = m.domain || m.name; } }catch(e){} return ref ? '<a href="#" class="stagl" data-stag="' + H(ref) + '" title="' + H(L('Open this agency in the Directory', '디렉터리에서 이 에이전시 열기')) + '">' + H(c.ag || '') + '</a>' : H(c.ag || ''); })() + (c.nat ? ' · ' + H(c.nat) : '') + '</span>' +
+          '<span class="stms"><b>' + n1(c.ht) + '</b> · ' + n1(c.bu) + ' / ' + n1(c.wa) + ' / ' + n1(c.hp) + ' · ' + n1(c.eu) + ' EU</span>' +
+          '<div class="stdt"><span><i>' + L('Arrived', '입국') + '</i>' + H(fmtD(st.a)) + '</span><span><i>' + L('Stay', '체류') + '</i>' + (st.d ? st.d + L(' days', '일') : '–') + '</span><span><i>' + L('Leaves', '출국') + '</i>' + H(fmtD(st.end)) + '</span></div>' +
+          '<div class="stbar"><i style="width:' + pct + '%"></i></div>' +
+          '<span class="stleft' + (late ? ' late' : '') + '">' + (st.up ? L('Arrives in ' + Math.round((st.a - today0()) / 864e5) + ' days', Math.round((st.a - today0()) / 864e5) + '일 후 입국') : st.left == null ? '' : st.left === 0 ? L('Last day today', '오늘 마지막 날') : L(st.left + ' days left · day ' + st.done + ' of ' + st.d, st.left + '일 남음 · ' + st.d + '일 중 ' + st.done + '일째')) + '</span>' +
+          '<button type="button" class="stwho" data-bkhand="' + H(c.id) + '" title="' + H(L('Hand this card to someone else', '다른 사람에게 넘기기')) + '">' + (c.by ? L('In charge: ', '담당: ') + '<b>' + H(pname(c.by) || '') + '</b>' : L('No one in charge', '담당자 없음')) + ' ▾</button>' +
+        '</div></article>';
+    }).join('') + '</div>';
+  }, () => stayCards().filter(x => x.s.on).length || '', ['Current / On-Stay', '현재 / 체류 중']);
+  document.addEventListener('click', e => { const g = e.target.closest && e.target.closest('[data-stag]'); if(!g) return; e.preventDefault(); e.stopPropagation(); try{ if(window.__illuDirGoAg) window.__illuDirGoAg(g.dataset.stag); }catch(er){} }, true);
+  /* 1.2.155: her photo opens her photos (her folder + her agency page), where the card photo can be changed */
+  document.addEventListener('click', e => { const p = e.target.closest && e.target.closest('[data-stph]'); if(!p || e.target.closest('[data-stag]')) return; e.preventDefault(); e.stopPropagation();
+    let c = null; try{ c = BOOK.get(p.dataset.stph); }catch(er){} if(!c) return; const im = p.querySelector('img');
+    try{ window.illuPhotoFull(im ? (im.currentSrc || im.src) : '', c.nm || '', c.k || '', c.k || ('bid:' + c.id), c.id); }catch(er){} }, true);
+  document.addEventListener('click', e => { const a = e.target.closest && e.target.closest('[data-stopen]'); if(!a) return; e.preventDefault(); try{ if(typeof bvOpenFor === 'function') bvOpenFor(a.dataset.stopen); }catch(er){} });
+  /* 1.2.156 (user, 12 Nov 2026: "On Today's Board, I want a sub board of Current/On-Stay that is also in the Opus Board"):
+     the same cards, small, in one row on Today - leaving soonest first; the whole board one click away */
+  window.__illuStayStrip = () => {
+    const list = stayCards(); if(!list.length) return '';
+    const sh = list.slice().sort((p, q) => (p.s.up - q.s.up) || ((p.s.left == null ? 1e9 : p.s.left) - (q.s.left == null ? 1e9 : q.s.left)));
+    const nOn = list.filter(x => x.s.on).length, nUp = list.length - nOn;
+    return '<section class="shstay"><div class="shsth"><h3>' + L('Current / On-Stay', '현재 / 체류 중') + '</h3><span class="shtag g">' + nOn + '</span>' + (nUp ? '<span class="shmut sm">+ ' + nUp + ' ' + L('arriving', '입국 예정') + '</span>' : '') + '<button type="button" class="shlink" data-shgo="stay" style="margin-left:auto">' + L('Board', '보드') + ' →</button></div>' +
+      '<div class="shstrow">' + sh.map(({c, s: st}) => {
+        let ph = ''; try{ ph = typeof bkPhoto === 'function' ? bkPhoto(c) : ''; }catch(e){}
+        if(!ph){ try{ ph = (window.__illuMatCover && (window.__illuMatCover(c.k || ('bid:' + c.id)) || (c.k ? window.__illuMatCover('bid:' + c.id) : ''))) || ''; }catch(e){} }
+        if(ph && /^https?:/i.test(ph) && window.illu && window.illu.modelPhotos && !window.illu.web) ph = 'illuimg://p/' + encodeURIComponent(ph) + '?r=' + encodeURIComponent(c.k || '') + '&w=300';
+        const pct = st.d && st.done != null ? Math.max(0, Math.min(100, Math.round(st.done / st.d * 100))) : 0, late = st.on && st.left != null && st.left <= 14;
+        const t = st.up ? L('in ' + Math.round((st.a - today0()) / 864e5) + 'd', Math.round((st.a - today0()) / 864e5) + '일 후') : st.left === 0 ? L('last day', '마지막 날') : L(st.left + 'd left', st.left + '일 남음');
+        return '<button type="button" class="shstc' + (st.up ? ' up' : '') + (late ? ' late' : '') + '" data-stopen="' + H(c.id) + '" title="' + H((c.nm || '') + ' · ' + (c.ag || '') + (c.by ? ' · ' + L('In charge: ', '담당: ') + (pname(c.by) || '') : '')) + '">' +
+          '<span class="shstp">' + (ph ? '<img src="' + H(ph) + '" alt="" loading="lazy" decoding="async" data-shini="' + H((c.nm || '?').charAt(0)) + '">' : '<i>' + H((c.nm || '?').charAt(0)) + '</i>') + (c.by ? '<span class="shstby">' + disc(c.by, 'xs') + '</span>' : '') + '</span>' +
+          '<b>' + H(c.nm || '') + '</b><small>' + H(c.ag || '') + '</small><span class="shstb"><i style="width:' + (st.up ? 0 : pct) + '%"></i></span><em>' + H(t) + '</em></button>';
+      }).join('') + '</div></section>';
+  };
+  { const st2 = document.createElement('style'); st2.textContent = `
+.shstay{margin-top:16px;background:var(--card,#fff);border:1px solid var(--line,#E7E2EC);border-radius:16px;padding:12px 14px 14px}
+.shsth{display:flex;align-items:center;gap:8px;margin-bottom:10px}.shsth h3{margin:0;font-size:14px}
+.shstay .shtag.g{background:#E3F4EA;color:#1F7A47;border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:700}
+.shstrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px}
+.shstc{border:0;background:none;padding:0;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px;min-width:0;font:inherit;color:inherit}
+.shstp{position:relative;display:block;width:100%;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:#E9E3EC}
+.shstp img{width:100%;height:100%;object-fit:cover;object-position:50% 20%;display:block}.shstp i{display:grid;place-items:center;height:100%;font-style:normal;font-weight:700;color:#9A8FA3;font-size:22px}
+.shstby{position:absolute;right:5px;top:5px}
+.shstc b{font-size:12px;letter-spacing:.02em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:4px}
+.shstc small{font-size:10.5px;color:var(--mut,#6D6577);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shstb{display:block;height:4px;border-radius:2px;background:#EEE9F1;overflow:hidden;margin-top:3px}.shstb i{display:block;height:100%;background:#5A2C57}
+.shstc em{font-style:normal;font-size:11px;font-weight:600;color:#3A3340}.shstc.late em{color:#B4532A}.shstc.up em{color:#2E7DB0}
+.shstc:hover .shstp img{filter:brightness(1.05)}`; document.head.appendChild(st2); }
+  document.addEventListener('keydown', e => { if(e.key !== 'Enter') return; const a = e.target.closest && e.target.closest('[data-stopen]'); if(!a) return; e.preventDefault(); try{ if(typeof bvOpenFor === 'function') bvOpenFor(a.dataset.stopen); }catch(er){} });
+  { const st = document.createElement('style'); st.textContent = `
+.stgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
+.stc{background:var(--surf,#fff);border:1px solid var(--line,#E7E2EC);border-radius:16px;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;box-shadow:0 10px 26px -20px rgba(40,20,50,.4)}
+.stc:hover{border-color:#C9B6CB}
+.stc.up{opacity:.85}
+.stph{position:relative;height:300px;background:#1a141d;cursor:zoom-in}
+.stph img{width:100%;height:100%;object-fit:cover;object-position:50% 20%;display:block}
+.stnoph{display:grid;place-items:center;height:100%;font-size:54px;font-weight:700;color:rgba(255,255,255,.3)}
+.stph::after{content:"";position:absolute;left:0;right:0;bottom:0;height:90px;background:linear-gradient(rgba(12,8,16,0),rgba(12,8,16,.75));pointer-events:none}
+.stnm{position:absolute;left:12px;bottom:10px;z-index:1;color:#fff;font-size:16px;letter-spacing:.03em;text-transform:uppercase}
+.stbadge{position:absolute;left:10px;top:10px;z-index:1;font-size:10.5px;font-weight:800;letter-spacing:.05em;border-radius:999px;padding:3px 9px;text-transform:uppercase}
+.stbadge.on{background:#2E9E5B;color:#fff}.stbadge.up{background:#FFF4E5;color:#9A5B12}
+.stby{position:absolute;right:10px;top:10px;z-index:1}
+.stby .ivdisc{box-shadow:0 0 0 2px #fff}
+.stbd{padding:10px 12px 12px;display:flex;flex-direction:column;gap:6px;font-size:12.5px}
+.stagl{color:inherit;text-decoration:none}.stagl:hover{text-decoration:underline}
+.stag{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--acc,#5A2C57);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stms{color:var(--ink2,#3A3340)}
+.stdt{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;border:1px solid var(--line,#EEE9F1);border-radius:10px;padding:6px 8px}
+.stdt span{display:flex;flex-direction:column;font-weight:600;font-size:12px}
+.stdt i{font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--mut,#8A8093)}
+.stbar{height:6px;border-radius:3px;background:var(--surf2,#EFEAF2);overflow:hidden}
+.stbar i{display:block;height:100%;background:var(--acc,#5A2C57);border-radius:3px}
+.stleft{font-weight:600;color:var(--ink2,#3A3340)}.stleft.late{color:#B02F48}
+.stwho{color:var(--mut,#6D6577);font-size:12px;border:0;background:none;padding:2px 4px;border-radius:6px;cursor:pointer;font-family:inherit;text-align:left}.stwho:hover{background:rgba(90,44,87,.07)}
+.avsec .avbs{display:flex;gap:6px;flex-wrap:wrap}.avsec .avb{border:1px solid var(--line,#E1D9E6);background:var(--surf,#fff);color:inherit;border-radius:999px;padding:5px 11px;font:600 12px inherit;cursor:pointer}
+.avsec .avb.on.no,.avsec .avb.on.nokr{background:#A3283F;border-color:#A3283F;color:#fff}.avsec .avb.on.later{background:#C97916;border-color:#C97916;color:#fff}.avsec .avb.clr{color:#2E7D4F}
+.avnow{border-radius:10px;padding:8px 10px;margin:4px 0 8px;display:flex;flex-direction:column;gap:2px;background:#FBECEF;color:#6E1A2C}.avnow.later{background:#FDF1E1;color:#7A4A09}.avnow small{opacity:.8}
+.aved{display:flex;flex-direction:column;gap:6px}.aved input{border:1px solid var(--line,#E1D9E6);border-radius:8px;padding:7px 9px;font:inherit;background:var(--surf,#fff);color:inherit}
+.avcap{border-radius:10px;padding:7px 9px;margin-top:6px;display:flex;flex-direction:column;gap:2px;background:#FBECEF;color:#6E1A2C;font-size:12px}.avcap.later{background:#FDF1E1;color:#7A4A09}
+/* 1.2.169 (user, 13 Nov 2026: "is there anything we can do to make the cards all the same size?"): on the Unavailable / On hold
+   board every card is as tall as the tallest in its row, the agency's note sits at the same place under each one, 3 lines at most */
+.ivunav{grid-auto-rows:1fr}.ivunav>.ivcw{height:100%}.ivunav>.ivcw>:first-child{flex:1 1 auto;display:flex;flex-direction:column}
+.ivunav>.ivcw>.avcap{flex:none;height:96px;overflow:hidden;margin-top:0}
+.ivunav>.ivcw>.avcap>*{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}.ivunav>.ivcw>.avcap>span,.ivunav>.ivcw>.avcap>q,.ivunav>.ivcw>.avcap>i{-webkit-line-clamp:2}.ivunav>.ivcw>.avcap>small{-webkit-line-clamp:1}.avcap small{opacity:.8}
+#illuwk{position:fixed;inset:0;z-index:9500;display:grid;place-items:center}#illuwk[hidden]{display:none}
+#illuwk .wkveil{position:absolute;inset:0;background:rgba(20,12,24,.35)}
+#illuwk .wkdlg{position:relative;width:min(440px,calc(100vw - 32px));background:var(--surf,#fff);color:var(--ink,#211C26);border-radius:14px;box-shadow:0 24px 60px -20px rgba(20,10,30,.55);padding:16px;display:flex;flex-direction:column;gap:9px}
+#illuwk h4{margin:0;font-size:15px}#illuwk p{margin:0;line-height:1.5;color:var(--ink,#3A3340)}#illuwk small{color:var(--mut,#6D6577);font-size:11.5px}
+#illuwk .wkb{display:flex;gap:6px;flex-wrap:wrap}#illuwk .wkb button{border:1px solid var(--line,#E1D9E6);background:var(--surf,#fff);color:inherit;border-radius:999px;padding:7px 13px;font:600 12.5px inherit;cursor:pointer}
+#illuwk .wkb .wkp{background:#5A2C57;border-color:#5A2C57;color:#fff}#illuwk .wkb .wkm{color:var(--mut,#6D6577)}.stwho b{color:var(--ink,#211C26)}`; document.head.appendChild(st); }
   add('mfav', ['Member Favorites', '멤버 즐겨찾기'], () => {
     let list = memberFavs();
     const multi = list.filter(e => e.who.length > 1).length;
@@ -1372,7 +1645,7 @@
   function votedCap(st){
     const v = st.mine;
     return '<div class="ivcap ivvc"><span class="ivst ' + (v === 'g' ? 'appr' : 'cxl') + '">' + (v === 'g' ? L('You voted Go', '내 투표: 찬성') : L('You voted Pass', '내 투표: 반대')) + '</span>' +
-      (st.open ? ' ' + stPill(st.k) : '') + '</div>' + (st.open ? '<div class="ivcap ivmut sm">' + L('Changed your mind? Press the other circle until everyone has voted.', '마음이 바뀌면 모두 투표하기 전까지 다른 동그라미를 누르세요.') + '</div>' : '');
+      (st.open ? ' ' + stPill(st.k) : '') + '</div>' + ''   /* 1.2.153: the 'Changed your mind?' hint removed (user, 12 Nov 2026) */;
   }
   add('team', ['Team Vote', '팀 투표'], () => {
     const ppl = people(), pick = VS.cwho && ppl.includes(VS.cwho) ? VS.cwho : '';
@@ -1426,6 +1699,16 @@
       }).join('') + '</div>' : '<div class="ivempty sm">' + L('No ties to break. When a vote ends level, the card comes here for the team to decide together.', '동점 투표가 없습니다. 투표가 동점으로 끝나면 팀이 함께 정하도록 여기로 옵니다.') + '</div>');
   }, () => ties().length || '');
   /* Cancelled */
+  /* 1.2.157 (approved demo): one board, sorted inside by the reason */
+  add('unav', ['Unavailable / On hold', '불가 / 보류'], () => {
+    const all = [...AV.values()].filter(v => v.t && AVT[v.t]);
+    const cat = ['all', 'no', 'nokr', 'later'].includes(VS.avc) ? VS.avc : 'all';
+    const list = all.filter(v => cat === 'all' || v.t === cat).sort((p, q) => String(q.at).localeCompare(String(p.at)));
+    const chipA = (k2, en, ko) => { const n = all.filter(v => k2 === 'all' || v.t === k2).length; return '<button type="button" class="' + (cat === k2 ? 'on' : '') + '" data-ivset="avc=' + k2 + '">' + L(en, ko) + ' · ' + n + '</button>'; };
+    return '<div class="ivhead"><div class="ivseg">' + chipA('all', 'All', '전체') + chipA('no', 'Not available', '불가') + chipA('nokr', 'Not for Korea', '한국 불가') + chipA('later', 'On hold', '보류') + '</div><span class="ivsp"></span><span class="ivkick">' + H(cat === 'later' ? L('Not now, but a chance later — with the date to ask again', '지금은 안 되지만 나중에 가능 — 다시 물어볼 날짜와 함께') : cat === 'nokr' ? L('The agency will not place her in Korea', '에이전시가 한국에는 보내지 않습니다') : cat === 'no' ? L('Not available at all', '전혀 불가') : L('Every model an agency said no or not now to', '에이전시가 불가 또는 보류라고 한 모델')) + '</span></div>' +
+      (list.length ? '<div class="ivgrid ivtv ivunav">' + list.map(v => '<div class="ivcw">' + (info(v.k).nm ? mcard(v.k) : (() => { try{ return (window.__illuCard({key: v.k, nm: v.nm || '', ag: v.ag || '', href: v.k}) || ''); }catch(e){ return ''; } })()) + '<div class="avcap ' + v.t + '" title="' + H(v.why || '') + '"><b>' + H(window.__illuAvailLabel(v)) + '</b>' + (v.why ? '<span>“' + H(v.why) + '”</span>' : '') + '<small>' + H([v.from, v.at ? new Date(v.at).toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short'}) : ''].filter(Boolean).join(' · ')) + '</small></div></div>').join('') + '</div>'
+        : empty(L('No one here', '없음'), L('When an agency says she is not available, not for Korea, or maybe later, open her card and set it under "Agency said". She shows here and is marked on every board.', '에이전시가 불가, 한국 불가, 보류라고 하면 카드의 "에이전시 답변"에서 설정하세요. 여기와 모든 보드에 표시됩니다.')));
+  }, () => [...AV.values()].filter(v => v.t && AVT[v.t]).length || '');
   add('cxl', ['Cancelled', '취소'], () => {
     const list = decided('cxl').filter(gw);
     return about('cxl', 'The team voted these out. Open a photo to see the result; reopen the vote if something changes.', '팀이 반대한 카드입니다. 사진을 열면 결과가 보이고, 사정이 바뀌면 투표를 다시 열 수 있습니다.') +
@@ -1513,13 +1796,14 @@
       });
       document.addEventListener('keydown', function esc(e){ if(e.key === 'Escape' && document.getElementById('ivshm')){ document.getElementById('ivshm').remove(); } });
     }
-    const ppl = people().filter(p => p !== me());
+    /* 1.2.165 (user: "I want my USER ID - Paul to be on the list too to be able to vote from a different device"): me too, first, marked (you) */
+    const ppl = people().slice().sort((a, b) => (a === me() ? -1 : b === me() ? 1 : 0));
     const open = allStates().filter(s => s.open);
     const waitFor = p => open.filter(s => s.voters.includes(p) && !voteOf(p, s.k, s.round)).length;
     m.innerHTML = '<div class="ivshp"><div class="ivshh"><b>' + L('Share the Team Vote', '팀 투표 링크 보내기') + '</b><button type="button" class="ivshx" data-shx aria-label="' + L('Close', '닫기') + '">×</button></div>' +
       '<p class="ivshd">' + L('One link to the Team Vote. They sign in with their own name and PIN (once on each phone) and vote on every card waiting for them, in any browser. Their votes show here at once.', '팀 투표 링크 하나입니다. 받은 사람은 자기 이름과 PIN으로 로그인(기기마다 한 번)한 뒤, 브라우저에서 자기 투표를 기다리는 모든 카드에 투표합니다. 투표는 바로 여기에 반영됩니다.') + '</p>' +
       '<div class="ivshl"><span>' + L('Who is it for?', '누구에게 보내나요?') + '</span><button type="button" class="ivshall' + (SHSEL.size ? '' : ' on') + '" data-shall>' + L('Everyone', '모두') + '</button></div>' +
-      '<div class="ivshps">' + ppl.map(p => { const w = waitFor(p); return '<label class="ivshpp"><input type="checkbox" data-shp="' + H(p) + '"' + (SHSEL.has(p) ? ' checked' : '') + '>' + capDisc(p) + '<b>' + H(pname(p)) + '</b><span class="ivshn' + (w ? ' wt' : '') + '">' + (w ? L(w + ' to vote', w + '장 대기') : L('nothing to vote', '대기 없음')) + '</span></label>'; }).join('') + '</div>' +
+      '<div class="ivshps">' + ppl.map(p => { const w = waitFor(p); return '<label class="ivshpp"><input type="checkbox" data-shp="' + H(p) + '"' + (SHSEL.has(p) ? ' checked' : '') + '>' + capDisc(p) + '<b>' + H(pname(p)) + (p === me() ? ' <small style="font-weight:500;opacity:.65">' + L('(you — for your other phone)', '(나 — 다른 기기용)') + '</small>' : '') + '</b><span class="ivshn' + (w ? ' wt' : '') + '">' + (w ? L(w + ' to vote', w + '장 대기') : L('nothing to vote', '대기 없음')) + '</span></label>'; }).join('') + '</div>' +
       '<div class="ivshu">' + H(shareUrl()) + '</div>' +
       '<div class="ivsha"><button type="button" class="ivbtn pri" data-shcopy="msg">' + L('Copy message + link', '메시지 + 링크 복사') + '</button><button type="button" class="ivbtn" data-shcopy="url">' + L('Copy link', '링크 복사') + '</button>' + (navigator.share ? '<button type="button" class="ivbtn" data-shnative>' + L('Share…', '공유…') + '</button>' : '') + '</div>' +
       '<p class="ivshd sm">' + L(SHSEL.size ? 'Only the people ticked are listed on the sign-in. ' : 'Everyone on the team is listed on the sign-in. ', SHSEL.size ? '선택한 사람만 로그인 목록에 나옵니다. ' : '팀 전원이 로그인 목록에 나옵니다. ') + L('Paste it into KakaoTalk, WhatsApp or a text message.', '카카오톡, 왓츠앱, 문자에 붙여 넣으세요.') + '</p>' +
@@ -1909,9 +2193,16 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .pnth button,.pn2 .pnth .picx,.pn2 .pnth .piccp{display:none!important}
 .pn2 .pnhm{min-width:0}
 .pn2 .pnhm h2{margin:0;font-size:18px;line-height:1.2;text-wrap:balance;overflow-wrap:anywhere}
-.pn2 .pnagr{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:3px}
+.pn2 .pnagr{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:3px}.pn2 .pnagr{flex-wrap:nowrap}.pn2 .pnagr .pnagl{min-width:0}.pn2 .pnagr .pnagfav{margin-left:0}
 .pn2 .pnagl{border:0;background:none;padding:0;font:inherit;font-size:13px;font-weight:600;color:var(--acc);text-decoration:none;cursor:pointer;text-align:left}
 .pn2 .pnagl:hover{text-decoration:underline}
+.pn2 .pnagfav{flex:none;width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:var(--surf);color:var(--faint);display:inline-grid;place-items:center;padding:0;cursor:pointer;vertical-align:middle;margin-left:6px}
+.pn2 .pnagfav svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2}
+.pn2 .pnagfav:hover{color:#C2185B;border-color:#E9A3BC}
+.pn2 .pnagfav.on{color:#C2185B;border-color:#E9A3BC;background:#FCE9F0}.pn2 .pnagfav.on svg{fill:currentColor}
+.pn2 .pnagfav:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.pn2 .pnnml{color:inherit;text-decoration:none}.pn2 .pnnml svg{width:12px;height:12px;margin-left:5px;vertical-align:1px;fill:none;stroke:currentColor;stroke-width:1.8;opacity:.45}
+.pn2 .pnnml:hover{text-decoration:underline;text-underline-offset:3px}.pn2 .pnnml:hover svg{opacity:1}.pn2 .pnnml:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:4px}
 .pn2 span.pnagl{color:var(--ink2,var(--ink));cursor:default}
 .pn2 .pnmom{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--acc);background:var(--wash,#EDE3EE);border-radius:4px;padding:1px 6px}
 .pn2 .pnmeta{margin:3px 0 0;font-size:12px;color:var(--mut)}
@@ -1926,6 +2217,10 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .pnmr em{font-style:normal;font-size:10px;font-weight:500;color:var(--faint);margin-left:1px}
 .pn2 .pnmr .no b{color:var(--faint);font-weight:500}
 .pn2 .pnmr.pnmr6{grid-template-columns:repeat(6,minmax(0,1fr))}
+/* 1.2.170 (user, 13 Nov 2026: "numbers are overlapping on this card" - 176.5 / 81.3 / 59.8 / 87.8): the figure shrinks to fit its box, never past it */
+.pn2 .pnmr>div,.pn2 .pnmr .pnage{container-type:inline-size;overflow:hidden}
+.pn2 .pnmr b{display:inline-block;max-width:100%;font-size:clamp(10.5px,21cqw,15px);letter-spacing:-.01em}
+.pn2 .pnmr em{font-size:clamp(8px,12cqw,10px)}
 .mxc.mxage .mxagei{width:3ch;text-align:center}
 .pn2 .pnmr .pnage{border:0;border-left:1px solid var(--line);background:none;padding:7px 3px;text-align:center;min-width:0;font:inherit;color:inherit;cursor:pointer}
 .pn2 .pnmr .pnage:hover:not(:disabled){background:var(--surf2,#F6F3F8)}

@@ -34,6 +34,18 @@
   const img = box.querySelector('.fvimg'), strip = box.querySelector('.fvstrip'), side = box.querySelector('.fvside');
   let S = null;                              // {photos:[url], i, name, ref, key}
   let seq = 0;
+  /* 1.2.169: a picture that does not load (or is not a photo of her - black, blank, a banner) leaves the strip */
+  box.addEventListener('error', e => {
+    const t = e.target; if(!S || !t || t.tagName !== 'IMG') return;
+    let u = '';
+    if(t.classList.contains('fvimg')) u = S.photos[S.i];
+    else { const b = t.closest('.fvt'); if(b) u = S.photos[+b.dataset.fvt]; }
+    if(!u || (S.vid && S.vid.has(u))) return;
+    const k = S.photos.indexOf(u); if(k < 0 || S.photos.length < 2) return;
+    S.photos.splice(k, 1); if(S.raw && S.raw.length > k) S.raw.splice(k, 1);
+    for(const t2 of Object.keys(S.src || {})){ const a = S.src[t2]; if(Array.isArray(a)){ const j = a.indexOf(u); if(j >= 0) a.splice(j, 1); } }
+    if(S.i >= S.photos.length) S.i = S.photos.length - 1; strip.dataset.sig = ''; draw();
+  }, true);
   function paintStrip(){
     const n = S.photos.length;
     box.classList.toggle('fvnostrip', n < 2);
@@ -60,6 +72,11 @@
     box.querySelectorAll('.fvnav').forEach(b => { b.hidden = n < 2; });
     /* 1.2.112: make the photo shown the card photo (a model card only - not a booking card) */
     const PH = window.__illuPhoto, mw = box.querySelector('.fvmainw');
+    if(S.bid){ let c = null; try{ c = typeof BOOK !== 'undefined' && BOOK.get(S.bid); }catch(e){}
+      const raw = S.raw && S.raw[S.i], want = raw ? bkPcv(raw) : '';
+      mw.innerHTML = !c || !n || !want || isV(cur) ? '' : c.pcv === want ? '<span class="fvmain on">✓ ' + esc(L('Card photo', '카드 사진')) + '</span> <button type="button" class="fvmain back" data-fvbkun>↺ ' + esc(L('Back to the first photo', '처음 사진으로')) + '</button>'
+        : '<button type="button" class="fvmain" data-fvbkmain title="' + esc(L('Show this photo on her card, for everyone', '이 사진을 카드에 표시합니다 (모두에게)')) + '">★ ' + esc(L('Use as card photo', '카드 사진으로')) + '</button>';
+    } else
     mw.innerHTML = !(PH && PH.setMain && S.key && !S.bid) ? '' : S.i > 0 && S.raw && S.raw[S.i] ? '<button type="button" class="fvmain" data-fvmain title="' + esc(L('Show this photo on the model’s card, for everyone (the photo is not saved — only which one to show)', '이 사진을 모델 카드에 표시합니다 (사진은 저장되지 않고, 어떤 사진을 보일지만 기록)')) + '">★ ' + esc(L('Use as card photo', '카드 사진으로 사용')) + '</button>'
       : S.i === 0 && PH.PMAIN.has(S.key) ? '<button type="button" class="fvmain back" data-fvunmain>↺ ' + esc(L('Back to the original photo', '원래 사진으로')) + '</button>' : '';
     /* 1.2.148: rotate the photo shown (for everyone) */
@@ -111,7 +128,8 @@
     const signed = typeof SIGNED === 'function' && SIGNED();
     const href = S.ref && /^https?:/i.test(S.ref) ? S.ref : '';
     /* 1.2.129: every expanded card outside the Booking board shows the one shared panel */
-    if(S.key && !S.bid && window.__illuModelPanel){
+    /* 1.2.158 (user: "the design seems to be different"): booking cards (On-Stay, Booking board) show the same panel too */
+    if(S.key && window.__illuModelPanel){
       let dom = ''; try{ const hit = (typeof AG !== 'undefined' ? AG : []).find(x => x.name === ag); dom = hit ? (hit.domain || hit.name) : ''; }catch(e){}
       const html = window.__illuModelPanel(S.key, {nm, ag, agRef: dom, city: i.city || (bk && bk.city) || '', country: i.country || (bk && bk.country) || '', href, nPhotos: S.photos.length > 1 ? S.photos.length : 0, boards: [sex, i.div || ''].filter(Boolean).join(' · '), f, readNote});
       if(side.__pnh !== html){ side.__pnh = html; side.innerHTML = html; }
@@ -244,6 +262,22 @@
     }
   })();
   box.querySelector('.fvsidet').addEventListener('click', () => { if(Date.now() - pillDragAt < 400) return; if(narrow()) narrowOn = !narrowOn; else { try{ localStorage.setItem(SIDEK, sideOn() ? '0' : '1'); }catch(e){} } paintSide(); });
+  /* 1.2.155: card photo of a booking card - a file in her folder, or a photo from her agency page */
+  function bkPcv(raw){
+    if(!S) return '';
+    if(S.tab && S.tab !== 'agency'){ const r = window.__illuMatRel ? window.__illuMatRel(S.key, raw) : ''; return r ? 'f:' + r : ''; }
+    return /^https?:/i.test(raw) ? 'u:' + raw : '';
+  }
+  box.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-fvbkmain], [data-fvbkun]'); if(!b || !S || !S.bid) return;
+    e.preventDefault(); e.stopPropagation();
+    try{ if(typeof SIGNED === 'function' && !SIGNED()){ if(typeof nudgeSignIn === 'function') nudgeSignIn(); return; } }catch(err){}
+    let c = null; try{ c = BOOK.get(S.bid); }catch(err){} if(!c) return;
+    if(b.hasAttribute('data-fvbkmain')){ const v = bkPcv(S.raw[S.i]); if(!v) return; c.pcv = v; } else delete c.pcv;
+    try{ saveBook(S.bid, true); }catch(err){}
+    try{ renderBook(); }catch(err){} try{ window.__illuVoteChanged && window.__illuVoteChanged(); }catch(err){} try{ window.__illuTodayRender && window.__illuTodayRender(); }catch(err){}
+    draw(); box.querySelector('.fvmsg').textContent = b.hasAttribute('data-fvbkmain') ? L('Card photo changed', '카드 사진을 바꿨습니다') : L('Back to the first photo', '처음 사진으로 돌아갔습니다');
+  }, true);
   box.addEventListener('click', e => {
     const b = e.target.closest && e.target.closest('[data-fvmain], [data-fvunmain]'); if(!b || !S) return;
     e.preventDefault(); e.stopPropagation();
@@ -312,6 +346,7 @@
   }
   function step(d){ if(!S || S.photos.length < 2) return; S.i = (S.i + d + S.photos.length) % S.photos.length; draw(); }
   window.illuPhotoFull = open;
+  window.__illuFvNow = () => (S && !box.hidden) ? {key: S.key, nm: S.name || '', url: S.ref || '', bid: S.bid || ''} : null;
 
   /* which photo was clicked, and whose it is */
   function infoOf(cell){
@@ -370,6 +405,8 @@
 
   const css = document.createElement('style');
   css.textContent = `
+/* 1.2.157 (user: "allow me to input or view the contact list when I click ... on any card"): the agency contacts open above the photo view */
+#ctmodal[data-on="1"]{z-index:9100}
 #illufv{position:fixed;inset:0;z-index:4000;background:#120D16;display:block;--fvside:340px;--fvstrip:96px}
 #illufv[hidden]{display:none}
 #illufv.fvnoside{--fvside:0px}#illufv.fvnostrip{--fvstrip:0px}

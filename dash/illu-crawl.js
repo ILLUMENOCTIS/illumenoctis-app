@@ -189,6 +189,9 @@
         while(C.paused) await wait(2000);
         const r = await illu.crawlProfile(h);
         st.read++; L.read++; C.read++;
+        /* 1.2.170: a photo already standing for 2 other models of this agency is its logo / placeholder - never kept */
+        if(r && r.ok && r.rec && r.rec[6]){ const u = r.rec[6], same = Object.keys(E).filter(x => x !== k && E[x] && E[x][6] === u);
+          if(same.length >= 2){ r.rec[6] = null; for(const x of same){ E[x][6] = null; try{ const m = MEAS.get(x); if(m) m[6] = null; }catch(er){} } } }
         if(r && r.ok && r.rec){ E[k] = r.rec; if(window.__measPut) window.__measPut(k, r.rec); else MEAS.set(k, r.rec); st.measured++; L.ok++; C.found++; since++; }
         else if(r && r.gone) st.gone++;
         else if(r && /no measurements/.test(r.error || '')) st.nomeas++;

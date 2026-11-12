@@ -31,6 +31,7 @@
   function tags(c, i){
     const out = [];
     /* 1.2.130: still on the Team Vote (sent to Booking, or Get files, before the vote ended) */
+    /* 1.2.165: why it was cancelled */
     try{ if(c.k && window.__illuVoteState && /^(open|tie)$/.test(window.__illuVoteState(c.k))) out.push(['w', L('Team Vote still open', '팀 투표 진행 중')]); }catch(e){}
     const GT = {no: L('No Guarantee', '노 개런티'), cond: L('Condition', '컨디션'), net: L('Net Guarantee', '넷 개런티')};
     if(c.gty && GT[c.gty]) out.push(['', GT[c.gty]]);
@@ -42,16 +43,21 @@
     return out;
   }
   function cardHTML(c, i){
-    let ph = ''; try{ ph = bkPhoto(c) || ''; }catch(e){}
+    let ph = ''; try{ ph = (window.__illuBkPic ? window.__illuBkPic(c, 200) : bkPhoto(c)) || ''; }catch(e){}
     const ml = measLine(c);
     const bar = STG.map(([k, en, ko]) => { const l = lightOf(c, k); return '<button type="button" class="bpseg ' + (l === 'g' ? 'd' : l === 'y' ? 'n' : '') + '" data-bpseg="' + H(c.id + '|' + k) + '" title="' + H(L(en + ': ' + SNAME[l || 'o'][0] + ' — press to change', ko + ': ' + SNAME[l || 'o'][1] + ' — 눌러서 바꾸기')) + '" aria-label="' + H(L(en + ': ' + SNAME[l || 'o'][0], ko + ': ' + SNAME[l || 'o'][1])) + '"><i></i></button>'; }).join('');
     let who = ''; try{ const p = PEOPLE.get(c.by); who = p ? p.n : ''; }catch(e){}
+    function crDate(c){ const d = c.at ? new Date(c.at) : null; if(!d || isNaN(d)) return '';
+      const ko = isKO(), y = d.getFullYear() !== new Date().getFullYear();
+      const sh = ko ? (y ? String(d.getFullYear()).slice(2) + '.' : '') + (d.getMonth() + 1) + '.' + d.getDate() : d.getDate() + ' ' + d.toLocaleString('en-GB', {month: 'short'}) + (y ? ' ' + String(d.getFullYear()).slice(2) : '');
+      const full = d.toLocaleDateString(ko ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'long', year: 'numeric'});
+      return '<span class="bpcr" title="' + H(L('Card created ' + full, '카드 생성일 ' + full)) + '"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>' + H(sh) + '</span>'; }
     return '<article class="bpc" draggable="true" data-bpc="' + H(c.id) + '" tabindex="0" title="' + H(L('Open the card', '카드 열기')) + '">' +
-      '<div class="bppic">' + (ph ? '<img src="' + H(ph) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '<span>' + H(String(c.nm || '?').charAt(0)) + '</span>') + '</div>' +
+      '<div class="bpside">' + '<div class="bppic">' + (ph ? '<img src="' + H(ph) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '<span>' + H(String(c.nm || '?').charAt(0)) + '</span>') + '</div>' + crDate(c) + '</div>' +
       '<div class="bpbody"><div class="bpag">' + H(c.ag || L('Agency not set', '에이전시 없음')) + '</div><b>' + H(c.nm || L('(no name)', '(이름 없음)')) + '</b>' +
       '<div class="bpmx">' + H(ml || L('Measurements missing', '사이즈 없음')) + '</div>' +
       '<div class="bpbar" role="group" aria-label="' + H(L('Stages', '단계')) + '">' + bar + '</div>' +
-      '<div class="bptags">' + tags(c, i).map(([cl, t]) => '<span class="bptag ' + cl + '">' + H(t) + '</span>').join('') + (who ? '<span class="bpwho" title="' + H(L('In charge of this card', '이 카드 담당')) + '">' + H(L('In charge: ', '담당: ') + who) + '</span>' : '<span class="bpwho none">' + H(L('No one in charge', '담당자 없음')) + '</span>') + '</div></div></article>';
+      '<div class="bptags">' + tags(c, i).map(([cl, t]) => '<span class="bptag' + (cl ? ' bpt' + cl : '') + '" title="' + H(cl === 'r' && c.cxl ? t + (c.cxl.why && c.cxl.r !== 'own' ? ' — ' + c.cxl.why : '') : t) + '">' + H(t) + '</span>').join('') + (who ? '<button type="button" class="bpwho" data-bkhand="' + H(c.id) + '" title="' + H(L('In charge of this card — click to hand it to someone else', '이 카드 담당 — 눌러서 다른 사람에게 넘기기')) + '">' + H(L('In charge: ', '담당: ') + who) + ' ▾</button>' : '<button type="button" class="bpwho none" data-bkhand="' + H(c.id) + '">' + H(L('No one in charge', '담당자 없음')) + ' ▾</button>') + '</div></div></article>';
   }
   function rowsNow(){
     let all = []; try{ all = bkSorted(); }catch(e){ return []; }
@@ -69,7 +75,7 @@
     const of = k => rows.filter(c => bkStOf(c) === k);
     const P = of('proc'), D = of('done'), C = of('canc');
     const tab = (k, en, ko, n) => '<button type="button" role="tab" aria-selected="' + (S.tab === k) + '" class="' + (S.tab === k ? 'on' : '') + '" data-bptab="' + k + '">' + H(L(en, ko)) + ' · ' + n + '</button>';
-    let h = '<div class="bphead"><div class="bpseg" role="tablist">' + tab('proc', 'Processing', '진행 중', P.length) + tab('done', 'Completed', '완료', D.length) + tab('canc', 'Cancelled', '취소', C.length) + '</div>' +
+    let h = '<div class="bphead"><div class="bptabs" role="tablist">' + tab('proc', 'Processing', '진행 중', P.length) + tab('done', 'Completed', '완료', D.length) + tab('canc', 'Cancelled', '취소', C.length) + '</div>' +
       '<div class="bpright"><button type="button" class="bpchip' + (S.mine ? ' on' : '') + '" data-bpmine aria-pressed="' + S.mine + '">' + L('Only mine', '내 카드만') + '</button>' +
       '</div></div>';
     if(S.on){
@@ -83,12 +89,27 @@
         if(allDone.length) h += '<p class="bpnote">' + H(L(allDone.length + ' card(s) have every stage done and are still in Processing — open one and press COMPLETED.', allDone.length + '개 카드가 모든 단계를 마쳤지만 아직 진행 중입니다 — 카드를 열어 완료를 누르세요.')) + '</p>';
       }else{
         const list = S.tab === 'done' ? D : C;
-        h += list.length ? '<div class="bpgrid">' + list.map(c => cardHTML(c, Math.min(stageIdx(c), 4))).join('') + '</div>'
+        h += list.length ? '<div class="bpgrid">' + list.map(c => '<div class="bprw">' + cardHTML(c, Math.min(stageIdx(c), 4)) + (S.tab === 'canc' && c.cxl && window.__illuCxlLabel ? (() => { const t = window.__illuCxlLabel(c.cxl), f = t + (c.cxl.why && c.cxl.r !== 'own' ? ' — ' + c.cxl.why : ''); return '<div class="bpwhy" title="' + H(f) + '"><b>' + H(L('Why: ', '사유: ')) + '</b>' + H(f) + '</div>'; })() : '') + (S.tab === 'canc' || S.tab === 'done' ? '<button type="button" class="bprev" data-bprevive="' + H(c.id) + '">↺ ' + H(L('Back to Processing', '진행 중으로 되돌리기')) + '</button>' : '') + '</div>').join('') + '</div>'
           : '<p class="bpempty big">' + H(S.tab === 'done' ? L('Nothing completed yet.', '완료된 카드가 없습니다.') : L('Nothing cancelled.', '취소된 카드가 없습니다.')) + '</p>';
+        /* 1.2.159: deleted cards, kept so they can come back */
+        if(S.tab === 'canc' && TRASH.size) h += '<div class="bptrash"><h4>' + H(L('Deleted cards', '삭제된 카드')) + ' · ' + TRASH.size + '</h4><div class="bptl">' + [...TRASH.values()].sort((p, q) => String(q.at).localeCompare(String(p.at))).map(t => '<div class="bpti"><b>' + H((t.c && t.c.nm) || '?') + '</b><span>' + H(((t.c && t.c.ag) || '') + ' · ' + L('deleted ', '삭제 ') + String(t.at || '').slice(0, 10) + (t.by && PEOPLE.get(t.by) ? ' · ' + PEOPLE.get(t.by).n : '')) + '</span><button type="button" class="bprev" data-bprestore="' + H(t.c && t.c.id) + '">↺ ' + H(L('Restore', '되살리기')) + '</button></div>').join('') + '</div></div>';
       }
     }
     if(box.__h !== h){ box.__h = h; box.innerHTML = h; }
   }
+  const TRASH = new Map();
+  (function lt(){ if(typeof DB === 'undefined' || !DB){ setTimeout(lt, 900); return; } try{ DB.collection('bktrash').onSnapshot(sn => { TRASH.clear(); for(const x of (sn.docs || [])){ const v = typeof docOf === 'function' ? docOf(x) : x.data(); if(v && v.c && v.c.id && !v.back && !BOOK.has(v.c.id)) TRASH.set(v.c.id, v); } render(); }, () => {}); }catch(e){} })();
+  document.addEventListener('click', async e => {
+    const r = e.target.closest && e.target.closest('#bkpipe [data-bprevive], #bkpipe [data-bprestore]'); if(!r) return;
+    e.preventDefault(); e.stopPropagation();
+    try{ if(typeof SIGNED === 'function' && !SIGNED()){ if(typeof nudgeSignIn === 'function') nudgeSignIn(); return; } }catch(er){}
+    if(r.dataset.bprevive){ try{ bkMoveTo(r.dataset.bprevive, 'proc'); }catch(er){} S.tab = 'proc'; render(); return; }
+    const t = TRASH.get(r.dataset.bprestore); if(!t) return;
+    const c = JSON.parse(JSON.stringify(t.c)); BOOK.set(c.id, c);
+    try{ await DB.doc('book/' + c.id).set(c); }catch(er){}
+    try{ await DB.doc('bktrash/' + c.id).set(Object.assign({}, t, {back: {by: ME || '', at: new Date().toISOString()}})); }catch(er){}
+    TRASH.delete(c.id); try{ renderBook(); }catch(er){} render();
+  }, true);
   window.__illuPipe = {render, stageIdx, S};
   try{
     const o = window.renderBook;
@@ -194,9 +215,14 @@ body.bkpipeon #bkmain{display:none!important}
 #bkpipe{display:flex;flex-direction:column;gap:14px;margin:4px 0 16px;font-family:var(--sans,Inter,system-ui,sans-serif);color:var(--ink)}
 #bkpipe .bphead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px}
 #bkpipe .bpright{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-#bkpipe .bpseg{display:inline-flex;background:var(--surf);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
-#bkpipe .bpseg button{border:0;background:none;font:inherit;font-size:13px;font-weight:600;color:var(--faint);padding:0 13px;border-radius:7px;min-height:32px;cursor:pointer}
-#bkpipe .bpseg button.on{background:var(--acc);color:#fff}
+#bkpipe .bptabs{display:inline-flex;background:var(--surf);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+#bkpipe .bptabs button{border:0;background:none;font:inherit;font-size:13px;font-weight:600;color:var(--faint);padding:0 13px;border-radius:7px;min-height:32px;cursor:pointer}
+#bkpipe .bptabs button.on{background:var(--acc);color:#fff}
+/* 1.2.166: framed tabs so Processing / Completed / Cancelled are easy to spot */
+#bkpipe .bptabs{border:1.5px solid color-mix(in srgb,var(--acc) 35%,var(--line));padding:4px;gap:4px;box-shadow:0 1px 3px rgba(40,20,50,.08)}
+#bkpipe .bptabs button{border:1px solid var(--line);background:var(--surf);color:var(--ink);opacity:.85;min-height:34px;padding:0 14px}
+#bkpipe .bptabs button:hover{border-color:var(--acc);opacity:1}
+#bkpipe .bptabs button.on{border-color:var(--acc);opacity:1;box-shadow:0 2px 6px -2px color-mix(in srgb,var(--acc) 60%,transparent)}
 #bkpipe .bpchip{height:34px;border:1px solid var(--line);background:var(--surf);border-radius:999px;padding:0 14px;font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
 #bkpipe .bpchip.on{border-color:var(--acc);color:var(--acc)}
 #bkpipe .bpcols{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:12px;overflow-x:auto;padding-bottom:6px;align-items:start}
@@ -211,7 +237,7 @@ body.bkpipeon #bkmain{display:none!important}
 #bkpipe .bppic{width:56px;height:72px;border-radius:9px;overflow:hidden;flex:none;background:var(--surf2,#eee);display:grid;place-items:center;font-weight:700;color:var(--faint)}
 #bkpipe .bppic img{width:100%;height:100%;object-fit:cover;display:block}
 #bkpipe .bpbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-#bkpipe .bpag{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#bkpipe .bpside{display:flex;flex-direction:column;align-items:center;gap:5px;flex:none}#bkpipe .bpcr{flex:none;display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--faint);white-space:nowrap}#bkpipe .bpcr svg{width:11px;height:11px}#bkpipe .bpag{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #bkpipe .bpbody b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #bkpipe .bpmx{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
 #bkpipe .bpbar{display:flex;gap:3px;margin:0 0 -2px}
@@ -232,10 +258,14 @@ body.bkpipeon #bkmain{display:none!important}
 #bpmenu .bpmi[aria-checked="true"]{font-weight:700}
 #bptoast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:9601;background:#1b1724;color:#fff;border-radius:10px;padding:9px 14px;font-size:13px;box-shadow:0 12px 30px rgba(0,0,0,.3);max-width:calc(100vw - 32px);pointer-events:none}
 @media (prefers-reduced-motion:reduce){#bkpipe .bpseg i{transition:none}}
+#bkpipe .bpwhy{font-size:11.5px;color:#8A1F33;background:#FBECEF;border-radius:8px;padding:4px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}#bkpipe .bprw{min-width:0;display:flex;flex-direction:column;gap:4px}#bkpipe .bprev{align-self:flex-start;border:1px solid var(--line,#E1D9E6);background:var(--surf,#fff);color:var(--acc,#5A2C57);border-radius:999px;padding:5px 11px;font:600 12px inherit;font-family:inherit;cursor:pointer}
+#bkpipe .bptrash{margin-top:18px;border-top:1px solid var(--line,#E7E2EC);padding-top:12px}#bkpipe .bptrash h4{margin:0 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}#bkpipe .bptl{display:flex;flex-direction:column;gap:6px}#bkpipe .bpti{display:flex;align-items:center;gap:10px;border:1px dashed var(--line,#E1D9E6);border-radius:10px;padding:8px 10px}#bkpipe .bpti span{flex:1;color:var(--faint);font-size:12px}
 #bkpipe .bptags{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
 #bkpipe .bptag{font-size:11px;font-weight:600;border-radius:6px;padding:1px 6px;background:var(--surf2,#f4ecf2);color:var(--acc)}
-#bkpipe .bptag.w{background:#fff3d6;color:#7a5200}#bkpipe .bptag.g{background:#e6f3ea;color:#24603a}
-#bkpipe .bpwho{font-size:11px;color:var(--faint);margin-left:auto}
+/* 1.2.156: bare .w / .g collided with other rules and blew the tag up (user: "the yellow portion is too big") */
+#bkpipe .bptag.bptr{background:#FBECEF;color:#8A1F33;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#bkpipe .bptag.bptw{background:#fff3d6;color:#7a5200}#bkpipe .bptag.bptg{background:#e6f3ea;color:#24603a}
+#bkpipe .bptag{width:auto;height:auto;flex:none;line-height:1.5}
+#bkpipe .bpwho{font-size:11px;color:var(--faint);margin-left:auto;border:0;background:none;padding:2px 4px;border-radius:6px;cursor:pointer;font-family:inherit}#bkpipe .bpwho:hover{background:var(--surf2,#f4ecf2);color:var(--fg,#211C26)}
 #bkpipe .bpwho.none{color:#9a6a00;font-weight:600}
 #bkpipe .bpempty{margin:6px 4px;font-size:12.5px;color:var(--faint)}
 #bkpipe .bpempty.big{font-size:14px;padding:30px;text-align:center}
@@ -312,5 +342,155 @@ body.bkpipeon #bkmain{display:none!important}
   css.textContent = `.bv .bvsex{display:inline-flex;border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px}
 .bv .bvsex button{border:0;background:none;border-radius:6px;padding:3px 10px;font:inherit;font-size:12px;font-weight:600;color:var(--mut);cursor:pointer}
 .bv .bvsex button[aria-pressed="true"]{background:var(--acc,#5A2C57);color:#fff}`;
+  document.head.appendChild(css);
+})();
+
+/* 1.2.156 (user, 12 Nov 2026: "I am in charge of the card/model, allow me to pass the responsibility to another USER so they
+   can continue working on the model"): click "In charge" on a booking card (Booking board, On-Stay board, the card itself)
+   -> choose the person -> confirm. The person in charge (or anyone, when no one is) can hand it over. Kept in c.bylog. */
+(function(){
+  const isKO = () => typeof LANG !== 'undefined' && LANG === 'ko';
+  const L = (en, ko) => isKO() ? ko : en;
+  const H = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
+  const nm = p => { try{ const r = PEOPLE.get(p); return r ? r.n : ''; }catch(e){ return ''; } };
+  const disc = p => { try{ return idDisc(p) || ''; }catch(e){ return ''; } };
+  let box = null, cur = null;
+  function close(){ if(box){ box.remove(); box = null; cur = null; } }
+  function place(anchor){
+    const r = anchor.getBoundingClientRect(), w = 260;
+    let x = Math.min(innerWidth - w - 12, Math.max(12, r.right - w)), y = r.bottom + 6;
+    if(y + 300 > innerHeight) y = Math.max(12, r.top - 306);
+    box.style.left = x + 'px'; box.style.top = y + 'px';
+  }
+  function draw(){
+    if(!box || !cur) return;
+    let c = null; try{ c = BOOK.get(cur.id); }catch(e){} if(!c){ close(); return; }
+    let me = ''; try{ me = ME || ''; }catch(e){}
+    const can = !c.by || c.by === me;
+    let ppl = []; try{ ppl = [...PEOPLE.keys()].filter(p => p !== c.by && !(typeof GONEID !== 'undefined' && GONEID.has && GONEID.has(p))); }catch(e){}
+    ppl.sort((a, b) => nm(a).localeCompare(nm(b)));
+    if(cur.to){
+      box.innerHTML = '<b class="bkhh">' + H(L('Hand ' + (c.nm || 'this card') + ' to ' + nm(cur.to) + '?', (c.nm || '이 카드') + '를 ' + nm(cur.to) + '님에게 넘길까요?')) + '</b>' +
+        '<p class="bkhp">' + H(L(nm(cur.to) + ' will be in charge from now on: the card, her emails and the next steps. ' + (c.by ? nm(c.by) + ' stops being in charge.' : ''), '이제 ' + nm(cur.to) + '님이 카드, 메일, 다음 단계를 담당합니다.' + (c.by ? ' ' + nm(c.by) + '님은 담당에서 빠집니다.' : ''))) + '</p>' +
+        '<div class="bkhb"><button type="button" class="bkhgo" data-bkhgo>' + H(L('Hand over', '넘기기')) + '</button><button type="button" data-bkhback>' + H(L('Back', '뒤로')) + '</button></div>';
+      return;
+    }
+    box.innerHTML = '<b class="bkhh">' + H(L('In charge', '담당')) + ': ' + H(c.by ? nm(c.by) : L('no one', '없음')) + '</b>' +
+      (can ? '<p class="bkhp">' + H(L('Hand this card to:', '이 카드를 넘길 사람:')) + '</p>' + ppl.map(p => '<button type="button" class="bkhpp" data-bkhto="' + H(p) + '">' + disc(p) + '<span>' + H(nm(p)) + '</span></button>').join('')
+        : '<p class="bkhp">' + H(L('Only ' + nm(c.by) + ' can hand this card to someone else.', nm(c.by) + '님만 이 카드를 다른 사람에게 넘길 수 있습니다.')) + '</p>') +
+      (Array.isArray(c.bylog) && c.bylog.length ? '<div class="bkhl">' + c.bylog.slice(-3).reverse().map(x => '<span>' + H((x.from ? nm(x.from) : L('no one', '없음')) + ' → ' + nm(x.to) + ' · ' + String(x.at || '').slice(0, 10)) + '</span>').join('') + '</div>' : '');
+  }
+  function open(id, anchor){
+    close(); cur = {id, to: ''};
+    box = document.createElement('div'); box.className = 'bkhand'; box.setAttribute('role', 'dialog');
+    document.body.appendChild(box); draw(); place(anchor);
+  }
+  document.addEventListener('click', e => {
+    const t = e.target.closest && e.target.closest('[data-bkhand]');
+    if(t){ e.preventDefault(); e.stopPropagation(); if(cur && cur.id === t.dataset.bkhand) close(); else open(t.dataset.bkhand, t); return; }
+    if(!box || !box.contains(e.target)){ if(box) close(); return; }
+    e.stopPropagation();
+    const b = e.target.closest('button'); if(!b) return;
+    if(b.dataset.bkhto){ cur.to = b.dataset.bkhto; draw(); return; }
+    if(b.hasAttribute('data-bkhback')){ cur.to = ''; draw(); return; }
+    if(b.hasAttribute('data-bkhgo')){
+      try{ if(typeof SIGNED === 'function' && !SIGNED()){ if(typeof nudgeSignIn === 'function') nudgeSignIn(); return; } }catch(er){}
+      const c = BOOK.get(cur.id); if(!c) return close();
+      let me = ''; try{ me = ME || ''; }catch(er){}
+      if(c.by && c.by !== me) return close();
+      c.bylog = (Array.isArray(c.bylog) ? c.bylog : []).concat([{from: c.by || '', to: cur.to, at: new Date().toISOString(), who: me}]).slice(-20);
+      c.by = cur.to;
+      try{ saveBook(c.id, true); }catch(er){}
+      close();
+      try{ renderBook(); }catch(er){} try{ window.__illuVoteChanged && window.__illuVoteChanged(); }catch(er){} try{ window.__illuTodayRender && window.__illuTodayRender(); }catch(er){} try{ window.__illuPipe && window.__illuPipe.render(); }catch(er){}
+    }
+  }, true);
+  document.addEventListener('keydown', e => { if(e.key === 'Escape' && box) close(); });
+  addEventListener('resize', close);
+  const css = document.createElement('style');
+  css.textContent = `.bkhand{position:fixed;z-index:9000;width:260px;max-height:300px;overflow:auto;background:var(--surf,#fff);color:var(--fg,#211C26);border:1px solid var(--line,#E1D9E6);border-radius:12px;box-shadow:0 18px 40px -16px rgba(40,20,50,.45);padding:10px;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.bkhand .bkhh{font-size:13px}.bkhand .bkhp{margin:2px 0 4px;color:var(--mut,#6D6577);font-size:12px;line-height:1.45}
+.bkhand .bkhpp{display:flex;align-items:center;gap:8px;border:0;background:none;padding:6px;border-radius:8px;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.bkhand .bkhpp:hover,.bkhand .bkhpp:focus-visible{background:var(--surf2,#f4ecf2)}
+.bkhand .bkhb{display:flex;gap:6px}.bkhand .bkhb button{border:1px solid var(--line,#E1D9E6);background:var(--surf,#fff);border-radius:999px;padding:6px 12px;font:600 12.5px inherit;cursor:pointer;color:inherit}
+.bkhand .bkhb .bkhgo{background:#5A2C57;border-color:#5A2C57;color:#fff}
+.bkhand .bkhl{border-top:1px solid var(--line,#EEE9F1);margin-top:4px;padding-top:6px;display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--mut,#6D6577)}`;
+  document.head.appendChild(css);
+})();
+
+/* 1.2.165 (user, 12 Nov 2026, approved demo): cancelling a booking asks why. The reason (and a note) stays on her card
+   (c.cxl {r, why, by, at}) and shows on the Cancelled tab; three reasons can also mark her card everywhere
+   ("Agency said": Not for Korea / Not available / On hold). Back to Processing keeps the last reason in c.cxlold. */
+(function(){
+  const isKO = () => typeof LANG !== 'undefined' && LANG === 'ko';
+  const L = (en, ko) => isKO() ? ko : en;
+  const H = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
+  const R = [
+    ['dates', ['The dates or timing don’t work', '날짜 또는 일정이 맞지 않음'], ['She isn’t available when we need her, or the travel dates don’t fit.', '필요한 시기에 가능하지 않거나 이동 날짜가 맞지 않습니다.'], ''],
+    ['guar', ['We couldn’t agree on the guarantee', '개런티 조건 합의 불가'], ['The agency and we could not agree on the guarantee or contract terms.', '에이전시와 개런티 또는 계약 조건을 합의하지 못했습니다.'], ''],
+    ['nokr', ['The agency won’t place her in Korea', '에이전시가 한국에 보내지 않음'], ['They don’t send her to Korea, or not at this time.', '한국에는 보내지 않거나, 지금은 보내지 않습니다.'], 'nokr'],
+    ['krag', ['She’s booked with another Korean agency', '다른 한국 에이전시와 계약'], ['Another agency in Korea has confirmed her.', '한국의 다른 에이전시가 확정했습니다.'], 'no'],
+    ['lost', ['We lost contact with the booker / agent', '부커 / 에이전트와 연락 두절'], ['No reply after several follow-ups.', '여러 번 연락했지만 답이 없습니다.'], 'later'],
+    ['own', ['Other reason', '기타 사유'], ['Please write the reason below.', '아래에 사유를 적어 주세요.'], '']
+  ];
+  const MARK = {nokr: ['Not for Korea', '한국 불가'], no: ['Not available (with another Korean agency)', '불가 (다른 한국 에이전시)'], later: ['On hold — ask again later', '보류 — 나중에 다시 문의']};
+  window.__illuCxlLabel = x => { const r = R.find(y => y[0] === (x && x.r)); return r ? (x.r === 'own' && x.why ? x.why.slice(0, 60) : L(r[1][0], r[1][1])) : L('Cancelled', '취소'); };
+  const S = {bid: '', go: null, r: '', why: '', mark: true};
+  function box(){ let b = document.getElementById('bkcxl'); if(!b){ b = document.createElement('div'); b.id = 'bkcxl'; document.body.appendChild(b); } return b; }
+  function draw(){
+    const b = box(); let c = null; try{ c = BOOK.get(S.bid); }catch(e){} if(!c){ b.hidden = true; return; }
+    const r = R.find(x => x[0] === S.r), need = S.r === 'own';
+    b.hidden = false;
+    b.innerHTML = '<div class="cxveil" data-cxkeep></div><div class="cxdlg" role="dialog" aria-modal="true" aria-labelledby="cxt"><h3 id="cxt">' + H(L('Why is ' + (c.nm || 'this model') + '’s booking being cancelled?', (c.nm || '이 모델') + ' 부킹을 취소하는 이유는 무엇인가요?')) + '</h3>' +
+      '<p class="cxsub">' + H(L('Choose the main reason. It stays on her card so the team knows what happened.', '주요 사유를 선택하세요. 카드에 남아 팀이 상황을 알 수 있습니다.')) + '</p>' +
+      '<fieldset><legend>' + H(L('Reason', '사유')) + '</legend>' + R.map(x => '<label class="cxopt' + (S.r === x[0] ? ' on' : '') + '"><input type="radio" name="cxr" value="' + x[0] + '"' + (S.r === x[0] ? ' checked' : '') + '><span><b>' + H(L(x[1][0], x[1][1])) + '</b><small>' + H(L(x[2][0], x[2][1])) + '</small></span></label>').join('') + '</fieldset>' +
+      '<label class="cxlab" for="cxwhy">' + H(need ? L('What happened? (required)', '무슨 일이 있었나요? (필수)') : L('Anything to add? (optional)', '덧붙일 내용 (선택)')) + '</label><textarea id="cxwhy" rows="3" maxlength="400">' + H(S.why) + '</textarea>' +
+      (r && r[3] ? '<label class="cxmark ' + r[3] + '"><input type="checkbox" id="cxmk"' + (S.mark ? ' checked' : '') + '><span><b>' + H(L('Also mark her card: ', '카드에도 표시: ') + L(MARK[r[3]][0], MARK[r[3]][1])) + '</b><small>' + H(L('Shown on her card on every board, so nobody asks the agency again by mistake.', '모든 보드의 카드에 표시되어 실수로 다시 문의하지 않게 합니다.')) + '</small></span></label>' : '') +
+      '<div class="cxacts"><button type="button" data-cxkeep>' + H(L('Keep it in Processing', '진행 중으로 유지')) + '</button><button type="button" class="cxgo" data-cxgo' + (!S.r || (need && !S.why.trim()) ? ' disabled' : '') + '>' + H(L('Cancel the booking', '부킹 취소')) + '</button></div></div>';
+  }
+  function ask(bid, go){ S.bid = bid; S.go = go; S.r = ''; S.why = ''; S.mark = true; draw(); setTimeout(() => { const i = document.querySelector('#bkcxl input[name=cxr]'); if(i) i.focus(); }, 30); }
+  document.addEventListener('change', e => {
+    const t = e.target; if(!t.closest || !t.closest('#bkcxl')) return;
+    if(t.name === 'cxr'){ S.r = t.value; S.mark = true; draw(); if(S.r === 'own'){ const w = document.getElementById('cxwhy'); if(w) w.focus(); } }
+    if(t.id === 'cxmk') S.mark = t.checked;
+  }, true);
+  document.addEventListener('input', e => { if(e.target.id !== 'cxwhy') return; S.why = e.target.value; const g = document.querySelector('#bkcxl [data-cxgo]'); if(g) g.disabled = !S.r || (S.r === 'own' && !S.why.trim()); }, true);
+  document.addEventListener('click', e => {
+    const b = document.getElementById('bkcxl'); if(!b || b.hidden || !b.contains(e.target)) return;
+    if(e.target.closest('[data-cxkeep]')){ e.preventDefault(); b.hidden = true; S.go = null; return; }
+    if(e.target.closest('[data-cxgo]')){ e.preventDefault();
+      let c = null; try{ c = BOOK.get(S.bid); }catch(er){} if(!c || !S.r) return;
+      let me = ''; try{ me = ME || ''; }catch(er){}
+      const r = R.find(x => x[0] === S.r);
+      c.cxl = {r: S.r, why: S.why.trim(), by: me, at: new Date().toISOString()};
+      if(r && r[3] && S.mark && window.__illuAvailSet){ try{ window.__illuAvailSet(c.k || ('bid:' + c.id), {nm: c.nm || '', ag: c.ag || '', t: r[3], why: L(r[1][0], r[1][1]) + (S.why.trim() ? ' — ' + S.why.trim() : ''), from: L('Booking cancelled', '부킹 취소'), remind: ''}); }catch(er){} }
+      const go = S.go; S.go = null; b.hidden = true; if(go) go();
+    }
+  }, true);
+  document.addEventListener('keydown', e => { const b = document.getElementById('bkcxl'); if(e.key === 'Escape' && b && !b.hidden){ e.stopPropagation(); b.hidden = true; S.go = null; } }, true);
+  /* every way a card is cancelled goes through here */
+  function wrap(){
+    if(typeof bkMoveTo !== 'function' || typeof bkDropInto !== 'function'){ setTimeout(wrap, 300); return; }
+    if(window.__cxlWrapped) return; window.__cxlWrapped = true;
+    const mv = bkMoveTo, dr = bkDropInto;
+    window.bkMoveTo = function(bid, to){ const c = BOOK.get(bid); if(to === 'canc' && c && bkStOf(c) !== 'canc'){ ask(bid, () => mv(bid, to)); return false; }
+      if(c && to !== 'canc' && bkStOf(c) === 'canc' && c.cxl){ c.cxlold = c.cxl; delete c.cxl; } return mv(bid, to); };
+    window.bkDropInto = function(bid, to, overId, before){ const c = BOOK.get(bid); if(to === 'canc' && c && bkStOf(c) !== 'canc'){ ask(bid, () => dr(bid, to, overId, before)); return; }
+      if(c && to !== 'canc' && bkStOf(c) === 'canc' && c.cxl){ c.cxlold = c.cxl; delete c.cxl; } return dr(bid, to, overId, before); };
+  }
+  wrap();
+  window.__illuCxlAsk = ask;
+  const css = document.createElement('style');
+  css.textContent = `#bkcxl{position:fixed;inset:0;z-index:9300;display:grid;place-items:center;padding:16px}#bkcxl[hidden]{display:none}
+#bkcxl .cxveil{position:absolute;inset:0;background:rgba(20,12,24,.45)}
+#bkcxl .cxdlg{position:relative;width:min(520px,100%);max-height:calc(100vh - 40px);overflow:auto;background:var(--surf,#fff);color:var(--ink,#211C26);border-radius:16px;box-shadow:0 30px 70px -20px rgba(20,10,30,.55);padding:20px;display:flex;flex-direction:column;gap:12px;font-size:14px}
+#bkcxl h3{margin:0;font-size:17px}#bkcxl .cxsub{margin:-6px 0 0;color:var(--mut,#6D6577);font-size:13px;line-height:1.45}
+#bkcxl fieldset{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}#bkcxl legend{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--mut,#6D6577);margin-bottom:6px}
+#bkcxl .cxopt{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--line,#E7E2EC);border-radius:10px;padding:9px 11px;cursor:pointer}#bkcxl .cxopt:hover,#bkcxl .cxopt.on{border-color:#5A2C57}#bkcxl .cxopt.on{background:rgba(90,44,87,.07)}
+#bkcxl .cxopt input{margin-top:2px;accent-color:#5A2C57}#bkcxl .cxopt b{display:block;font-size:13.5px;font-weight:600}#bkcxl .cxopt small{color:var(--mut,#6D6577);font-size:12px}
+#bkcxl .cxlab{font-size:12px;font-weight:600;color:var(--mut,#6D6577)}#bkcxl textarea{border:1px solid var(--line,#E7E2EC);border-radius:10px;padding:9px 11px;font:inherit;color:inherit;background:var(--surf,#fff);resize:vertical}
+#bkcxl .cxmark{display:flex;gap:10px;align-items:flex-start;border-radius:10px;padding:10px 11px;background:#FBECEF}#bkcxl .cxmark.later{background:#FDF1E1}#bkcxl .cxmark input{margin-top:2px;accent-color:#5A2C57}#bkcxl .cxmark b{font-size:13px}#bkcxl .cxmark small{display:block;color:var(--mut,#6D6577);font-size:12px;margin-top:2px}
+#bkcxl .cxacts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}#bkcxl .cxacts button{border:1px solid var(--line,#E7E2EC);background:var(--surf,#fff);color:inherit;border-radius:999px;padding:8px 16px;font:600 13px inherit;font-family:inherit;cursor:pointer}
+#bkcxl .cxacts .cxgo{background:#A3283F;border-color:#A3283F;color:#fff}#bkcxl .cxacts .cxgo:disabled{opacity:.45;cursor:not-allowed}`;
   document.head.appendChild(css);
 })();

@@ -52,24 +52,43 @@
   /* 1.2.133 (user, 10 Nov 2026): "Collect from Hiworks" - the program searches her name in received and sent mail
      (read only; unread emails are counted, not opened) and fills this tab. Sign-in: once, in the program's Hiworks
      window, typed by the person. */
+  const hwMe = () => { try{ return ME || ''; }catch(e){ return ''; } };
   let HWBUSY = false, HWMSG = '';
   async function collect(c){
     if(!c || HWBUSY) return;
     HWBUSY = true; HWMSG = ''; redraw();
-    let r = null; try{ r = await window.illu.hiworksCollect(String(c.nm || '').trim()); }catch(e){ r = {ok: false, why: String(e && e.message || e)}; }
+    let r = null; try{ r = await window.illu.hiworksCollect(String(c.nm || '').trim(), hwMe()); }catch(e){ r = {ok: false, why: String(e && e.message || e)}; }
+    /* 1.2.156 (user, 12 Nov 2026: "No emails found for Malika A"): the card name often carries an initial ("Malika A") that
+       the emails do not. Nothing found -> search her first name, and keep only emails with her agency (its address,
+       or its name in the subject / text) so another girl of the same name is not pulled in. */
+    try{
+      const full = String(c.nm || '').trim(), first = full.split(/\s+/)[0] || '';
+      if(r && r.ok && !r.found && first.length > 2 && first !== full){
+        const r2 = await window.illu.hiworksCollect(first, hwMe());
+        if(r2 && r2.ok){
+          const dom = String(c.agd || '').toLowerCase().replace(/^www\./, ''), agw = String(c.ag || '').toLowerCase().split(/[^a-z0-9а-яё]+/i).filter(w => w.length > 2 && !/^(model|models|management|mgmt|agency|group|the)$/i.test(w));
+          const mine = em => { const addrs = [].concat(em.from || [], em.to || [], em.cc || []).map(x => String(x || '').toLowerCase()).join(' '), txt = (String(em.subject || '') + ' ' + String(em.summary || '')).toLowerCase();
+            return (dom && addrs.includes('@' + dom)) || (dom && addrs.includes('.' + dom)) || (agw.length && agw.every(w => (addrs + ' ' + txt).includes(w))); };
+          const kept = (r2.emails || []).filter(mine);
+          r = {ok: true, emails: kept, unread: r2.unread || 0, found: kept.length, first: first, skipped: (r2.emails || []).length - kept.length};
+        }
+      }
+    }catch(e){}
     HWBUSY = false;
     if(r && r.need === 'signin'){ HWMSG = E(T('Hiworks needs you to sign in once in the program.', 'Hiworks 로그인이 한 번 필요합니다.')) + ' <button type="button" class="bvbtn" data-emsignin>' + T('Sign in to Hiworks', 'Hiworks 로그인') + '</button> ' + E(T('Then press Collect again.', '그다음 다시 가져오기를 누르세요.')); redraw(); return; }
     if(!r || !r.ok){ HWMSG = E(T('Could not read Hiworks: ', 'Hiworks를 읽지 못했습니다: ') + ((r && r.why) || '')); redraw(); return; }
     const EM = fromAnswer({emails: r.emails || [], unread: r.unread || 0, email_summary: ''});
     const n = EM ? countNew(c, EM) : 0;
     if(EM){ EM.by = 'program'; merge(c, EM); try{ saveBook(c.id, true); }catch(e){} }
-    HWMSG = E(r.found ? T(r.found + ' found · ' + n + ' new on the card' + (r.unread ? ' · ' + r.unread + ' unread not opened' : ''), r.found + '통 찾음 · 새로 ' + n + '통' + (r.unread ? ' · 안 읽은 ' + r.unread + '통은 열지 않음' : '')) : T('No emails found for ' + (c.nm || ''), (c.nm || '') + ' 관련 메일이 없습니다'));
+    HWMSG = E(r.found ? T(r.found + ' found · ' + n + ' new on the card' + (r.unread ? ' · ' + r.unread + ' unread not opened' : ''), r.found + '통 찾음 · 새로 ' + n + '통' + (r.unread ? ' · 안 읽은 ' + r.unread + '통은 열지 않음' : '')) : T('No emails found for ' + (c.nm || '') + (r.first ? ' (also tried "' + r.first + '" with ' + (c.ag || 'her agency') + (r.skipped ? '; ' + r.skipped + ' about other agencies left out' : '') + ')' : ''), (c.nm || '') + ' 관련 메일이 없습니다' + (r.first ? ' ("' + r.first + '" + 에이전시로도 찾음)' : '')));
     redraw();
   }
   document.addEventListener('click', e => {
-    const b = e.target.closest && e.target.closest('[data-emcollect],[data-emsignin]'); if(!b) return;
+    const b = e.target.closest && e.target.closest('[data-emcollect],[data-emsignin],[data-emcts]'); if(!b) return;
     e.preventDefault(); e.stopPropagation();
     if(b.hasAttribute('data-emsignin')){ try{ window.illu.hiworksSignin(); }catch(err){} return; }
+    if(b.hasAttribute('data-emcts')){ HWMSG = E(T('Reading your Hiworks mail list… this can take a few minutes.', 'Hiworks 메일 목록을 읽는 중… 몇 분 걸릴 수 있습니다.')); redraw();
+      Promise.resolve(window.__illuHwContacts && window.__illuHwContacts(true)).then(r => { HWMSG = r && r.ok ? E(T(r.contacts + ' new agency contacts, ' + r.agencies + ' new agencies added · ' + r.dupes + ' already there · ' + r.mails + ' emails read', '새 연락처 ' + r.contacts + '개, 새 에이전시 ' + r.agencies + '곳 · 이미 있음 ' + r.dupes + ' · ' + r.mails + '통 확인')) : r && r.need === 'signin' ? E(T('Sign in to Hiworks first.', '먼저 Hiworks에 로그인하세요.')) + ' <button type="button" class="bvbtn" data-emsignin>' + T('Sign in to Hiworks', 'Hiworks 로그인') + '</button>' : E(T('Could not read Hiworks: ', 'Hiworks를 읽지 못했습니다: ') + ((r && (r.why || r.err)) || '')); redraw(); }); return; }
     const c = typeof bv !== 'undefined' && bv && BOOK.get(bv.id); collect(c);
   }, true);
 
@@ -97,13 +116,16 @@
     const upd = em.at ? new Date(em.at) : null;
     const updTxt = upd ? String(upd.getDate()).padStart(2, '0') + '/' + String(upd.getMonth() + 1).padStart(2, '0') + '/' + upd.getFullYear() + ' ' + String(upd.getHours()).padStart(2, '0') + ':' + String(upd.getMinutes()).padStart(2, '0') : '';
     const P = people(L);
+    /* 1.2.168 (user, 13 Nov 2026): the agency's ✉ / ☎ here too - ✉ opens its contacts, a contact's ✉ writes through Hiworks about her */
+    let chip = ''; try{ const ref = /^https?:/i.test(c.k || '') ? c.k : (c.agd ? 'https://' + String(c.agd).replace(/^https?:\/\//, '') : ''); chip = typeof ctsChip === 'function' && (ref || c.ag) ? ctsChip(ref, c.ag || '') : ''; }catch(e){}
     return '<div class="emhw">' +
+      (chip ? '<div class="emmail" data-emfor="' + E(c.id) + '"><span>' + T('Email ', '이메일 ') + '<b>' + E(c.ag || '') + '</b></span>' + chip + '</div>' : '') +
       '<div class="emsum">' +
         '<div class="emk"><div><i>' + T('Emails', '이메일') + '</i><b>' + L.length + '</b></div><div><i>' + T('Received', '받음') + '</i><b>' + rin + '</b></div><div><i>' + T('Sent', '보냄') + '</i><b>' + rout + '</b></div><div><i>' + T('Files', '파일') + '</i><b>' + nf + '</b></div></div>' +
         (L.length || em.summary ? '<p class="emov">' + (first ? '<b>' + E(first === last ? first : first + ' – ' + last) + '.</b> ' : '') + E(sumOf(em)) + '</p>'
           : '<p class="emov emnone">' + T('No emails on this card yet.', '이 카드에는 아직 이메일이 없습니다.') + '</p>') +
         '<div class="emupd"><span>' + (updTxt ? T('Updated ', '업데이트 ') + E(updTxt) + (em.by === 'program' ? '' : T(' · by Claude', ' · Claude')) + (em.unread ? ' · ' + em.unread + T(' unread not opened', '통 안 읽음(열지 않음)') : '') : '') + '</span>' +
-          (window.illu && window.illu.hiworksCollect ? '<button type="button" class="bvbtn emcol" data-emcollect' + (HWBUSY ? ' disabled' : '') + '>' + (HWBUSY ? T('Reading Hiworks…', 'Hiworks 읽는 중…') : T('Collect from Hiworks', 'Hiworks에서 가져오기')) + '</button>' : '') +
+          (window.illu && window.illu.hiworksCollect ? '<button type="button" class="bvbtn emcol" data-emcollect' + (HWBUSY ? ' disabled' : '') + '>' + (HWBUSY ? T('Reading Hiworks…', 'Hiworks 읽는 중…') : T('Collect from Hiworks', 'Hiworks에서 가져오기')) + '</button>' : '') + (window.illu && window.illu.hiworksContacts ? '<button type="button" class="bvbtn emcol" data-emcts title="' + E(T('Reads your Hiworks mail list (addresses only) and adds every agency contact to the Directory, never twice', 'Hiworks 메일 목록(주소만)을 읽고 에이전시 연락처를 디렉터리에 추가합니다 (중복 없음)')) + '">' + T('Update agency contacts from my Hiworks', '내 Hiworks에서 에이전시 연락처 가져오기') + '</button>' : '') +
           '</div>' + (HWMSG ? '<p class="emcolm">' + HWMSG + '</p>' : '') +   /* 1.2.133: the program reads Hiworks itself */
       '</div>' +
       (P.length ? '<div class="emppl">' + T('People', '사람') + '</div><div class="empp"><button type="button" data-emwho="" aria-pressed="' + (!WHO) + '">' + T('All', '전체') + ' <em>' + L.length + '</em></button>' +
@@ -210,7 +232,7 @@
   st.textContent = [
     '.bv .emseg{display:flex;background:#f1eff4;border-radius:8px;padding:2px;margin:8px 0 10px}.bv .emseg button{flex:1;border:0;background:none;padding:6px;border-radius:6px;font:inherit;font-size:12px;color:#666;cursor:pointer}',
     '.bv .emseg button[aria-pressed="true"]{background:#fff;color:#1d1b22;box-shadow:0 1px 2px rgba(0,0,0,.1);font-weight:600}',
-    '.bv .emhw{font-size:12.5px;overflow:auto}.bv .emsum{border:1px solid #ebe8f0;border-radius:12px;padding:9px 10px;background:#faf9fc}',
+    '.bv .emmail{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px;padding:8px 10px;border:1px solid #ebe8f0;border-radius:12px;background:#fff}.bv .emmail>span:first-child{margin-right:auto;color:#6d6577}.bv .emmail b{color:#211c26;font-weight:600}' + '.bv .emhw{font-size:12.5px;overflow:auto}.bv .emsum{border:1px solid #ebe8f0;border-radius:12px;padding:9px 10px;background:#faf9fc}',
     '.bv .emk{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:7px}.bv .emk div{background:#fff;border:1px solid #eee;border-radius:8px;padding:5px 7px}.bv .emk i{display:block;font-style:normal;font-size:9.5px;letter-spacing:.08em;color:#888;text-transform:uppercase}.bv .emk b{font-size:15px}',
     '.bv .emov{margin:0 0 4px;color:#333;line-height:1.45}.bv .emnone{color:#777}.bv .emupd{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:#888;margin-top:6px}.bv .emup{white-space:nowrap}.bv .emup .clg{margin-right:4px}',
     '.bv .emppl{margin:10px 0 4px;font-size:10px;letter-spacing:.1em;color:#888;text-transform:uppercase;font-weight:600}.bv .empp{display:flex;flex-wrap:wrap;gap:5px}.bv .empp button{border:1px solid #e3dfe8;background:#fff;border-radius:8px;padding:3px 8px;font:inherit;font-size:11.5px;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bv .empp button em{font-style:normal;color:#888;margin-left:4px}.bv .empp button[aria-pressed="true"]{border-color:#6b2a5e;background:#f6eff4}',
@@ -235,4 +257,99 @@
   const st3 = document.createElement('style'); st3.textContent = '.emupd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.emupd .emcol{margin-left:auto}.emcolm{margin:6px 0 0;font-size:12.5px;color:var(--mut)}.emcolm .bvbtn{margin:0 4px}'; document.head.appendChild(st3);
   /* ...and its Close / OK button works there too (illu-claude.js handles it in the program) */
   if(!(window.illu && window.illu.claudeToggle)) document.addEventListener('click', e => { const x = e.target.closest && e.target.closest('.clmod [data-clx]'); if(!x) return; e.preventDefault(); const m = x.closest('.clmod'); if(m) m.remove(); });
+})();
+
+/* 1.2.158 (user, 12 Nov 2026): "Connect Hiworks to all users. Allow them to login using their own Hiworks ID. Once they
+   log in, go through their email and collect all the agency lists/contacts and add them to the directory. Watch for
+   duplicates. Add the agency websites according to their names. Also according to their user login, when they click
+   on the email cursor to send an email."
+   - The program tells its Hiworks side who is signed in here, so sign-in, Collect and compose use that person's own
+     Hiworks ID (program only; the phone has no Hiworks).
+   - After a person's Hiworks sign-in (and then once a day) their mail is read - addresses only, from the mail list -
+     and every agency address is added to that agency's contacts: never twice (an address already anywhere is
+     skipped). An agency that is not in the Directory yet is added with its website from its email domain
+     (docs agextra/<domain>, marked "from Hiworks"). Free mail (gmail, naver ...) and services (no-reply, google ...)
+     are left out. */
+(function(){
+  /* the agencies added from Hiworks show on the phone too; only the reading needs the program */
+  const has = () => !!(window.illu && window.illu.hiworksUser && window.illu.hiworksContacts);
+  const me = () => { try{ return ME || ''; }catch(e){ return ''; } };
+  let told = null;
+  const tell = () => { if(!has()) return; const m = me(); if(m !== told){ told = m; try{ window.illu.hiworksUser(m); }catch(e){} if(m) setTimeout(() => autoRun(), 8000); } };
+  setInterval(tell, 3000); tell();
+  const FREE = /^(gmail|googlemail|naver|yahoo|hotmail|outlook|live|msn|icloud|me|mac|mail|yandex|ya|daum|hanmail|nate|gmx|web|t-online|protonmail|proton|pm|qq|163|126|aol|ukr|bk|inbox|list|rambler|seznam|wp|o2|libero|virgilio|orange|free|laposte|sfr|wanadoo|btinternet|sky|comcast|verizon|att|kakao|hanmir|empas|zoho|yahoo\.co|mail\.ru)\./i;
+  const NOISE = /(google|facebook|instagram|meta|linkedin|amazon|apple|microsoft|paypal|hiworks|gabia|naver|kakao|notion|dropbox|zoom|slack|adobe|canva|figma|github|mailchimp|sendgrid|stripe|shopify|wix|squarespace|godaddy|cafe24|coupang|airbnb|booking\.com|agoda|expedia|uber|grab|spotify|netflix|youtube|tiktok|twitter|x\.com|pinterest|wetransfer|docusign|hellosign|smartstore|anthropic|claude|openai|supabase|firecrawl|magnific|mediaslide)/i;
+  const BOT = /^(no-?reply|do-?not-?reply|mailer|notifications?|news(letter)?|info-?mail|bounce|postmaster|support@hiworks)/i;
+  const MODELY = /model|agenc|inquir|availab|package|new ?face|booking|option|casting|placement|mother|guarantee|contract|stay|digitals|polaroid|snaps|book|show ?package|talent|scout|mgmt|management/i;
+  const regDom = d => { const p = String(d || '').toLowerCase().split('.'); if(p.length <= 2) return p.join('.'); const two = p.slice(-2).join('.'); return /^(co|com|net|org|ac|or|ne|go)\.[a-z]{2}$/.test(two) ? p.slice(-3).join('.') : two; };
+  function agFor(dom){ try{ return AG.find(a => a.domain && (lc(a.domain) === dom || lc(a.domain).endsWith('.' + dom) || dom.endsWith('.' + lc(a.domain)) || regDom(a.domain) === dom)); }catch(e){ return null; } }
+  const lc = s => String(s || '').trim().toLowerCase();
+  function guessName(dom, rows){
+    for(const r of rows){ const n = String(r.n || ''); const m = n.match(/[|\/@–-]\s*([^|\/@–-]*(model|mgmt|management|agency|talent)[^|\/@–-]*)$/i) || n.match(/^([^|\/]*(model|mgmt|management|agency|talent)[^|\/]*)$/i); if(m) return m[1].trim().replace(/\s+/g, ' ').slice(0, 60); }
+    const stem = dom.split('.')[0].replace(/[-_]+/g, ' ');
+    return stem.replace(/\b\w/g, c => c.toUpperCase()).replace(/mgmt\b/i, 'Mgmt').replace(/models\b/i, 'Models');
+  }
+  /* the agencies added from Hiworks (or by hand) join the Directory list */
+  const EXTRA = new Map();
+  function applyExtra(){
+    let added = 0;
+    try{ for(const v of EXTRA.values()){ if(!v.domain || AGALL.some(a => lc(a.domain) === lc(v.domain))) continue;
+      const id = 200000 + EXTRA.size + AGALL.length; AGALL.push({id, name: v.name || v.domain, domain: v.domain, country: v.country || '', city: v.city || '', region: v.region || '', boards: [], site: v.website || ('https://' + v.domain), n: 0, at: '', tiers: [], sexes: [], __o: {country: v.country || '', city: v.city || '', region: v.region || ''}, src: v.src || 'hiworks'}); added++; }
+      if(added){ if(typeof agApply === 'function') agApply(); try{ refresh(); }catch(e){} } }catch(e){}
+  }
+  (function listen(){ if(typeof DB === 'undefined' || !DB){ setTimeout(listen, 800); return; }
+    try{ DB.collection('agextra').onSnapshot(sn => { for(const x of (sn.docs || [])){ const v = typeof docOf === 'function' ? docOf(x) : x.data(); if(v && v.domain) EXTRA.set(lc(v.domain), v); } applyExtra(); }, () => {}); }catch(e){}
+  })();
+  let busy = false;
+  async function run(manual){
+    if(!has()) return {ok: false, why: 'Hiworks works in the program on the computer'};
+    if(busy) return {ok: false, why: 'busy'}; const m = me(); if(!m) return {ok: false, why: 'not signed in to the program'};
+    busy = true;
+    try{
+      const r = await window.illu.hiworksContacts(m);
+      if(!r || !r.ok) return r || {ok: false};
+      const all = new Set(); try{ for(const rows of CONTACTS.values()) for(const c of rows) if(c.e) all.add(lc(c.e)); }catch(e){}
+      const byDom = new Map(); let free = 0, noise = 0;
+      for(const o of r.list){
+        const a = lc(o.a), local = a.split('@')[0], full = a.split('@')[1] || '', dom = regDom(full);
+        if(!dom || BOT.test(local) || NOISE.test(full)){ noise++; continue; }
+        if(FREE.test(full)){ free++; continue; }
+        const ag = agFor(dom);
+        if(!ag && !o.s.some(x => MODELY.test(x))) { noise++; continue; }
+        const key = ag ? lc(ag.domain) : dom;
+        if(!byDom.has(key)) byDom.set(key, {ag, rows: []});
+        byDom.get(key).rows.push(o);
+      }
+      let addC = 0, addA = 0, dupe = 0; const newAgs = [];
+      for(const [dom, g] of byDom){
+        const list = (CONTACTS.get(dom) || []).slice(); let ch = false;
+        for(const o of g.rows.sort((p, q) => q.k - p.k)){
+          if(all.has(lc(o.a))){ dupe++; continue; }
+          list.push(ctsClean({e: o.a, n: o.n || '', r: '', p: ''})); all.add(lc(o.a)); addC++; ch = true;
+        }
+        if(ch){ CONTACTS.set(dom, list); try{ await saveContacts(dom); }catch(e){} try{ paintCtsChip(dom); }catch(e){} }
+        if(!g.ag && !EXTRA.has(dom) && !AGALL.some(a => lc(a.domain) === dom)){
+          const v = {domain: dom, name: guessName(dom, g.rows), website: 'https://' + dom, country: '', city: '', src: 'hiworks', by: m, at: new Date().toISOString(), n: g.rows.length};
+          EXTRA.set(dom, v); newAgs.push(v.name); addA++;
+          try{ await DB.doc('agextra/' + dom.replace(/[^a-z0-9.-]/g, '_')).set(v); }catch(e){}
+        }
+      }
+      applyExtra();
+      const sum = {ok: true, mails: r.seen, contacts: addC, agencies: addA, dupes: dupe, free, skipped: noise, newAgs: newAgs.slice(0, 40), at: new Date().toISOString()};
+      try{ localStorage.setItem('illu.hwcts.' + m, JSON.stringify(sum)); }catch(e){}
+      try{ await DB.doc('hwscan/' + m).set(sum); }catch(e){}
+      if(manual || addC || addA){ try{ (window.__illuToast || window.toast || (() => {}))(L2('Hiworks: ' + addC + ' new agency contacts' + (addA ? ', ' + addA + ' new agencies in the Directory' : '') + ' (' + r.seen + ' emails read, nothing twice)', 'Hiworks: 새 연락처 ' + addC + '개' + (addA ? ', 새 에이전시 ' + addA + '곳' : '') + ' (' + r.seen + '통 확인, 중복 없음)')); }catch(e){} }
+      return sum;
+    } finally { busy = false; }
+  }
+  const L2 = (en, ko) => (typeof LANG !== 'undefined' && LANG === 'ko') ? ko : en;
+  async function autoRun(){
+    const m = me(); if(!m) return;
+    let last = null; try{ last = JSON.parse(localStorage.getItem('illu.hwcts.' + m) || 'null'); }catch(e){}
+    if(last && Date.now() - new Date(last.at).getTime() < 22 * 3600e3) return;
+    let st = null; try{ st = await window.illu.hiworksStatus(m); }catch(e){}
+    if(st && st.signed) run(false);
+  }
+  try{ window.illu && window.illu.onHiworksSignedIn && window.illu.onHiworksSignedIn(() => setTimeout(() => run(true), 1500)); }catch(e){}
+  window.__illuHwContacts = run;
 })();

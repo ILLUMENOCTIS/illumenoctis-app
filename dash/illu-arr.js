@@ -92,7 +92,7 @@
       : m.est === 'planned' ? '<span class="adest" title="' + H(L('No departure date yet - counted from the contract length', '출국일 없음 - 계약 기간으로 계산')) + '">' + L('planned', '예정') + '</span>' : '';
   }
   const facts = c => { try{ return bkFacts(c) || {}; }catch(e){ return {}; } };
-  const photo = c => { try{ return bkPhoto(c) || ''; }catch(e){ return ''; } };
+  const photo = c => { try{ return (window.__illuBkPic ? window.__illuBkPic(c, 200) : bkPhoto(c)) || ''; }catch(e){ return ''; } };
   const n1 = v => v == null ? '–' : (Math.round(v * 10) / 10);
   const thumb = (m, big) => { const p = photo(m.c); return '<span class="adthumb' + (big ? ' big' : '') + '" style="--c:' + m.col + '">' + (p ? '<img src="' + H(p) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '<i>' + H(String(m.nm).charAt(0)) + '</i>') + '</span>'; };
   const moved = m => (m.c.dlog || []).some(x => x.k === 'ind');
@@ -405,7 +405,11 @@
   /* ---------- the timeline: one row per model ---------- */
   const addM = (d, n) => new Date(d.getFullYear(), d.getMonth() + n, 1);
   function timeline(all){
-    const a = S.tl0, z = addM(a, S.tls), N = days(a, z), ix = d => days(a, d);
+    /* 1.2.159 (user, 12 Nov 2026: "allow me to scroll back, there is a limit to go back"): the timeline holds 12 months
+       before the chosen month too; it still opens on today, at the same zoom */
+    /* and as far as you scroll: reaching either end adds 6 more months there (no limit) */
+    const a = addM(S.tl0, -12 - (S.tlBack || 0)), z = addM(S.tl0, S.tls + (S.tlFwd || 0)), N = days(a, z), ix = d => days(a, d);
+    S.tlA = a; S.tlNv = days(S.tl0, z);
     const rows = all.filter(m => m.ind < z && m.end >= a);
     let mo = '', ml = '', dy = '', cnt = '', wk = '';
     for(let i = 0; i < N;){ let j = i + 1; while(j < N && addD(a, j).getDay() !== 0) j++;
@@ -426,7 +430,7 @@
         (cr ? '<em class="r">' + (m.tbd ? L('departure TBD ›', '출국 미정 ›') : L('until ', '') + fmt(m.out) + L(' ›', '까지 ›')) + '</em>' : '<span class="fd">' + (m.early ? L('EARLY ', '조기 ') : '') + '↗ ' + H(fz.t || '--:--') + (apShort(fz) ? ' ' + H(apShort(fz)) : '') + '</span>') + '</button>' : '';
       return '<div class="adtlr' + (S.pick === m.id ? ' on' : '') + '"><button type="button" class="adtln" data-adpick="' + H(m.id) + '" data-adtl="1">' + thumb(m) + '<span><b>' + H(m.nm) + '</b><small>' + VIS(m.vty) + ' · ' + (m.tbd ? 'TBD' : L(m.len + ' days', m.len + '일')) + '</small></span></button><div class="adtlt grid">' + bar + ap + '</div></div>';
     }).join('');
-    const ti = ix(today()), nowL = ti >= 0 && ti < N ? '<i class="adtlnow" style="left:calc(var(--nw) + var(--dw) * ' + (ti + .5) + ' - 1px)"></i>' : '';
+    const ti = ix(today()), nowL = ti >= 0 && ti < N ? '<i class="adtlnow" style="left:calc(var(--nw) + var(--dw) * ' + (ti + .5) + ' - 1px)"><b class="adtlnowl">' + H(L('Today', '오늘') + ' · ' + today().toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'})) + '</b><b class="adtlnowl bot">' + H(today().toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short'})) + '</b></i>' : '';   /* 1.2.159 (user: "a clear indication of what date that long line is on") */
     return '<div class="adtlbar"><span class="adseg" role="group" aria-label="' + H(L('How much to show', '표시 기간')) + '">' + [1, 3, 6].map(k => '<button type="button" data-adtls="' + k + '" aria-pressed="' + (S.tls === k) + '">' + L(k + (k === 1 ? ' month' : ' months'), k + '개월') + '</button>').join('') + '</span>' +
       '<p class="adhint"><span><s></s>' + L('one bar per model: arrival → departure', '모델 한 명당 막대 하나: 도착 → 출국') + '</span><span><i style="background:#5B48C9"></i>' + L('appointment', '일정') + '</span><span>· ' + L('click a bar for flights and details · click a date to open that day', '막대를 누르면 항공·상세 · 날짜를 누르면 그날 일정') + '</span></p></div>' +
       '<div class="adtlw"><div class="adtl" style="--days:' + N + ';--dw:20px">' +
@@ -437,9 +441,14 @@
   function fitTl(){
     const w = PG.querySelector('.adtlw'), t = PG.querySelector('.adtl'); if(!w || !t) return;
     const nw = parseFloat(getComputedStyle(t).getPropertyValue('--nw')) || 190, N = +t.style.getPropertyValue('--days');
-    const dw = Math.max(S.tls === 1 ? 26 : 9, (w.clientWidth - nw - 2) / N);
-    t.style.setProperty('--dw', dw.toFixed(2) + 'px'); t.classList.toggle('dense', dw < 17); t.classList.toggle('wide', dw >= 26);
-    if(S.tlScroll){ S.tlScroll = false; w.scrollLeft = Math.max(0, days(S.tl0, today()) * dw - 40); return true; }
+    const dw = Math.max(S.tls === 1 ? 26 : 9, (w.clientWidth - nw - 2) / (S.tlNv || N));
+    t.style.setProperty('--dw', dw.toFixed(2) + 'px'); { const hd = t.querySelector('.adtlh'); if(hd) t.style.setProperty('--tlhd', (hd.offsetHeight + 4) + 'px'); } t.classList.toggle('dense', dw < 17); t.classList.toggle('wide', dw >= 26);
+    if(!w.__tlEnd){ w.__tlEnd = 1; let busy = false;
+      w.addEventListener('scroll', () => { if(busy) return; const t2 = PG.querySelector('.adtl'); const dw2 = parseFloat((t2 && t2.style.getPropertyValue('--dw')) || '0'); if(!dw2) return;
+        if(w.scrollLeft < 120){ busy = true; const was = S.tlA, keep = w.scrollLeft; S.tlBack = (S.tlBack || 0) + 6; render(); requestAnimationFrame(() => { const w2 = PG.querySelector('.adtlw'); if(w2 && was && S.tlA) w2.scrollLeft = keep + days(S.tlA, was) * dw2; busy = false; }); }
+        else if(w.scrollLeft + w.clientWidth > w.scrollWidth - 120){ busy = true; const keep = w.scrollLeft; S.tlFwd = (S.tlFwd || 0) + 6; render(); requestAnimationFrame(() => { const w2 = PG.querySelector('.adtlw'); if(w2) w2.scrollLeft = keep; busy = false; }); }
+      }, {passive: true}); }
+    if(S.tlScroll){ S.tlScroll = false; const T = today(), tgt = T >= S.tl0 && T < addM(S.tl0, S.tls) ? T : S.tl0; w.scrollLeft = Math.max(0, days(S.tlA || S.tl0, tgt) * dw - 40); return true; }
     return false;
   }
 
@@ -615,7 +624,7 @@
     if((b = q('[data-adbmv]'))){ const n = +b.dataset.adbmv;
       if(S.view === 'day'){ S.vday = addD(S.vday, n); S.vy = S.vday.getFullYear(); S.vm = S.vday.getMonth(); S.apt = null; }
       else if(S.view === 'month'){ const d = new Date(S.vy, S.vm + n, 1); S.vy = d.getFullYear(); S.vm = d.getMonth(); }
-      else if(S.home === 'tl') S.tl0 = addM(S.tl0, n);
+      else if(S.home === 'tl'){ S.tl0 = addM(S.tl0, n); S.tlScroll = true; }
       else { const d = new Date(S.by, S.bm + n * 3, 1); S.by = d.getFullYear(); S.bm = d.getMonth(); }
       render(); return; }
     if(q('[data-adbtoday]')){ const T = today(); S.by = T.getFullYear(); S.bm = T.getMonth() - 1; if(S.bm < 0){ S.bm = 11; S.by--; } S.tl0 = new Date(T.getFullYear(), T.getMonth(), 1); S.tlScroll = true;
@@ -1144,6 +1153,8 @@ body.adfull #pane-arrd .adbd{height:100%}
 .adtl.dense .adtlt.grid{background-image:none}
 .adtlm{position:absolute;top:0;bottom:0;width:1px;background:var(--line);pointer-events:none}
 .adtlnow{position:absolute;top:0;bottom:0;width:2px;background:var(--acc);z-index:1;pointer-events:none;opacity:.8}
+.adtlnow .adtlnowl{position:absolute;top:var(--tlhd,58px);left:50%;transform:translateX(-50%);white-space:nowrap;background:var(--acc);color:#fff;font-style:normal;font-weight:700;font-size:10.5px;line-height:1;font-family:inherit;padding:4px 7px;z-index:3;border-radius:999px;box-shadow:0 2px 8px rgba(40,20,50,.25);opacity:1}
+.adtlnow .adtlnowl.bot{top:auto;bottom:6px}
 .adtlb{position:absolute;top:8px;height:30px;border-radius:8px;border:1px solid color-mix(in srgb,var(--c) 55%,transparent);background:color-mix(in srgb,var(--c) 20%,var(--surf));display:flex;align-items:center;gap:6px;padding:0 6px;font:inherit;font-size:11.5px;white-space:nowrap;overflow:hidden;cursor:pointer;color:var(--ink);text-align:left}
 .adtlb:hover{background:color-mix(in srgb,var(--c) 30%,var(--surf))}
 .adtlb.cl{border-top-left-radius:0;border-bottom-left-radius:0;border-left-style:dashed}

@@ -104,6 +104,17 @@ function tallies(){
       rbox.appendChild(lab);
     }
   }
+  /* 1.2.169 (user, 13 Nov 2026: "the filter should also have the option to choose the country"): one box per country */
+  const cbox = document.getElementById('f-country');
+  if(cbox){
+    const have = new Set(Array.from(cbox.querySelectorAll('input[data-f="country"]')).map(i => i.value));
+    const want = [...new Set(AG.map(a => a.country || 'Unknown'))].filter(c => !have.has(c)).sort((x, y) => x === 'Unknown' ? 1 : y === 'Unknown' ? -1 : x.localeCompare(y));
+    for(const c of want){
+      const lab = document.createElement('label'); lab.className = 'opt';
+      lab.innerHTML = '<input type="checkbox" data-f="country" value="' + esc(c) + '"><span>' + esc(c === 'Unknown' ? 'Not stated' : c) + '</span><span class="oc" data-c="country:' + esc(c) + '">0</span>';
+      cbox.appendChild(lab);
+    }
+  }
   /* the Blind spots badge has always counted BOARDS the scan cannot read, not the
      agencies they belong to - kept as it was, but counted rather than typed */
   const bl = document.getElementById('vn-bld');
@@ -2039,6 +2050,17 @@ async function loadMeas(){
       const data = docOf(d);
       for(const [k, v] of Object.entries((data && data.e) || {})) measPut(k, v);
     }
+    /* 1.2.170 (user, 13 Nov 2026: "many cards have a black photo as the main photo"): one picture standing as the photo
+       of 4+ different models is the agency's logo or a placeholder (manifesto.png, models.png...), never hers - dropped,
+       so the card looks for her real photo */
+    try{
+      const use = new Map();
+      for(const [k, r] of MEAS){ const u = r && r[6]; if(!u) continue; const seg = String(k).toLowerCase().replace(/[?#].*$/, '').replace(/\/+$/, '').split('/').pop();
+        let o = use.get(u); if(!o){ o = {n: 0, s: new Set()}; use.set(u, o); } o.n++; o.s.add(seg); }
+      let dropped = 0;
+      for(const [k, r] of MEAS){ const u = r && r[6]; const o = u && use.get(u); if(o && o.n >= 4 && o.s.size >= 3){ r[6] = null; dropped++; } }
+      window.__illuSharedPhotos = dropped;
+    }catch(e){}
     await loadEdits();
     measState = 'ready';
   }catch(e){
@@ -2405,6 +2427,7 @@ function passesFilters(a){
   const sexes = checked('sex'), regions = checked('region'), tiers = checked('tier');
   if(sexes.length && !sexes.includes(a.g || '?')) return false;
   if(regions.length && !regions.includes(REGION[a.country] || 'Unknown')) return false;
+  { const cs = checked('country'); if(cs.length && !cs.includes(a.country || 'Unknown')) return false; }
   if(tiers.length && !tiers.includes(a.tier || 'unlabelled')) return false;
   const marks = checked('mark');
   if(marks.length && !marks.includes(lampOf(normKey(a.url || 'name:' + a.name)) || ''))
@@ -3828,6 +3851,7 @@ function blindShown(){
   const regions = checked('region');
   return BLINDS.filter(a => {
     if(regions.length && !regions.includes(REGION[a.c] || 'Unknown')) return false;
+    { const cs = checked('country'); if(cs.length && !cs.includes(a.c || 'Unknown')) return false; }
     if(!term) return true;
     const hay = (a.n + ' ' + a.city + ' ' + a.c + ' ' + a.dom + ' ' +
                  a.b.map(b => b.d + ' ' + REASON[b.r].l).join(' ')).toLowerCase();
@@ -4137,6 +4161,7 @@ function igRows(){
   const regions = checked('region');
   return IGA.filter(a => {
     if(regions.length && !regions.includes(REGION[a.k] || 'Unknown')) return false;
+    { const cs = checked('country'); if(cs.length && !cs.includes(a.k || 'Unknown')) return false; }
     if(term && !((a.n || '') + ' ' + (a.h || '') + ' ' + (a.c || '') + ' ' + (a.k || '') +
                  ' ' + (a.note || '')).toLowerCase().includes(term)) return false;
     return true;
@@ -4527,6 +4552,7 @@ function litPasses(m, term){
   if(litWho && (!PRIV() || litWho === ME) && !whoHas(litWho, m.key)) return false;
   if(marks.length && !marks.includes(m.v)) return false;
   if(regions.length && !regions.includes(REGION[m.country] || 'Unknown')) return false;
+  { const cs = checked('country'); if(cs.length && !cs.includes(m.country || 'Unknown')) return false; }
   if(term){
     const hay = (m.nm + ' ' + m.ag + ' ' + m.city + ' ' + m.country + ' ' + m.div)
                   .toLowerCase();
@@ -6302,6 +6328,7 @@ function counts(){
       c['sex:' + (a.g || '?')] = (c['sex:' + (a.g || '?')] || 0) + 1;
       const rg = REGION[a.country] || 'Unknown';
       c['region:' + rg] = (c['region:' + rg] || 0) + 1;
+      c['country:' + (a.country || 'Unknown')] = (c['country:' + (a.country || 'Unknown')] || 0) + 1;
       const t = a.tier || 'unlabelled';
       c['tier:' + t] = (c['tier:' + t] || 0) + 1;
     }
@@ -6315,6 +6342,7 @@ function counts(){
       c['sex:' + (f.g || '?')] = (c['sex:' + (f.g || '?')] || 0) + 1;
       const rg = REGION[m.country] || 'Unknown';
       c['region:' + rg] = (c['region:' + rg] || 0) + 1;
+      c['country:' + (m.country || 'Unknown')] = (c['country:' + (m.country || 'Unknown')] || 0) + 1;
       const t = f.tier || 'unlabelled';
       c['tier:' + t] = (c['tier:' + t] || 0) + 1;
       c['mark:' + m.v] = (c['mark:' + m.v] || 0) + 1;
@@ -6323,6 +6351,7 @@ function counts(){
     for(const a of BLINDS){
       const rg = REGION[a.c] || 'Unknown';
       c['region:' + rg] = (c['region:' + rg] || 0) + 1;
+      c['country:' + (a.c || 'Unknown')] = (c['country:' + (a.c || 'Unknown')] || 0) + 1;
     }
   }else{
     for(const a of AG){
@@ -8056,6 +8085,9 @@ document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'hidden') flushBook();
 });
 async function dropBook(bid){
+  /* 1.2.159 (user, 12 Nov 2026: "in case I make the mistake of deleting or if I change my mind"): a deleted card is
+     kept in bktrash/<id> first, and comes back from "Deleted cards" on the Booking board (Cancelled tab) */
+  try{ const c0 = BOOK.get(bid); if(c0 && DB && SIGNED()) await DB.doc('bktrash/' + bid).set({c: JSON.parse(JSON.stringify(c0)), by: ME || '', at: new Date().toISOString()}); }catch(e){}
   BOOK.delete(bid);
   renderBook();
   if(!DB || !SIGNED()) return;
@@ -8167,11 +8199,16 @@ function bkMoveTo(bid, to){
   return true;
 }
 function bkPhoto(c){
+  /* 1.2.155: the photo picked for her card (her folder or her agency page) comes first */
+  try{ const v = window.__illuBkCover && window.__illuBkCover(c); if(v) return v; }catch(e){}
   if(c.ph) return picURL(c.ph);
   if(c.k){
     const id = PICS.get(c.k);
     if(id) return picURL(id);
-    try{ const f = litFacts({key: c.k, nm: c.nm, ag: c.ag}); if(f && f.photo) return f.photo; }catch(e){}
+    /* 1.2.163 (user: "photo is not appearing" - Rusne S showed Manifesto's black logo): the card photo picked for
+       her, then her agency photo, and never a site logo */
+    try{ const P = window.__illuPhoto; const pm = P && P.PMAIN && P.PMAIN.get(c.k); if(pm && pm.u) return pm.u; const pl = P && P.PLINK && P.PLINK.get(c.k); if(pl) return pl; }catch(e){}
+    try{ const f = litFacts({key: c.k, nm: c.nm, ag: c.ag}); if(f && f.photo && !/\/images\/[^\/]+\.(png|svg|gif)(\?|$)|logo|placeholder|no[-_ ]?image/i.test(f.photo)) return f.photo; }catch(e){}
   }
   return '';
 }
@@ -9846,6 +9883,7 @@ function bkPasses(c, term){
   if(litWho && c.by !== litWho) return false;
   if(marks.length && !marks.includes(lampOf(c.k) || '')) return false;
   if(regions.length && !regions.includes(REGION[c.country] || 'Unknown')) return false;
+  { const cs = checked('country'); if(cs.length && !cs.includes(c.country || 'Unknown')) return false; }
   if(term){
     const hay = [c.nm, c.ag, c.city, c.country, c.ig]
       .map(x => String(x || '')).join(' ').toLowerCase();
@@ -11279,6 +11317,7 @@ function dirExportLabel(){
   const bits = [];
   const add = (lab, arr) => { if(arr.length) bits.push(lab + ': ' + arr.join(', ')); };
   add('Region', checked('region'));
+  add('Country', checked('country'));
   add('Sex', checked('sex').map(x => SEXWORD[x] || x));
   add('Board', checked('tier').map(x => TIER[x] || x));
   add('Agency type', checked('atype').map(x => ILLU_AT[x] || x));

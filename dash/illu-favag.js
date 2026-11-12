@@ -15,7 +15,13 @@
   const H = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
   const lc = s => String(s || '').trim().toLowerCase();
   const PH = () => matchMedia('(max-width:760px), (pointer:coarse) and (max-width:1024px)').matches;
-  const S = {tab: (() => { try{ return localStorage.getItem('illu.favag.tab') || 'mine'; }catch(e){ return 'mine'; } })(), who: '', sel: '', sheet: '', log: false};
+  const S = {tab: (() => { try{ return localStorage.getItem('illu.favag.tab') || 'mine'; }catch(e){ return 'mine'; } })(), who: '', sel: '', sheet: '', log: false,
+    f: (() => { try{ return localStorage.getItem('illu.favag.f') || 'all'; }catch(e){ return 'all'; } })(), pop: ''};
+  /* 1.2.156 (user, 12 Nov 2026, approved demo): two tabs - My favorites (mine only) and Team (one list, chips All / Shared / In contact).
+     The old Shared tab is Team > In contact. */
+  if(S.tab === 'shared'){ S.tab = 'team'; S.f = 'contact'; }
+  if(!['all', 'shared', 'contact'].includes(S.f)) S.f = 'all';
+  const isContact = () => S.tab === 'team' && S.f === 'contact';
   const HAND = new Map();          // id -> {d, an, who, them, role, what, at, by}
   const PREFS = new Map();         // pid -> [domains]
   const pane = document.createElement('div');
@@ -76,16 +82,16 @@
     /* 1.2.149 (user, 12 Nov 2026, approved demo): which models of the agency each person is working on - her booking
        card, a card they sent to the Team Vote, or a favourite - with where her vote stands */
     const MOD = new Map();        // agency key -> Map(pid -> Map(model key -> {k, nm, how:[...], at}))
-    const agOfModel = (k, agName) => { let h = ''; try{ h = new URL(k).hostname.replace(/^www\./, ''); }catch(e){} const a = (h && agOf(h)) || (agName && agOf(agName)); return a ? lc(a.domain) : (agName ? 'name:' + lc(agName) : ''); };
-    const mput = (k, pid, nm, ag, how, at) => {
+    const agOfModel = (k, agName) => { let h = ''; try{ if(!/^bid:/.test(k)) h = new URL(k).hostname.replace(/^www\./, ''); }catch(e){} const a = (h && agOf(h)) || (agName && agOf(agName)); return a ? lc(a.domain) : (agName ? 'name:' + lc(agName) : ''); };
+    const mput = (k, pid, nm, ag, how, at, card) => {
       if(!k || !pid) return; const ak = agOfModel(k, ag); if(!ak) return;
       if(!MOD.has(ak)) MOD.set(ak, new Map()); const pm = MOD.get(ak); if(!pm.has(pid)) pm.set(pid, new Map());
       const mm = pm.get(pid); const o = mm.get(k) || {k, nm: '', how: [], at: ''};
       if(!o.nm){ let i = {}; try{ i = (window.__illuModelInfo && window.__illuModelInfo(k)) || {}; }catch(e){} o.nm = nm || i.nm || ''; }
-      if(!o.how.includes(how)) o.how.push(how); if(String(at || '') > o.at) o.at = String(at || '');
+      if(!o.how.includes(how)) o.how.push(how); if(String(at || '') > o.at) o.at = String(at || ''); if(card) o.bk = card;
       mm.set(k, o);
     };
-    try{ for(const c of BOOK.values()){ if(c && c.by && c.k) mput(c.k, c.by, c.nm, c.ag, 'book', c.at); } }catch(e){}
+    try{ for(const c of BOOK.values()){ if(c && c.by && (c.k || c.id)) mput(c.k || ('bid:' + c.id), c.by, c.nm, c.agd || c.ag, c.st === 'canc' ? 'bkx' : 'book', c.at, c); } }catch(e){}
     try{ for(const o of (window.__illuVoteSent ? window.__illuVoteSent() : [])) mput(o.k, o.by, o.nm, o.ag, 'vote', o.at); }catch(e){}
     try{ for(const p of (window.__illuFavPeople ? window.__illuFavPeople() : [])) for(const f of window.__illuFavsOf(p)) mput(f.k, p, f.nm, f.ag, 'fav', f.at); }catch(e){}
     return {C, LOG, MOD};
@@ -106,7 +112,7 @@
     let ks;
     const fav = (window.ATLFAV && ATLFAV.list()) || [];
     if(S.tab === 'mine') ks = fav.map(lc);
-    else if(S.tab === 'shared'){
+    else if(isContact()){
       /* 1.2.149: two or more of us in contact, or working on its models */
       const who = k => { const s2 = new Set([...((D.C.get(k) || new Map()).keys())]); for(const p of ((D.MOD && D.MOD.get(k)) || new Map()).keys()) s2.add(p); return s2.size; };
       const last = k => Math.max(0, ...[...((D.C.get(k) || new Map()).values())].map(x => x.w.t));
@@ -123,22 +129,87 @@
     return all.slice(0, 8);
   }
   function head(D){
-    const nShared = (() => { const t = S.tab; S.tab = 'shared'; const n = rowsFor(D).length; S.tab = t; return n; })(), nMine = ((window.ATLFAV && ATLFAV.list()) || []).length;
+    const nMine = ((window.ATLFAV && ATLFAV.list()) || []).length, nTeam = teamAgs().length;
+    const chip2 = (k, l) => '<button type="button" class="fgchip" data-fgf="' + k + '" aria-pressed="' + (S.f === k) + '">' + l + '</button>';
     const tab = (k, l) => '<button type="button" data-fgtab="' + k + '" aria-pressed="' + (S.tab === k) + '">' + l + '</button>';
     const ppl = cols(D);
-    return '<div class="fghd"><div class="fgseg" role="tablist">' + tab('mine', L('My favorites', '내 즐겨찾기') + ' · ' + nMine) + tab('shared', L('Shared', '공유') + ' · ' + nShared) + tab('team', L('Team favorites', '팀 즐겨찾기')) + '</div>' +
-      (S.tab !== 'team' ? '<div class="fgwho"><span>' + L('Show who:', '사람:') + '</span><button type="button" data-fgwho="" aria-pressed="' + !S.who + '">' + L('Everyone', '모두') + '</button>' +
+    return '<div class="fghd"><div class="fgseg" role="tablist">' + tab('mine', L('My favorites', '내 즐겨찾기') + ' · ' + nMine) + tab('team', L('Team', '팀') + ' · ' + nTeam) + '</div>' +
+      (S.tab === 'team' ? '<div class="fgchips">' + chip2('all', L('All', '전체')) + chip2('shared', '★ ' + L('Shared', '공유')) + chip2('contact', L('In contact', '연락 중')) + '</div>' : '') +
+      (S.tab === 'mine' || isContact() ? '<div class="fgwho"><span>' + L('Show who:', '사람:') + '</span><button type="button" data-fgwho="" aria-pressed="' + !S.who + '">' + L('Everyone', '모두') + '</button>' +
         ppl.map(p => { const c = colOf(p); return '<button type="button" data-fgwho="' + H(p) + '" aria-pressed="' + (S.who === p) + '" style="--pc:' + c.bg + ';--pf:' + c.fg + '">' + av(p, 20) + '<b>' + H(nmOf(p)) + '</b></button>'; }).join('') + '</div>' : '') + '</div>';
   }
-  const modsOf = (D, k, pid) => { const pm = D.MOD && D.MOD.get(k); const mm = pm && pm.get(pid); return mm ? [...mm.values()].sort((a, b) => String(b.at).localeCompare(String(a.at))) : []; };
+  /* every agency anyone on the team starred: domain -> [people], me first */
+  function teamAgs(){
+    const m = new Map();
+    for(const p of people()) for(const d of (PREFS.get(p) || [])){ const k = lc(d); if(!k) continue; if(!m.has(k)) m.set(k, []); if(!m.get(k).includes(p)) m.get(k).push(p); }
+    try{ const me = meId(); for(const d of ((window.ATLFAV && ATLFAV.list()) || [])){ const k = lc(d); if(!m.has(k)) m.set(k, []); if(!m.get(k).includes(me)) m.get(k).push(me); } }catch(e){}
+    const me = meId();
+    return [...m.entries()].map(([k, ps]) => ({k, ps: ps.sort((a, b) => (a === me ? -1 : b === me ? 1 : nmOf(a).localeCompare(nmOf(b)))), I: infoOf(k)}));
+  }
+  function teamList(D){
+    const all = teamAgs(), COLL = (a, b) => String(a.I.name).localeCompare(String(b.I.name), undefined, {sensitivity: 'base', numeric: true});
+    const sh = all.filter(x => x.ps.length > 1).sort(COLL), rest = all.filter(x => x.ps.length < 2).sort(COLL);
+    const row = x => { const inC = (D.C.get(x.k) || new Map()).size > 0;
+      return '<button type="button" class="fgtl" data-fgdir="' + H(x.k) + '" title="' + H(L('Open in the Directory', '디렉터리에서 열기')) + '"><span class="fgtls">★</span><span class="fgtln"><b>' + H(x.I.name) + '</b><small>' + H(x.I.place) + '</small></span>' +
+        (inC ? '<span class="fgtlc">' + L('in contact', '연락 중') + '</span>' : '<span></span>') + '<span class="fgtla">' + x.ps.map(p => av(p, 22)).join('') + '</span>' + (x.ps.length > 1 ? '<span class="fgtlk">★ ' + x.ps.length + '</span>' : '<span></span>') + '</button>'; };
+    if(!all.length) return '<p class="fgempty">' + L('No one has a favorite agency yet.', '아직 즐겨찾는 에이전시가 없습니다.') + '</p>';
+    return '<div class="fgtlw">' + (sh.length ? '<div class="fgtlb"><div class="fgtlh">★ ' + L('Shared favorites', '공유 즐겨찾기') + ' · ' + sh.length + '</div>' + sh.map(row).join('') + '</div>' : (S.f === 'shared' ? '<p class="fgempty">' + L('No agency is starred by two or more of us yet.', '두 명 이상이 즐겨찾기한 에이전시가 아직 없습니다.') + '</p>' : '')) +
+      (S.f === 'all' && rest.length ? '<div class="fgtlh">' + L('Others', '그 외') + ' · ' + rest.length + '</div>' + rest.map(row).join('') : '') + '</div>';
+  }
+  const modsOf = (D, k, pid) => { const pm = D.MOD && D.MOD.get(k); const mm = pm && pm.get(pid); if(!mm) return [];
+    /* 1.2.156: the same model in another person's hands at this agency -> orange ring (ov) */
+    const others = new Set(); for(const [p, m2] of pm) if(p !== pid) for(const x of m2.values()) others.add(x.k);
+    return [...mm.values()].map(x => Object.assign(x, {ov: others.has(x.k)})).sort((a, b) => String(b.at).localeCompare(String(a.at))); };
   const shortNm = n => { const w = String(n || '').trim().split(/\s+/); return w.length > 1 ? w[0] + ' ' + w[w.length - 1].charAt(0) + '.' : (w[0] || '?'); };
   const stOf = k => { try{ return window.__illuVoteState ? window.__illuVoteState(k) : ''; }catch(e){ return ''; } };
   const ST = {open: ['Voting', '투표 중', 'y'], tie: ['Tie-breaker', '타이브레이커', 'y'], appr: ['Approved', '승인', 'g'], cxl: ['Cancelled', '취소', 'r']};
   const howL = h => h === 'book' ? L('Booking', '부킹') : h === 'vote' ? L('Sent to vote', '투표에 보냄') : L('Favorite', '즐겨찾기');
+  /* 1.2.153 (approved demo, 12 Nov 2026): her mini card in the person's box - where she stands, as a coloured bar */
+  const MST = {req: ['Requested', '요청', '#9A8FA3'], vote: ['Team Vote', '팀 투표', '#E0A030'], tie: ['Tie-breaker', '타이브레이커', '#E0A030'], appr: ['Approved', '승인', '#2E9E5B'], cxl: ['Cancelled', '취소', '#A3283F'], bk: ['Booking', '부킹', '#5A2C57'], done: ['Booked', '부킹 완료', '#2E9E5B'], stay: ['On stay', '체류 중', '#1F7F8C'], fav: ['Favorite', '즐겨찾기', '#C9B6CB'], bkx: ['Booking cancelled', '부킹 취소', '#A3283F'], hold: ['On hold', '보류', '#C97916'], no: ['Unavailable', '불가', '#A3283F']};
+  function mStat(m){
+    try{ const av = window.__illuAvailOf && window.__illuAvailOf(m.k); if(av) return av.t === 'later' ? 'hold' : 'no'; }catch(e){}
+    if(m.bk){ const c = m.bk; try{ const so = window.__illuStayOf && window.__illuStayOf(c); if(so && so.on) return 'stay'; }catch(e){} return c.st === 'done' ? 'done' : c.st === 'canc' ? 'bkx' : 'bk'; }
+    const v = stOf(m.k); if(v === 'open') return 'vote'; if(v) return v;
+    return m.how.includes('fav') ? 'fav' : 'req';
+  }
+  function mPhoto(m){
+    let u = '';
+    try{ if(m.bk && typeof bkPhoto === 'function') u = bkPhoto(m.bk) || ''; }catch(e){}
+    try{ if(!u && window.__illuMatCover) u = window.__illuMatCover(/^bid:/.test(m.k) ? m.k : m.k) || (m.bk ? window.__illuMatCover('bid:' + m.bk.id) : '') || ''; }catch(e){}
+    try{ if(!u && !/^bid:/.test(m.k) && typeof litFacts === 'function') u = (litFacts({key: m.k}) || {}).photo || ''; }catch(e){}
+    if(u && /^https?:/i.test(u)){ if(window.illu && window.illu.modelPhotos && !window.illu.web) u = 'illuimg://p/' + encodeURIComponent(u) + '?r=' + encodeURIComponent(m.k) + '&w=200'; else if(window.__illuSmall) u = window.__illuSmall(u, 150); }
+    return u;
+  }
+  function miniHTML(m){
+    const st = MST[mStat(m)] || MST.req, ph = mPhoto(m);
+    return '<button type="button" class="fgmini' + (/Unavailable|cancelled/i.test(st[0]) ? ' no' : '') + (m.ov ? ' ov' : '') + '" data-fgmod="' + H(m.k) + '"' + (m.bk ? ' data-fgbid="' + H(m.bk.id) + '"' : '') + ' title="' + H((m.nm || '?') + ' — ' + L(st[0], st[1])) + '"><span class="fgmph">' + (ph ? '<img src="' + H(ph) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()">' : '<i>' + H((m.nm || '?').charAt(0)) + '</i>') + '<s style="background:' + st[2] + '"></s></span><span class="fgmnm">' + H(shortNm(m.nm)) + '</span></button>';
+  }
+  /* 1.2.156 (user, 12 Nov 2026, approved demo): many models with one person - a stack + count + one dot per stage; the full list on click */
+  const ORDER = ['stay', 'done', 'bk', 'vote', 'tie', 'appr', 'fav', 'req', 'hold', 'no', 'bkx', 'cxl'];
+  const GROUP = {stay: 'g1', done: 'g1', bk: 'g2', vote: 'g3', tie: 'g3', appr: 'g3', fav: 'g4', req: 'g4', hold: 'g5', no: 'g5', bkx: 'g5', cxl: 'g5'};
+  const GNAME = {g1: ['On stay / Booked', '체류 / 부킹 완료', '#2E9E5B'], g2: ['Booking', '부킹', '#5A2C57'], g3: ['Team vote', '팀 투표', '#E0A030'], g4: ['Favorite / Requested', '즐겨찾기 / 요청', '#9A8FA3'], g5: ['Unavailable / On hold / Cancelled', '불가 / 보류 / 취소', '#A3283F']};
+  function stackHTML(ms, k, pid){
+    if(ms.length < 2) return minisHTML(ms);
+    const top = ms.slice(0, 3), cnt = {};
+    for(const m of ms){ const g = GROUP[mStat(m)] || 'g4'; cnt[g] = (cnt[g] || 0) + 1; }
+    const key = k + '|' + pid, ov = ms.some(m => m.ov);
+    return '<button type="button" class="fgstk' + (ov ? ' ov' : '') + '" data-fgstack="' + H(key) + '" aria-expanded="' + (S.pop === key) + '" title="' + H(ms.map(m => m.nm).join(', ')) + '"><span class="fgstp">' +
+      top.map((m, i) => { const st = MST[mStat(m)] || MST.req, ph = mPhoto(m); return '<span class="fgstm" style="left:' + (i * 14) + 'px;z-index:' + (3 - i) + '">' + (ph ? '<img src="' + H(ph) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()">' : '<i>' + H((m.nm || '?').charAt(0)) + '</i>') + '<s style="background:' + st[2] + '"></s></span>'; }).join('') +
+      (ms.length > 3 ? '<b class="fgstn">' + ms.length + '</b>' : '') + '</span><span class="fgstd">' + Object.keys(GNAME).filter(g => cnt[g]).map(g => '<span><i style="background:' + GNAME[g][2] + '"></i>' + cnt[g] + '</span>').join('') + '</span></button>';
+  }
+  function popHTML(D){
+    if(!S.pop) return '';
+    const [k, pid] = S.pop.split('|'); const ms = modsOf(D, k, pid); if(!ms.length){ S.pop = ''; return ''; }
+    const by = {}; for(const m of ms){ const g = GROUP[mStat(m)] || 'g4'; (by[g] = by[g] || []).push(m); }
+    const C = (a, b) => String(a.nm || '').localeCompare(String(b.nm || ''), undefined, {sensitivity: 'base', numeric: true});
+    return '<div class="fgpop" role="dialog" aria-label="' + H(nmOf(pid) + ' · ' + infoOf(k).name) + '"><div class="fgpoph"><div><b>' + H(nmOf(pid) + ' · ' + infoOf(k).name) + '</b><small>' + ms.length + ' ' + L('models · click one to open her card', '명 · 누르면 카드가 열립니다') + '</small></div><button type="button" class="fgpopx" data-fgpopx aria-label="' + L('Close', '닫기') + '">✕</button></div>' +
+      Object.keys(GNAME).filter(g => by[g]).map(g => '<div class="fgpopg" style="color:' + GNAME[g][2] + '"><i style="background:' + GNAME[g][2] + '"></i>' + L(GNAME[g][0], GNAME[g][1]) + ' · ' + by[g].length + '</div><div class="fgpopr">' + by[g].sort(C).map(miniHTML).join('') + '</div>').join('') + '</div>';
+  }
+  function minisHTML(ms){ if(!ms.length) return ''; return '<span class="fgminis">' + ms.slice(0, 2).map(miniHTML).join('') + (ms.length > 2 ? '<span class="fgmore" title="' + H(ms.slice(2).map(m => m.nm).join(', ')) + '">+' + (ms.length - 2) + '</span>' : '') + '</span>'; }
   function chip(m){ const s = ST[stOf(m.k)]; return '<button type="button" class="fgmc" data-fgmod="' + H(m.k) + '" title="' + H(m.how.map(howL).join(' · ')) + '"><span>' + H(m.nm || '?') + '</span>' + (s ? '<i class="fgms ' + s[2] + '">' + L(s[0], s[1]) + '</i>' : '') + (m.how.includes('book') ? '<i class="fgms b">' + L('Booking', '부킹') + '</i>' : '') + '</button>'; }
-  function cellHTML(x, pid, ms){
+  function cellHTML(x, pid, ms, k){
     ms = ms || [];
-    const mline = ms.length ? '<small class="fgmod">◆ ' + H(shortNm(ms[0].nm)) + (ms.length > 1 ? ' +' + (ms.length - 1) : '') + '</small>' : '';
+    const mline = stackHTML(ms, k, pid);
     if(!x && !ms.length) return '<div class="fgcell off"></div>';
     if(!x){ const c = colOf(pid), dim = S.who && S.who !== pid; return '<div class="fgcell monly' + (dim ? ' dim' : '') + '" style="--pc:' + c.bg + ';--pf:' + c.fg + '" title="' + H(nmOf(pid) + ': ' + ms.map(m => m.nm).join(', ')) + '"><span>' + L('models', '모델') + '</span>' + mline + '</div>'; }
     const c = colOf(pid), dim = S.who && S.who !== pid;
@@ -154,20 +225,20 @@
       return '<div class="fgrow' + (k === S.sel ? ' on' : '') + '" data-fgk="' + H(k) + '" style="grid-template-columns:' + gridCols + '">' +
         (S.tab === 'mine' ? '<button type="button" class="fggrip" data-fggrip="' + i + '" aria-label="' + L('Drag to change the order', '끌어서 순서 바꾸기') + '" title="' + L('Drag to change the order', '끌어서 순서 바꾸기') + '">⋮⋮</button>' : '<span class="fgn">' + (i + 1) + '</span>') +
         '<button type="button" class="fgag" data-fgsel="' + H(k) + '"><span><b' + (k.startsWith('name:') ? '' : ' class="fgagn" data-fgagdir="' + H(k) + '" title="' + H(L('Open this agency in the Directory', '디렉터리에서 이 에이전시 열기')) + '"') + '>' + H(I.name) + '</b>' + (n > 1 ? '<i class="fgsh">' + L(n + ' of us', n + '명') + '</i>' : '') + '</span><small>' + H(I.place) + '</small></button>' +
-        P.map(p => cellHTML(m.get(p), p, modsOf(D, k, p))).join('') + '<span class="fglast">' + H(last ? when(new Date(last).toISOString()).s : '—') + '</span></div>';
+        P.map(p => cellHTML(m.get(p), p, modsOf(D, k, p), k)).join('') + '<span class="fglast">' + H(last ? when(new Date(last).toISOString()).s : '—') + '</span></div>';
     }).join('');
     const empty = S.tab === 'mine' ? L('No favorite agencies yet. Tap ★ on any agency in the Directory or on the Map and it comes here.', '즐겨찾는 에이전시가 없습니다. 디렉터리나 지도에서 ★를 누르면 여기에 들어옵니다.')
-      : L('No agency has two or more of us in contact yet.', '두 명 이상이 연락 중인 에이전시가 아직 없습니다.');
+      : L('No agency has two or more of us in contact yet.', '두 명 이상이 연락 중인 에이전시가 아직 없습니다.');   /* Team > In contact */
     return '<div class="fgmain"><div class="fgtable"><div class="fgrow fghead" style="grid-template-columns:' + gridCols + '"><span></span><span class="fglab">' + L('Agency', '에이전시') + '</span>' +
       P.map(p => '<span class="fgph' + (S.who && S.who !== p ? ' dim' : '') + '">' + av(p) + '<b>' + H(nmOf(p)) + '</b></span>').join('') + '<span class="fglab r">' + L('Last', '최근') + '</span></div>' +
       '<div class="fgbody">' + (rows || '<p class="fgempty">' + H(empty) + '</p>') + '</div>' +
-      '<div class="fgfoot"><span>' + L('A coloured box = that person is in contact: who at the agency, their role, and when they last talked.', '색 칸 = 그 사람이 연락 중: 에이전시 담당자, 역할, 마지막 연락.') + '</span><span class="fgkey"><i class="k1"></i>' + L('this week', '이번 주') + '<i class="k2"></i>' + L('older', '이전') + '</span></div></div>' +
+      '<div class="fgfoot"><span>' + L('A coloured box = that person is in contact: who at the agency, their role, and when they last talked.', '색 칸 = 그 사람이 연락 중: 에이전시 담당자, 역할, 마지막 연락.') + ' ' + L('Small photos = her models, the bar shows where she stands:', '작은 사진 = 모델, 아래 막대 = 진행 상태:') + ' ' + [['vote'],['bk'],['done'],['stay'],['hold'],['no']].map(([k]) => '<b class="fgsk"><s style="background:' + MST[k][2] + '"></s>' + L(MST[k][0], MST[k][1]) + '</b>').join(' ') + '</span><span class="fgkey"><i class="k1"></i>' + L('this week', '이번 주') + '<i class="k2"></i>' + L('older', '이전') + '</span></div></div>' +
       side(D, S.sel) + '</div>';
   }
   function side(D, k){
     if(!k) return '<aside class="fgside"><p class="fgempty">' + L('Choose an agency.', '에이전시를 고르세요.') + '</p></aside>';
     const I = infoOf(k), m = D.C.get(k) || new Map(), log = (D.LOG.get(k) || []).slice(0, 30);
-    return '<aside class="fgside"><div class="fgsh1"><div><b>' + H(I.name) + '</b>' + (m.size > 1 ? '<i class="fgsh">' + L(m.size + ' of us in contact', m.size + '명 연락 중') + '</i>' : '') + '</div><small>' + H(I.place) + '</small></div>' +
+    return '<aside class="fgside"><div class="fgsh1"><div><b>' + H(I.name) + '</b>' + (m.size > 1 ? '<i class="fgsh">' + L(m.size + ' of us in contact', m.size + '명 연락 중') + '</i>' : '') + '</div><small>' + H(I.place) + '</small>' + (() => { try{ return !k.startsWith('name:') && typeof ctsChip === 'function' ? '<span class="fgcts" title="' + H(L('Agency contacts — click to view or add', '에이전시 연락처 — 보기 / 추가')) + '">' + ctsChip('https://' + k, I.name) + '</span>' : ''; }catch(e){ return ''; } })() + '</div>' +
       '<div class="fgsec"><span class="fglab">' + L('Who talks to whom', '누가 누구와') + '</span>' +
       ([...m.entries()].sort((a, b) => b[1].w.t - a[1].w.t).map(([p, x]) => '<div class="fglink">' + av(p) + '<span><b>' + H(nmOf(p)) + '</b> <i>→</i> <b>' + H(x.them || '?') + '</b>' + (x.role ? ' <s>· ' + H(x.role) + '</s>' : '') + (x.about ? '<small>' + H(x.about) + '</small>' : '') + (modsOf(D, k, p).length ? '<span class="fgmcs">' + modsOf(D, k, p).slice(0, 6).map(chip).join('') + '</span>' : '') + '</span><em>' + H(x.w.s) + '</em></div>').join('') ||
         '<p class="fgempty">' + L('No one on the team is in contact yet.', '아직 연락 중인 사람이 없습니다.') + '</p>') + '</div>' +
@@ -214,7 +285,7 @@
   function render(){
     if(pane.hidden) return;
     const D = build(), ph = PH();
-    const h = '<div class="fgwrap' + (ph ? ' fgphone' : '') + '">' + head(D) + (S.tab === 'team' ? teamHTML() : ph ? phoneHTML(D) : pcHTML(D)) + '</div>';
+    const h = '<div class="fgwrap' + (ph ? ' fgphone' : '') + '">' + head(D) + (S.tab === 'team' && !isContact() ? teamList(D) : ph ? phoneHTML(D) : pcHTML(D)) + popHTML(D) + '</div>';
     if(pane.__h === h) return;
     const keep = pane.querySelector('.fglogf'), kv = keep ? [...keep.elements].map(x => [x.name, x.value]) : null;
     pane.__h = h; pane.innerHTML = h;
@@ -222,13 +293,17 @@
   }
   /* ---------- clicks ---------- */
   pane.addEventListener('click', e => {
+    const fb = e.target.closest('[data-fgbid]'); if(fb){ e.preventDefault(); e.stopPropagation(); try{ if(typeof bvOpenFor === 'function') bvOpenFor(fb.dataset.fgbid); }catch(er){} return; }
     const fm = e.target.closest('[data-fgmod]'); if(fm){ e.preventDefault(); e.stopPropagation(); const k = fm.dataset.fgmod; let i = {}; try{ i = (window.__illuModelInfo && window.__illuModelInfo(k)) || {}; }catch(er){} if(window.illuPhotoFull) window.illuPhotoFull('', i.nm || fm.innerText.split('\n')[0], i.href || k, k, ''); return; }
     if(drag && drag.moved) return;
     /* 1.2.151 (user, 12 Nov 2026): the agency's name opens it in the Directory */
     const gn = e.target.closest('[data-fgagdir]'); if(gn){ e.preventDefault(); e.stopPropagation(); try{ if(window.__illuDirGoAg) window.__illuDirGoAg(gn.dataset.fgagdir); else if(window.__illuGo) window.__illuGo('dir'); }catch(er){} return; }
     const t = e.target.closest('button'); if(!t) return;
     const d = t.dataset;
-    if(d.fgtab){ S.tab = d.fgtab; S.sheet = ''; S.log = false; try{ localStorage.setItem('illu.favag.tab', S.tab); }catch(er){} render(); return; }
+    if(d.fgtab){ S.tab = d.fgtab; S.sheet = ''; S.log = false; S.pop = ''; try{ localStorage.setItem('illu.favag.tab', S.tab); }catch(er){} render(); return; }
+    if(d.fgf){ S.f = d.fgf; S.pop = ''; try{ localStorage.setItem('illu.favag.f', S.f); }catch(er){} render(); return; }
+    if(d.fgstack){ S.pop = S.pop === d.fgstack ? '' : d.fgstack; render(); return; }
+    if(d.fgpopx != null){ S.pop = ''; render(); return; }
     if(d.fgwho != null){ S.who = d.fgwho; render(); return; }
     if(d.fgsel){ S.sel = d.fgsel; S.log = false; render(); return; }
     if(d.fgsheet){ if(Date.now() - (drag0 || 0) < 400) return; S.sheet = d.fgsheet; S.log = false; render(); return; }
@@ -237,6 +312,8 @@
     if(d.fglogx != null){ S.log = false; render(); return; }
     if(d.fgdir){ try{ if(window.__illuDirGoAg) window.__illuDirGoAg(d.fgdir); else if(window.__illuGo) window.__illuGo('dir'); }catch(er){} return; }
   });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape' && S.pop){ S.pop = ''; render(); } });
+  document.addEventListener('pointerdown', e => { if(S.pop && !(e.target.closest && e.target.closest('.fgpop, [data-fgstack]'))){ S.pop = ''; paint(); } }, true);
   pane.addEventListener('submit', async e => {
     const f = e.target.closest('form.fglogf'); if(!f) return; e.preventDefault();
     const k = f.dataset.fglogf, I = infoOf(k), v = n => (f.elements[n] && f.elements[n].value || '').trim();
@@ -333,6 +410,45 @@
 #pane-favag .fgsec{padding:14px 18px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line2,#EEE9F1)}
 #pane-favag .fgagn{cursor:pointer;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px;transition:text-decoration-color .15s}
 #pane-favag .fgagn:hover{color:var(--acc,#5A2C57);text-decoration-color:currentColor}
+#pane-favag .fgsk{font-weight:500;white-space:nowrap;margin-left:6px}#pane-favag .fgsk s{display:inline-block;width:12px;height:4px;border-radius:2px;margin-right:4px;vertical-align:middle}
+#pane-favag .fgchips{display:flex;gap:6px;margin-left:8px}
+#pane-favag .fgchip{border:1px solid var(--line,#E7E2EC);background:var(--surf,#fff);color:inherit;border-radius:999px;padding:6px 12px;font:600 12.5px inherit;cursor:pointer}
+#pane-favag .fgchip[aria-pressed="true"]{background:#5A2C57;border-color:#5A2C57;color:#fff}
+#pane-favag .fgtlw{background:var(--surf,#fff);border:1px solid var(--line,#E7E2EC);border-radius:16px;overflow:hidden;max-width:980px}
+#pane-favag .fgtlb{background:#FBF4E4}
+#pane-favag .fgtlh{padding:10px 16px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6D6577}
+#pane-favag .fgtlb .fgtlh{color:#8A600C}
+#pane-favag .fgtl{display:grid;grid-template-columns:20px minmax(0,1fr) auto auto 44px;gap:10px;align-items:center;width:100%;padding:9px 16px;border:0;border-top:1px solid var(--line,#EEE9F1);background:none;text-align:left;cursor:pointer;color:inherit;font:inherit}
+#pane-favag .fgtlb .fgtl{border-top-color:#F2E5C4}
+#pane-favag .fgtl:hover{background:rgba(90,44,87,.05)}
+#pane-favag .fgtls{color:#C7A13A}#pane-favag .fgtln b{display:block;font-size:13.5px}#pane-favag .fgtln small{color:#6D6577;font-size:11.5px}
+#pane-favag .fgtla{display:flex;gap:3px}#pane-favag .fgtlc{font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 8px;background:#E6ECFB;color:#2D3A7A}
+#pane-favag .fgtlk{font-size:11px;font-weight:700;color:#8A600C;background:#F7E7BD;border-radius:999px;padding:2px 7px;justify-self:end}
+#pane-favag .fgstk{display:block;border:0;background:none;padding:0;margin-top:6px;cursor:pointer;text-align:left;width:100%}
+#pane-favag .fgstp{display:block;position:relative;height:58px}
+#pane-favag .fgstm{position:absolute;top:0;width:42px;height:56px;border-radius:6px;overflow:hidden;background:#E9E3EC;box-shadow:0 0 0 2px var(--pc,#fff)}
+#pane-favag .fgstm img{width:100%;height:100%;object-fit:cover;object-position:50% 20%;display:block}#pane-favag .fgstm i{display:grid;place-items:center;height:100%;font-style:normal;font-weight:700;color:#9A8FA3}
+#pane-favag .fgstm s{position:absolute;left:0;right:0;bottom:0;height:4px}
+#pane-favag .fgstn{position:absolute;right:0;top:2px;z-index:5;box-shadow:0 0 0 2px #fff;background:#211C26;color:#fff;border-radius:999px;font-size:11px;padding:2px 7px}
+#pane-favag .fgstd{display:flex;gap:6px;flex-wrap:wrap;font-size:10px;font-weight:600;margin-top:3px;color:var(--pf,#3A3340)}#pane-favag .fgstd i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:2px}
+#pane-favag .fgstk.ov .fgstm{box-shadow:0 0 0 2px #C2410C}
+#pane-favag .fgpop{position:fixed;right:max(24px,env(safe-area-inset-right,0px));top:120px;width:min(400px,calc(100vw - 32px));max-height:calc(100vh - 160px);overflow:auto;background:var(--surf,#fff);border:1px solid #E1D9E6;border-radius:14px;box-shadow:0 20px 50px -18px rgba(40,20,50,.45);padding:12px 14px;z-index:60}
+#pane-favag .fgpoph{display:flex;align-items:flex-start;gap:8px;margin-bottom:4px}#pane-favag .fgpoph div{flex:1}#pane-favag .fgpoph b{display:block;font-size:13.5px}#pane-favag .fgpoph small{color:#6D6577;font-size:11.5px}
+#pane-favag .fgpopx{border:0;background:none;font-size:15px;cursor:pointer;color:#6D6577}
+#pane-favag .fgpopg{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:9px 0 5px;display:flex;align-items:center;gap:6px}#pane-favag .fgpopg i{width:8px;height:8px;border-radius:50%;display:inline-block}
+#pane-favag .fgpopr{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:8px}
+#pane-favag .fgpopr .fgmini,#pane-favag .fgpopr .fgmph{width:100%}#pane-favag .fgpopr .fgmph{height:auto;aspect-ratio:3/4}
+#pane-favag .fgcts{display:flex;gap:6px;margin-top:6px}
+#pane-favag .fgminis{display:flex;gap:5px;margin-top:6px;align-items:flex-start}
+#pane-favag .fgmini{width:44px;flex:none;border:0;background:none;padding:0;cursor:pointer;text-align:left}
+#pane-favag .fgmph{display:grid;place-items:center;position:relative;width:44px;height:58px;border-radius:6px;overflow:hidden;background:#E9E3EC}
+#pane-favag .fgmph img{width:100%;height:100%;object-fit:cover;object-position:50% 20%;display:block}
+#pane-favag .fgmph i{display:grid;place-items:center;height:100%;font-style:normal;font-weight:700;color:#9A8FA3}
+#pane-favag .fgmph s{position:absolute;left:0;right:0;bottom:0;height:5px}
+#pane-favag .fgmini.ov .fgmph{box-shadow:0 0 0 2px #C2410C}
+#pane-favag .fgmini.no .fgmph img{filter:grayscale(.9) brightness(.92)}
+#pane-favag .fgmnm{display:block;font-size:9.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;color:var(--pf,#3A3340)}
+#pane-favag .fgmore{width:44px;height:58px;border-radius:6px;border:1px dashed #CDBFD0;display:grid;place-items:center;font-size:11px;font-weight:700;color:#5A2C57;background:#FBF9FC;flex:none}
 #pane-favag .fgmod{display:block;margin-top:3px;font-size:10.5px;font-weight:600;color:var(--pf,#5A2C57);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #pane-favag .fgcell.monly{background:transparent;border:1.5px dashed var(--pc,#C7B6CC)}
 #pane-favag .fgcell.monly > span{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut,#8A8093)}

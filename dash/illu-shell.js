@@ -38,7 +38,7 @@
      A place with several pages shows them as tabs along the top and remembers the last one. */
   const GROUPS = {
     'g-atlas': {label: ['Atlas', '아틀라스'], icon: 'atl', tabs: ['atl', 'dir', 'cmpb', 'ig', 'favag']},
-    'g-opus': {label: ['Opus', '오푸스'], icon: 'bk', tabs: ['fav', 'mfav', 'team', 'appr', 'tie', 'cxl', 'bk', 'cmp']},
+    'g-opus': {label: ['Opus', '오푸스'], icon: 'bk', tabs: ['fav', 'mfav', 'team', 'appr', 'tie', 'cxl', 'unav', 'bk', 'stay', 'cmp']},
     'g-404': {label: ['404 · Blind spots', '404 · 크롤 불가'], icon: '404', tabs: ['404', 'bld']}
   };
   const TABLAB = {atl: ['Map', '지도'], '404': ['404 · left their board', '404 · 보드에서 내려감'], bld: ['Blind spots', '크롤 불가']};
@@ -261,7 +261,7 @@
   }
   function people(pid){ try{ const p = PEOPLE.get(pid); return p ? p.n : ''; }catch(e){ return ''; } }
   function disc(pid){ try{ return idDisc(pid, 'shdisc') || ''; }catch(e){ return ''; } }
-  function photoOf(c){ try{ return bkPhoto(c) || ''; }catch(e){ return ''; } }
+  function photoOf(c){ try{ return (window.__illuBkPic ? window.__illuBkPic(c, 200) : bkPhoto(c)) || ''; }catch(e){ return ''; } }
   function inProc(){
     let all = []; try{ all = [...BOOK.values()]; }catch(e){}
     const me = (() => { try{ return ME; }catch(e){ return null; } })();
@@ -299,6 +299,15 @@
       return '<div class="shact">' + disc(e.p) + '<div><b>' + H(people(e.p) || '?') + '</b> ' + H(isKO() ? '' : v[0]) + ' <b>' + H(e.nm || '') + '</b> ' + tag +
         '<div class="shmut sm">' + H([e.ag, when].filter(Boolean).join(' · ')) + '</div></div></div>';
     }).join('');
+  }
+  /* 1.2.156 (approved demo): two of us on the same model - shown to both people at the top of Needs my action */
+  function ovRows(){
+    let ov = []; try{ ov = window.__illuOverlaps ? window.__illuOverlaps() : []; }catch(e){}
+    let me = null; try{ me = ME; }catch(e){}
+    ov = ov.filter(o => o.people.includes(me)); if(!ov.length) return '';
+    const nm = p => { try{ const r = PEOPLE.get(p); return r ? r.n : ''; }catch(e){ return ''; } };
+    return ov.slice(0, 4).map(o => '<div class="shov"><i></i><div><b>' + H(L('Two of us on ' + (o.nm || 'the same model'), (o.nm || '') + ' — 두 명이 같은 모델 작업 중')) + '</b><span>' + H((o.ag || '') + ' · ' + o.people.map(nm).join(' & ') + ' · ' + (o.why === 'vote' ? L(nm(o.people[0]) + ' has her booking card, ' + nm(o.people[1]) + ' sent her to the Team Vote', nm(o.people[0]) + ' 부킹 카드, ' + nm(o.people[1]) + ' 팀 투표') : L('two booking cards', '부킹 카드 2장'))) + '</span>' +
+      '<div class="shovb"><button type="button" class="shlink" data-shbk="' + H(o.a.id) + '">' + L('Open her card', '카드 열기') + '</button>' + (o.b ? '<button type="button" class="shlink" data-shbk="' + H(o.b.id) + '">' + L('Open the other card', '다른 카드 열기') + '</button>' : '') + '</div></div></div>').join('');
   }
   function bookRows(list){
     if(!list.length) return '<p class="shmut">' + L('Nothing in your charge right now.', '지금 내가 담당하는 카드가 없습니다.') + ' <button type="button" class="shlink" data-shgo="bk">' + L('Booking board', '부킹 보드') + ' →</button></p>';
@@ -358,7 +367,7 @@
       '<div class="shlay' + (ckOn ? '' : ' noclk') + '">' +
       '<div class="shclk' + (W.clk ? '' : ' noclk') + (W.map ? '' : ' nomap') + (ckOn ? '' : ' none') + '" id="shclk"></div>' +
       '<div class="shhead"><div><div class="shkick">' + H(dateLine()) + '</div><h2>' + H(greet() + (nm ? ', ' + nm : '')) + ' <span class="shsub2">— ' + H(sub) + '</span></h2></div></div>' +
-      '<div class="shmainc">' + (window.__illuVoteToday ? window.__illuVoteToday() : '<div></div>') + '</div>' +
+      '<div class="shmainc">' + (window.__illuVoteToday ? window.__illuVoteToday() : '<div></div>') + '</div>'   /* 1.2.158 (user): the On-Stay row taken off Today again - the board stays in Opus */ +
       sidePanel(list) +
       '</div>';
     /* the clocks are a live element: lift them out before the page is redrawn, or they go with it */
@@ -380,10 +389,10 @@
     const ev = soon();
     const tabs = '<div class="shtabs" role="tablist">' +
       '<button type="button" role="tab" data-shtab="act" aria-selected="' + (SP.tab === 'act') + '">' + L('Needs my action', '내가 처리할 일') + '<b>' + list.length + '</b></button>' +
-      '<button type="button" role="tab" data-shtab="ad" aria-selected="' + (SP.tab === 'ad') + '">' + L('Arriving/Departing', '입국/출국') + '<b>' + ev.length + '</b></button></div>';
+      '<button type="button" role="tab" data-shtab="ad" aria-selected="' + (SP.tab === 'ad') + '">' + L('Arriving/Departing', '입국/출국') + '<b>' + ev.length + '</b></button>' + (SP.tab === 'act' ? '<button type="button" class="shinfo shtabi" data-shinfo aria-expanded="' + !!SP.info + '" aria-label="' + H(L('What is this list?', '이 목록은?')) + '" title="' + H(L('What is this list?', '이 목록은?')) + '">i</button>' : '') + '</div>';
     return '<aside class="shside" id="shside" aria-label="' + H(L('Side panel', '사이드 패널')) + '">' + tabs +
-      '<section class="shhalf" data-shh="act"' + (SP.tab === 'act' ? '' : ' data-off') + '><div class="shph"><h3>' + L('Needs my action', '내가 처리할 일') + '</h3><span class="shtag y">' + list.length + '</span></div>' +
-        '<p class="shmut sm">' + L('Booking cards you are in charge of, at the stage each is on — then cards nobody has taken yet.', '내가 담당하는 부킹 카드와 현재 단계 — 그다음 담당자가 없는 카드.') + '</p><div class="shscr">' + bookRows(list) + '</div></section>' +
+      '<section class="shhalf" data-shh="act"' + (SP.tab === 'act' ? '' : ' data-off') + '><div class="shph"><h3>' + L('Needs my action', '내가 처리할 일') + ' ' + '<button type="button" class="shinfo" data-shinfo aria-expanded="' + !!SP.info + '" aria-label="' + H(L('What is this list?', '이 목록은?')) + '" title="' + H(L('What is this list?', '이 목록은?')) + '">i</button>' + '</h3><span class="shtag y">' + list.length + '</span></div>' +
+        (SP.info ? '<div class="shinfop" role="note">' + L('Booking cards you are in charge of, at the stage each is on — then cards nobody has taken yet.', '내가 담당하는 부킹 카드와 현재 단계 — 그다음 담당자가 없는 카드.') + '</div>' : '') + '<div class="shscr">' + ovRows() + bookRows(list) + '</div></section>' +
       '<section class="shhalf" data-shh="ad"' + (SP.tab === 'ad' ? '' : ' data-off') + '>' + adHalf(ev) + '</section></aside>';
   }
   function adHalf(ev){
@@ -449,6 +458,8 @@
   function onTodayClick(e){
     if(e.target.closest('.vmk')) return;
     const wt = e.target.closest('[data-shwid]'); if(wt){ setWid(wt.dataset.shwid); return; }
+    if(e.target.closest('[data-shinfo]')){ SP.info = !SP.info; renderToday(); return; }
+    if(SP.info && !e.target.closest('.shinfop')){ SP.info = false; renderToday(); }
     const tb = e.target.closest('[data-shtab]'); if(tb){ SP.tab = tb.dataset.shtab; keepSP(); renderToday(); return; }
     const fc = e.target.closest('[data-shf]'); if(fc){ SP.f = fc.dataset.shf; keepSP(); renderToday(); return; }
     const dy = e.target.closest('[data-shday]'); if(dy){ const i = +dy.dataset.shday; SP.day = SP.day === i ? -1 : i; renderToday(); return; }
@@ -681,6 +692,7 @@ body.shtoday #appbar #ababout,body.shtoday #appbar #abtools,body.shtoday #appbar
 .shtoday .shbtn.p kbd{background:transparent;color:#fff;border-color:rgba(255,255,255,.45)}
 .shtoday .shkick{font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--faint)}
 .shtoday .shmut{color:var(--faint)}
+.shov{display:flex;gap:9px;align-items:flex-start;border:1px solid #F3C9A6;background:#FFF6EE;border-radius:12px;padding:9px 10px;margin:0 0 8px}.shov>i{flex:none;width:8px;height:8px;border-radius:50%;background:#C2410C;margin-top:5px}.shov b{display:block;font-size:13px}.shov span{display:block;font-size:12px;color:var(--faint)}.shovb{display:flex;gap:10px;margin-top:4px}
 .shtoday .sm{font-size:12.5px}
 .shtoday .shclk .ckrow{margin:0}
 .shtoday .shgrid2{display:grid;grid-template-columns:minmax(0,1fr) clamp(300px,24vw,380px);gap:18px;align-items:start}
@@ -738,6 +750,7 @@ html[data-theme="dark"] .shtoday .shad.d,html[data-theme="dim"] .shtoday .shad.d
   .shtoday .shtabs b{font-size:11px;border-radius:7px;padding:1px 6px;background:#fff3d6;color:#7a5200;margin-left:5px}
   .shtoday .shhalf[data-off]{display:none}.shtoday .shhalf+.shhalf{border-top:0}
   .shtoday .shhalf>.shph{display:none}
+  .shtoday .shtabs .shtabi{display:inline-grid;align-self:center;margin:0 4px 4px}.shtoday .shinfop{top:6px}
   .shtoday .shwd{min-height:52px}.shtoday .shchip{min-height:36px;padding:6px 14px}
   .shtoday .shad{padding:8px;grid-template-columns:auto minmax(0,1fr)}
   .shtoday .shadw{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:space-between;border-top:1px dashed var(--line);padding-top:6px}
@@ -759,7 +772,13 @@ html[data-theme="dark"] .shtoday .shad.d,html[data-theme="dim"] .shtoday .shad.d
 .shtoday .shgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:18px;align-items:start}
 .shtoday .shpanel{background:var(--surf);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0;box-sizing:border-box}
 .shtoday .shph{display:flex;justify-content:space-between;align-items:center;gap:8px}
-.shtoday .shph h3{font-size:15px;font-weight:700;margin:0}
+.shtoday .shph h3{font-size:15px;font-weight:700;margin:0;display:flex;align-items:center;gap:6px}
+.shtoday .shinfo{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--faint);background:none;color:var(--faint);font:italic 700 12px/1 Georgia,'Times New Roman',serif;display:inline-grid;place-items:center;padding:0;cursor:pointer;flex:none}
+.shtoday .shinfo:hover,.shtoday .shinfo[aria-expanded="true"]{border-color:var(--acc);color:var(--acc)}
+.shtoday .shinfo:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.shtoday .shtabi{display:none}
+.shtoday .shhalf{position:relative}
+.shtoday .shinfop{position:absolute;z-index:5;top:44px;left:14px;right:14px;background:var(--surf);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px -10px rgba(30,15,40,.35);padding:10px 12px;font-size:12.5px;line-height:1.45;color:var(--ink)}
 .shtoday .shpanel>p{margin:0}
 .shtoday .shtag{display:inline-flex;align-items:center;border-radius:7px;padding:2px 8px;font-size:12px;font-weight:600;background:var(--surf2,#f4ecf2);color:var(--acc)}
 .shtoday .shtag.g{background:#e6f3ea;color:#24603a}.shtoday .shtag.y{background:#fff3d6;color:#7a5200}.shtoday .shtag.r{background:#fbe7e5;color:#9c2018}
@@ -827,3 +846,5 @@ html[data-theme="dark"] .shtoday .shad.d,html[data-theme="dim"] .shtoday .shad.d
   }
   start();
 })();
+/* 1.2.167: Esc closes the "i" explanation on Today's side panel */
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && document.querySelector('.shinfop')){ const b = document.querySelector('[data-shinfo]'); if(b) b.click(); } });

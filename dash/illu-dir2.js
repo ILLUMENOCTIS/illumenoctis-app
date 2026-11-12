@@ -421,7 +421,7 @@
   }
   function nameRow(m, a){
     return '<div class="mrow">' + lamps(m.key, m.nm, a.name + (a.city ? ' · ' + a.city : ''), m.href) +
-      '<a class="mnm' + litClass(m.key) + '" data-ref="' + esc(m.href) + '" href="' + esc(m.href) + '" target="_blank" rel="noopener noreferrer">' + esc(m.nm) + '</a></div>';
+      '<a class="mnm' + litClass(m.key) + '" data-ref="' + esc(m.href) + '" href="' + esc(m.href) + '" target="_blank" rel="noopener noreferrer">' + esc(m.nm) + '</a>' + (() => { try{ const v = window.__illuAvailOf && window.__illuAvailOf(m.key); return v ? '<span class="mav ' + esc(v.t) + '" title="' + esc(v.why || '') + '">' + esc(window.__illuAvailLabel(v, true)) + '</span>' : ''; }catch(e){ return ''; } })() + '</div>';
   }
   /* the boards as pills that wrap (never a sideways scroll): click one to show it, click
      more to add them, click a chosen one again to take it away; "All boards" clears the choice.
@@ -1635,20 +1635,21 @@
     try{ if(typeof readBounds === 'function') readBounds(); }catch(e){}
     const term = ((($('#q') || {}).value) || '').trim().toLowerCase();
     const byMeas = !!(typeof BND !== 'undefined' && BND && BND.any) && (typeof measState === 'undefined' || measState === 'ready');
-    return {term, regions: checked('region'), tiers: checked('tier'), sexes: checked('sex'), marks: checked('mark'), byMeas,
-      key: [term, checked('region'), checked('tier'), checked('sex'), checked('mark'), byMeas ? JSON.stringify([BND.ht, BND.bu, BND.wa, BND.hp, BND.sh]) : ''].join('|')};
+    return {term, regions: checked('region'), countries: checked('country'), tiers: checked('tier'), sexes: checked('sex'), marks: checked('mark'), byMeas,
+      key: [term, checked('region'), checked('country'), checked('tier'), checked('sex'), checked('mark'), byMeas ? JSON.stringify([BND.ht, BND.bu, BND.wa, BND.hp, BND.sh]) : ''].join('|')};
   }
   window.__illuRecoSig = () => { try{ const f = recoSig(); return {term: f.term, regions: f.regions, tiers: f.tiers, sexes: f.sexes, marks: f.marks, byMeas: f.byMeas, ht: typeof BND !== 'undefined' && BND ? BND.ht : null, tab: RC.tab, sub: RC.nfSub}; }catch(e){ return null; } };
   function recoOk(m, f){
     if(f.sexes.length && !f.sexes.includes(m.g)) return false;
     if(f.tiers.length && !f.tiers.includes(m.t || (m.b && m.b.t) || '')) return false;
     if(f.regions.length){ const o = (m.b && m.b.off) || {}; const rg = o.region || ''; if(!f.regions.includes(rg)) return false; }
+    if(f.countries && f.countries.length){ const o = (m.b && m.b.off) || {}; const ct = o.country || m.country || 'Unknown'; if(!f.countries.includes(ct)) return false; }
     if(f.marks.length && !f.marks.includes(lampOf(m.key) || '')) return false;
     if(f.byMeas && !fits(m.key)) return false;
     if(f.term && !(m.nm + ' ' + m.ag + ' ' + m.city + ' ' + m.country).toLowerCase().includes(f.term)) return false;
     return true;
   }
-  const recoActive = f => !!(f.term || f.regions.length || f.tiers.length || f.sexes.length || f.marks.length || f.byMeas);
+  const recoActive = f => !!(f.term || f.regions.length || (f.countries && f.countries.length) || f.tiers.length || f.sexes.length || f.marks.length || f.byMeas);
   /* the next 18 for this ID */
   function recoNext(want){
     const RNW = want || RN;
@@ -1872,10 +1873,14 @@
     const meta = (m.ag || '') + (m.city ? ' · ' + m.city : '');
     const tl = TIERL[m.t] || null;
     const offices = m.boards ? new Set(m.boards.map(b => b.off)).size : 1;
-    return '<article class="uc" data-uck="' + esc(m.key) + '">' +
+    /* 1.2.170 (user, 13 Nov 2026, approved demo "A + C, 2 - shades of purple"): a liked model whose booking is in progress
+       has a slowly moving purple ring and an "In booking · who" label - on the Directory, Suggestiones and every board */
+    let bk = null; try{ bk = window.__illuBkRing ? window.__illuBkRing(m.key, m.nm, m.ag) : null; }catch(e){}
+    return '<article class="uc' + (bk ? ' ucbk' : '') + '" data-uck="' + esc(m.key) + '">' +
+      (bk ? '<span class="ucbkt" title="' + esc((isKo() ? '부킹 진행 중 · ' : 'In booking · ') + bk.who + (bk.st ? ' · ' + bk.st : '')) + '">' + (isKo() ? '부킹 중 · ' : 'In booking · ') + esc(bk.who) + '</span>' : '') +
       '<div class="ucimg"><div class="d2t ucph" data-d2k="' + esc(m.key) + '" title="' + esc(m.nm) + '">' + pc + '</div>' +
       (minor || !/^https?:/i.test(m.href || '') ? '' : '<button type="button" class="ucarr l" data-ucarr="-1" aria-label="Previous photo">‹</button><button type="button" class="ucarr r" data-ucarr="1" aria-label="Next photo">›</button><span class="uccnt" aria-live="polite"></span>') +
-      '<div class="ucov"><b>' + esc(m.nm) + '</b><span class="ucag">' + esc(meta) + '</span>' + mx + '</div>' +
+      '<div class="ucov">' + (() => { try{ const v = window.__illuAvailOf && window.__illuAvailOf(m.key); return v ? '<span class="ucav ' + esc(v.t) + '" title="' + esc(v.why || '') + '">' + (v.t === 'later' ? '⏳ ' : '⛔ ') + esc(window.__illuAvailLabel(v, true)) + '</span>' : ''; }catch(e){ return ''; } })() + (() => { try{ const w = window.__illuWorkOf && window.__illuWorkOf(m.key, m.nm, m.ag); return w ? '<span class="ucwk" title="' + esc((isKo() ? w.who + '님이 작업 중 · ' : w.who + ' is working on her · ') + (w.what === 'booked' ? (isKo() ? '부킹 완료' : 'booked') : (isKo() ? '부킹 카드 ' : 'booking card since ') + w.since) + (w.them ? ' · ' + w.them : '')) + '">● ' + esc(w.who) + (isKo() ? (w.what === 'booked' ? ' · 부킹 완료' : ' · 부킹 중') : (w.what === 'booked' ? ' · booked' : ' · booking')) + '</span>' : ''; }catch(e){ return ''; } })() + '<b>' + esc(m.nm) + '</b><span class="ucag">' + esc(meta) + '</span>' + mx + '</div>' +
       (offices > 1 ? '<span class="ucbadge">' + offices + (isKo() ? '개 오피스' : ' offices') + '</span>' : '') + '</div>' +
       '<div class="ucft"><em>' + esc(tl ? (isKo() ? tl[1] : tl[0]) : (m.div || '')) + '</em>' + lamps(m.key, m.nm, meta, m.href) + '</div></article>';
   }
@@ -1891,13 +1896,13 @@
   function ucTileHref(u, k){ try{ const i = typeof keyInfo === 'function' ? keyInfo(k) : null; if(i && i.href) return i.href; }catch(e){} return /^https?:/i.test(k) ? k : ''; }
   function ucTilePaint(u){
     const k = ucTileKey(u), t = TS.get(k); if(!t) return;
-    const im = u.querySelector('.ucph img'), cnt = u.querySelector('.uccnt');
+    const im = u.querySelector('.ucph img.ivmat') || u.querySelector('.ucph img'), cnt = u.querySelector('.uccnt');
     const n = t.list ? t.list.length : 0;
     if(cnt){ cnt.textContent = t.state === 'loading' ? '…' : n > 1 ? (t.i + 1) + ' / ' + n : t.state === 'none' ? '1 / 1' : ''; cnt.classList.toggle('on', !!cnt.textContent); }
     u.classList.toggle('ucfirst', !t.i); u.classList.toggle('uclast', !!n && t.i >= n - 1);
     if(!im || !n) return;
     if(!im.dataset.ucorig) im.dataset.ucorig = im.getAttribute('src') || '';
-    const want = t.i ? slImg(t.list[t.i], 900) : im.dataset.ucorig;
+    const want = t.i ? (/^\/_blob\//.test(t.list[t.i]) ? t.list[t.i] : slImg(t.list[t.i], 900)) : im.dataset.ucorig;
     if(im.getAttribute('src') !== want){
       if(t.i && !im.dataset.orig0) im.dataset.orig0 = im.dataset.orig || '';
       im.dataset.orig = t.i ? t.list[t.i] : (im.dataset.orig0 || im.dataset.orig || '');
@@ -1909,7 +1914,7 @@
     const k = ucTileKey(u); if(!k) return;
     let t = TS.get(k);
     if(!t){
-      const im = u.querySelector('.ucph img');
+      const im = u.querySelector('.ucph img.ivmat') || u.querySelector('.ucph img');
       const first = im ? (im.dataset.orig || im.currentSrc || im.src || '') : '';
       t = {list: first ? [first] : [], i: 0, state: 'loading'}; TS.set(k, t); ucTilePaint(u);
       const href = ucTileHref(u, k);
@@ -1951,6 +1956,7 @@
 .uc.ucfirst .ucarr.l,.uc.uclast .ucarr.r{opacity:0!important;pointer-events:none}
 .uc .uccnt{position:absolute;right:8px;top:8px;z-index:6;background:rgba(15,10,20,.62);color:#fff;border-radius:999px;padding:2px 8px;font:600 11px var(--sans,Inter,system-ui,sans-serif);display:none;pointer-events:none}
 .uc .uccnt.on{display:block}
+.ivcw .uc .uccnt{top:auto;bottom:40px;right:10px}
   #pane-arr .rcclr{height:38px;flex:none;padding:0 14px;border-radius:999px;border:1px solid var(--line,#E7E2EC);background:var(--surf,#fff);color:var(--ink2,#5b5263);font:600 13px var(--sans,Inter,system-ui,sans-serif);white-space:nowrap;cursor:pointer;margin-left:8px;align-self:center}
   #pane-arr .rcclr:hover{border-color:#C9475F;color:#B02F48}
   #pane-arr .rcclr.ask{display:inline-flex;align-items:center;gap:8px;cursor:default;border-color:#E9B9C3;background:#FFF5F7;color:#7A2335;padding:0 6px 0 12px}
@@ -2763,12 +2769,23 @@ body.d2max #d2bar{margin-top:0}
   const css = document.createElement('style');
   css.textContent = `
 .uc{container-type:inline-size;position:relative;display:flex;flex-direction:column;border-radius:16px;overflow:hidden;background:var(--surf,#fff);box-shadow:0 1px 2px rgba(20,10,30,.06),0 8px 22px -12px rgba(20,10,30,.28);min-width:0;contain:layout paint}
+@property --ucbka{syntax:'<angle>';inherits:false;initial-value:0deg}
+.uc.ucbk{padding:3px;background:conic-gradient(from var(--ucbka),#2A0F33,#6B2E7A,#B07CC6,#E6D3F0,#B07CC6,#6B2E7A,#2A0F33);animation:ucbkspin 5s linear infinite;contain:layout}
+.uc.ucbk>.ucimg{border-radius:13px 13px 0 0;overflow:hidden}
+.uc.ucbk>:not(.ucimg):not(.ucbkt){background-color:var(--surf,#fff)}
+.uc.ucbk>:last-child{border-radius:0 0 13px 13px}
+.uc .ucbkt{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#fff;background:#4A1D57;border-radius:999px;padding:3px 9px;box-shadow:0 0 0 2px rgba(255,255,255,.85)}
+@keyframes ucbkspin{to{--ucbka:360deg}}
+@media (prefers-reduced-motion:reduce){.uc.ucbk{animation:none}}
 .uc .ucimg{position:relative;aspect-ratio:3/4;background:#1a141d}
 .uc .ucph.d2t{position:absolute;inset:0;aspect-ratio:auto;border-radius:0!important;box-shadow:none!important;transform:none!important;background:#1a141d}
 .uc .ucph img{width:100%;height:100%;object-fit:cover;object-position:center 20%}
 .uc .ucov{position:absolute;left:0;right:0;bottom:0;padding:44px 12px 10px;background:linear-gradient(rgba(10,6,14,0),rgba(10,6,14,.55) 45%,rgba(10,6,14,.82));color:#fff;pointer-events:none;display:flex;flex-direction:column;gap:1px;font-family:var(--sans,Inter,system-ui,sans-serif)}
 .uc .ucov b{font-size:14.5px;font-weight:600;letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .uc .ucag{font-size:12px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.uc .ucav{align-self:flex-start;display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:#A3283F;color:#fff;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;margin-bottom:3px;text-shadow:none;letter-spacing:.02em;text-transform:uppercase}.uc .ucav.later{background:#C97916}
+.mrow .mav{font-size:10px;font-weight:700;border-radius:999px;padding:1px 6px;margin-left:6px;background:#FBECEF;color:#A3283F;white-space:nowrap}.mrow .mav.later{background:#FDF1E1;color:#9A5A0A}
+.uc .ucwk{align-self:flex-start;display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:#FFF1E6;color:#7A3B10;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;margin-bottom:3px;text-shadow:none;letter-spacing:0;text-transform:none}
 .uc .ucmx{align-self:flex-start;max-width:100%;box-sizing:border-box;margin-top:7px;display:inline-flex;align-items:baseline;gap:4px;font-size:12px;font-weight:500;letter-spacing:-.01em;padding:4px 9px;border-radius:999px;background:rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);white-space:nowrap;overflow:hidden;font-variant-numeric:tabular-nums}
 .uc .ucmx i{font-style:normal;opacity:.5}
 .uc .ucmx small{font-size:9.5px;opacity:.7;margin-left:2px;letter-spacing:.02em}

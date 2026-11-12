@@ -201,6 +201,123 @@ document.head.appendChild(st);
   }
   window.__illuCompose = compose;
 
+  /* ---------- email templates (docs mailtpl/<id>: {name, subject, body, kind, by, at, o}) ---------- */
+  const TPL = new Map();
+  const BUILTIN = { id: 'model-inquiry', name: 'Model inquiry (Seoul)', subject: SUBJECT, kind: 'inquiry', o: 0, note: 'Lists the models you picked; says she / he / they by itself' };
+  (function listen() {
+    if (typeof DB === 'undefined' || !DB) { setTimeout(listen, 800); return; }
+    try { DB.collection('mailtpl').onSnapshot(sn => { TPL.clear(); for (const x of (sn.docs || [])) { const v = typeof docOf === 'function' ? docOf(x) : x.data(); if (v && !v.off) TPL.set(x.id, Object.assign({ id: x.id }, v)); } paintPick(); }, () => {}); } catch (e) {}
+    /* the template the user had saved becomes the first entry, for everyone */
+    setTimeout(async () => { try { if (!TPL.has(BUILTIN.id) && typeof SIGNED === 'function' && SIGNED()) { const snap = await DB.doc('mailtpl/' + BUILTIN.id).get(); const v = typeof docOf === 'function' ? docOf(snap) : null; if (!v) await DB.doc('mailtpl/' + BUILTIN.id).set({ name: BUILTIN.name, subject: BUILTIN.subject, kind: 'inquiry', body: '', o: 0, by: (typeof ME !== 'undefined' && ME) || '', at: new Date().toISOString() }); } } catch (e) {} }, 6000);
+  })();
+  const list = () => { const l = [...TPL.values()]; if (!l.some(t => t.id === BUILTIN.id)) l.push(BUILTIN); return l.sort((p, q) => (p.o || 0) - (q.o || 0) || String(p.name).localeCompare(String(q.name))); };
+  function fill(t, agName, ms) {
+    if (t.kind === 'inquiry' && !String(t.body || '').trim()) return Object.assign({ subject: t.subject || SUBJECT }, ms.length ? letter(agName, ms) : letter(agName, []));
+    const me = (typeof meRec === 'function' && meRec()) || {};
+    const one = ms.length === 1, g = one ? ms[0].g : '';
+    const [sub, pos] = g === 'F' ? ['she', 'her'] : g === 'M' ? ['he', 'his'] : ['they', 'their'];
+    /* 1.2.162: grammar that follows how many models (one: "Is she", "model"; more: "Are they", "models") - {Is} {She} {Her} capitalised at a sentence start */
+    const isW = sub === 'they' ? 'are' : 'is', cap = w => w.charAt(0).toUpperCase() + w.slice(1);
+    const rep = x => String(x || '').replace(/\{agency\}/gi, agName || '').replace(/\{my name\}/gi, me.n || '').replace(/\{model\(s\)\}/gi, one ? 'model' : 'models').replace(/\{model\}/g, one ? String(ms[0].nm || '') : 'the models')
+      .replace(/\{Is\}/g, cap(isW)).replace(/\{is\}/g, isW).replace(/\{She\}/g, cap(sub)).replace(/\{she\}/g, sub).replace(/\{Her\}/g, cap(pos)).replace(/\{her\}/g, pos)
+      .replace(/\{date\}/gi, new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }));
+    const lines = [];
+    /* {models}: each name as the agency writes it, its link under it, a blank line between */
+    for (const l of rep(t.body).split('\n')) { if (/\{models\}/i.test(l)) { ms.forEach((m, i) => { lines.push(String(m.nm || '')); lines.push('\u0000' + m.url); if (i < ms.length - 1) lines.push(''); }); } else lines.push(l); }
+    const html = lines.map(l => l === '' ? '<p><br></p>' : l.charAt(0) === '\u0000' ? '<p><a href="' + escT(l.slice(1)) + '">' + escT(l.slice(1)) + '</a></p>' : '<p>' + escT(l) + '</p>').join('');
+    return { subject: rep(t.subject), html, text: lines.map(l => l.replace('\u0000', '')).join('\n') };
+  }
+  let PK = null;   /* {addr, agName, ms, el, edit} */
+  /* 1.2.160 (user: "allow me to also select multiple models from that agency ... to add onto the email"): the agency's
+     models, ticked in the same box; the one the email was opened for is ticked already */
+  function agModels(dom) {
+    const a = (typeof AG !== 'undefined' ? AG : []).find(x => x.domain === dom); if (!a) return [];
+    const out = new Map();
+    for (const b of a.boards || []) for (const m of b.m || []) { const raw = String(m[1] || ''); const url = raw.charAt(0) === '|' ? raw.slice(1) : (b.p || '') + raw; let key = url; try { key = normKey(url); } catch (e) {} if (!out.has(key)) out.set(key, { key, nm: m[0] || '', url, g: b.g || '?', ag: a.name, bd: b.d || '' }); }
+    return [...out.values()].sort((p, q) => String(p.nm).localeCompare(String(q.nm), undefined, { sensitivity: 'base', numeric: true }));
+  }
+  function tplPick(anchor, addr, agName, ms, dom) { PK = { addr, agName, ms: (ms || []).slice(), dom: dom || '', edit: null, open: false, q: '', cc: [] }; let box = document.getElementById('illutpl'); if (!box) { box = document.createElement('div'); box.id = 'illutpl'; document.body.appendChild(box); } box.hidden = false; paintPick(); }
+  function paintPick() {
+    const box = document.getElementById('illutpl'); if (!box || box.hidden || !PK) return;
+    const me = (typeof ME !== 'undefined' && ME) || '';
+    let last = ''; try { last = localStorage.getItem('illu.tpl.last.' + me) || ''; } catch (e) {}
+    const L = list(); if (last) L.sort((p, q) => (q.id === last) - (p.id === last));
+    if (PK.edit) {
+      const t = PK.edit;
+      box.innerHTML = '<div class="tplveil" data-tplx></div><div class="tplbox" role="dialog" aria-modal="true"><h3>' + (t.id ? 'Edit template' : 'New template') + '</h3>' +
+        '<label>Name<input id="tplnm" maxlength="60" value="' + escT(t.name || '') + '" placeholder="e.g. Follow-up after no reply"></label>' +
+        '<label>Subject<input id="tplsub" maxlength="200" value="' + escT(t.subject || '') + '"></label>' +
+        '<label>Email<textarea id="tplbody" rows="12" placeholder="Dear {agency} Team,&#10;&#10;…&#10;&#10;{models}&#10;&#10;Thank you!">' + escT(t.body || (t.kind === 'inquiry' ? fill(t, '{agency}', []).text.replace(/following models:\n\n/, 'following models:\n\n{models}\n').replace(/My name is [^,]*,/, 'My name is {my name},') : '')) + '</textarea></label>' +
+        '<p class="tplhelp">Filled in for you: <b>{agency}</b> the agency · <b>{my name}</b> your name · <b>{models}</b> the model names with their links · <b>{model}</b> one model\'s name · <b>{model(s)}</b> model or models · <b>{she}</b> / <b>{her}</b> / <b>{is}</b> she·he·they, her·his·their, is·are (write <b>{She}</b> <b>{Is}</b> at the start of a sentence) · <b>{date}</b> today. Your Hiworks signature is added by Hiworks.</p>' +
+        '<div class="tplacts">' + (t.id && t.id !== BUILTIN.id ? '<button type="button" class="tpldel" data-tpldel="' + escT(t.id) + '">Delete</button>' : '') + '<span></span><button type="button" data-tplback>Back</button><button type="button" class="tplgo" data-tplsave>Save</button></div></div>';
+      setTimeout(() => { const i = box.querySelector('#tplnm'); if (i) i.focus(); }, 30);
+      return;
+    }
+    box.innerHTML = '<div class="tplveil" data-tplx></div><div class="tplbox" role="dialog" aria-modal="true"><h3>Which email?</h3><p class="tplto">To <b>' + escT(PK.addr) + '</b>' + (PK.ms.length ? ' · about <b>' + escT(PK.ms.map(m => String(m.nm || '').toUpperCase()).join(', ')) + '</b>' : '') + '</p>' +
+      '<div class="tpllist">' + L.map(t => '<div class="tplrow"><button type="button" class="tpluse" data-tpluse="' + escT(t.id) + '"><b>' + escT(t.name) + '</b><small>' + escT(t.subject || '') + (t.id === last ? ' · last used' : '') + '</small></button><button type="button" class="tpled" data-tpled="' + escT(t.id) + '" title="Edit">Edit</button></div>').join('') +
+      '<div class="tplrow"><button type="button" class="tpluse blank" data-tpluse=""><b>Blank email</b><small>Only the address — write it yourself</small></button></div></div>' +
+      '<div class="tplacts"><button type="button" data-tplnew>+ New template</button><span></span><button type="button" data-tplx>Cancel</button></div></div>';
+    /* the models in this email */
+    const all = PK.dom ? agModels(PK.dom) : [];
+    if (all.length) {
+      const on = new Set(PK.ms.map(m => m.key)), q = PK.q.toLowerCase();
+      const shown = all.filter(m => !q || String(m.nm).toLowerCase().includes(q));
+      const sec = '<div class="tplms"><div class="tplmsh"><b>Models in this email · ' + PK.ms.length + '</b><button type="button" data-tplmore>' + (PK.open ? 'Done' : '+ Add models from ' + escT(PK.agName)) + '</button></div>' +
+        (PK.ms.length ? '<div class="tplchips">' + PK.ms.map(m => '<span class="tplchip">' + escT(String(m.nm).toUpperCase()) + '<button type="button" data-tploff="' + escT(m.key) + '" aria-label="Remove">✕</button></span>').join('') + '</div>' : '<p class="tplnone">No model — the email goes without a model list.</p>') +
+        (PK.open ? '<input class="tplq" data-tplq placeholder="Search ' + all.length + ' models…" value="' + escT(PK.q) + '"><div class="tplml">' + shown.slice(0, 400).map(m => { const red = anyRed(m.key); return '<label class="tplm' + (red ? ' red' : '') + '"><input type="checkbox" data-tplm="' + escT(m.key) + '"' + (on.has(m.key) ? ' checked' : '') + (red ? ' disabled' : '') + '><span>' + escT(m.nm) + '</span><small>' + escT(red ? 'voted out' : m.bd) + '</small></label>'; }).join('') + '</div>' : '') + '</div>';
+      const to = box.querySelector('.tplto'); if (to) to.insertAdjacentHTML('afterend', sec);
+      if (PK.open && PK.focusQ) { const i = box.querySelector('[data-tplq]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
+    }
+    /* 1.2.164 (user: "the option to see a list of the contacts from that agency I can CC to"): the agency's other
+       contacts with an email, ticked ones go in CC */
+    let cts = []; try { cts = ((typeof CONTACTS !== 'undefined' && CONTACTS.get(PK.dom)) || []).filter(c => c && c.e && /@/.test(c.e)); } catch (e) {}
+    const seen = new Set([String(PK.addr).toLowerCase()]); cts = cts.filter(c => { const e = String(c.e).trim().toLowerCase(); if (seen.has(e)) return false; seen.add(e); return true; });
+    if (cts.length) {
+      const on = new Set(PK.cc.map(x => x.toLowerCase()));
+      const cc = '<div class="tplcc"><div class="tplmsh"><b>CC · ' + PK.cc.length + '</b>' + (cts.length > 1 ? '<button type="button" data-tplccall>' + (PK.cc.length === cts.length ? 'Clear' : 'Tick all') + '</button>' : '') + '</div><div class="tplccl">' +
+        cts.map(c => '<label class="tplm"><input type="checkbox" data-tplcc="' + escT(String(c.e).trim()) + '"' + (on.has(String(c.e).trim().toLowerCase()) ? ' checked' : '') + '><span>' + escT(c.n || String(c.e).split('@')[0]) + '</span><small>' + escT(String(c.e).trim()) + (c.r ? ' · ' + escT(c.r) : '') + '</small></label>').join('') + '</div></div>';
+      const anchor = box.querySelector('.tplms') || box.querySelector('.tplto'); if (anchor) anchor.insertAdjacentHTML('afterend', cc);
+    }
+  }
+  document.addEventListener('change', e => { const c = e.target.closest && e.target.closest('#illutpl [data-tplcc]'); if (!c || !PK) return; const v = c.dataset.tplcc; PK.cc = PK.cc.filter(x => x.toLowerCase() !== v.toLowerCase()); if (c.checked) PK.cc.push(v); paintPick(); }, true);
+  document.addEventListener('input', e => { const i = e.target.closest && e.target.closest('#illutpl [data-tplq]'); if (!i || !PK) return; PK.q = i.value; PK.focusQ = true; paintPick(); PK.focusQ = false; }, true);
+  document.addEventListener('change', e => { const c = e.target.closest && e.target.closest('#illutpl [data-tplm]'); if (!c || !PK) return;
+    const m = agModels(PK.dom).find(x => x.key === c.dataset.tplm); if (!m) return;
+    if (c.checked) { if (!PK.ms.some(x => x.key === m.key)) PK.ms.push(m); } else PK.ms = PK.ms.filter(x => x.key !== m.key);
+    const keepScroll = (document.querySelector('#illutpl .tplml') || {}).scrollTop || 0; paintPick(); const l = document.querySelector('#illutpl .tplml'); if (l) l.scrollTop = keepScroll; }, true);
+  document.addEventListener('click', async e => {
+    const box = document.getElementById('illutpl'); if (!box || box.hidden || !box.contains(e.target) || !PK) return;
+    const b = e.target.closest('[data-tplx],[data-tpluse],[data-tpled],[data-tplnew],[data-tplback],[data-tplsave],[data-tpldel],[data-tplmore],[data-tploff],[data-tplccall]'); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    const me = (typeof ME !== 'undefined' && ME) || '';
+    if (b.hasAttribute('data-tplx')) { box.hidden = true; PK = null; return; }
+    if (b.hasAttribute('data-tplmore')) { PK.open = !PK.open; PK.focusQ = PK.open; paintPick(); PK.focusQ = false; return; }
+    if (b.hasAttribute('data-tplccall')) { const all = [...box.querySelectorAll('[data-tplcc]')].map(x => x.dataset.tplcc); PK.cc = PK.cc.length === all.length ? [] : all; paintPick(); return; }
+    if (b.dataset.tploff) { PK.ms = PK.ms.filter(x => x.key !== b.dataset.tploff); paintPick(); return; }
+    if (b.hasAttribute('data-tpluse')) {
+      const id = b.dataset.tpluse, t = id ? list().find(x => x.id === id) : null;
+      const f = t ? fill(t, PK.agName, PK.ms) : { subject: '', html: '', text: '' };
+      compose({ to: [PK.addr], cc: PK.cc.slice(), subject: f.subject, html: f.html, text: f.text });
+      try { localStorage.setItem('illu.tpl.last.' + me, id); } catch (er) {}
+      box.hidden = true; PK = null; return;
+    }
+    if (b.dataset.tpled) { PK.edit = Object.assign({}, list().find(x => x.id === b.dataset.tpled)); paintPick(); return; }
+    if (b.hasAttribute('data-tplnew')) { PK.edit = { name: '', subject: SUBJECT, body: 'Dear {agency} Team,\n\n\n\nThank you!' }; paintPick(); return; }
+    if (b.hasAttribute('data-tplback')) { PK.edit = null; paintPick(); return; }
+    if (b.dataset.tpldel) { if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Delete — press again'; return; } try { await DB.doc('mailtpl/' + b.dataset.tpldel).set(Object.assign({}, TPL.get(b.dataset.tpldel) || {}, { off: { by: me, at: new Date().toISOString() } })); } catch (er) {} TPL.delete(b.dataset.tpldel); PK.edit = null; paintPick(); return; }
+    if (b.hasAttribute('data-tplsave')) {
+      if (typeof SIGNED === 'function' && !SIGNED()) { if (typeof nudgeSignIn === 'function') nudgeSignIn(); return; }
+      const nm = box.querySelector('#tplnm').value.trim(), sub = box.querySelector('#tplsub').value.trim(), body = box.querySelector('#tplbody').value.replace(/\r/g, '');
+      if (!nm) { box.querySelector('#tplnm').focus(); return; }
+      const t = PK.edit, id = t.id || ('t' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+      const doc = { name: nm, subject: sub, body, kind: t.kind || '', o: t.o != null ? t.o : list().length, by: t.by || me, at: t.at || new Date().toISOString(), ed: { by: me, at: new Date().toISOString() } };
+      TPL.set(id, Object.assign({ id }, doc)); try { await DB.doc('mailtpl/' + id).set(doc); } catch (er) {}
+      PK.edit = null; paintPick(); return;
+    }
+  }, true);
+  document.addEventListener('keydown', e => { const box = document.getElementById('illutpl'); if (e.key === 'Escape' && box && !box.hidden) { e.stopPropagation(); if (PK && PK.edit) { PK.edit = null; paintPick(); } else { box.hidden = true; PK = null; } } }, true);
+  window.__illuTplPick = tplPick; window.__illuTplList = list; window.__illuTplFill = fill;
+
   /* which model a contact list was opened for: the one model card the chip sits in */
   let FOR = null;
   function modelAround(el) {
@@ -216,6 +333,11 @@ document.head.appendChild(st);
     const chip = e.target.closest && e.target.closest('[data-ctopen]');
     if (!chip) return;
     FOR = modelAround(chip);
+    /* 1.2.168: from a booking card's Email stage, the email is about that card's model */
+    if (!FOR) { const w = chip.closest('[data-emfor]'); const c = w && typeof BOOK !== 'undefined' ? BOOK.get(w.dataset.emfor) : null;
+      if (c && c.k) { const hit = index().get(c.k); FOR = hit ? Object.assign({ key: c.k }, hit) : { key: c.k, nm: c.nm || '', url: /^https?:/i.test(c.k) ? c.k : '', dom: c.agd || '', ag: c.ag || '', g: '?' }; } }
+    /* 1.2.160: from her photo view / panel, the email is about her */
+    if (!FOR && chip.closest('#illufv') && window.__illuFvNow) { const v = window.__illuFvNow(); if (v && v.key && !/^bid:/.test(v.key)) { const hit = index().get(v.key); FOR = hit ? Object.assign({ key: v.key }, hit) : { key: v.key, nm: v.nm, url: v.url || v.key, dom: chip.dataset.dom || '', ag: '', g: '?' }; } }
     setTimeout(() => {
       const hd = document.querySelector('.ctbox .ctbhd'); if (!hd || hd.querySelector('.illufor')) return;
       const p = document.createElement('p'); p.className = 'illufor';
@@ -235,8 +357,9 @@ document.head.appendChild(st);
     const box = a.closest('.cts[data-dom]'); const dom = box ? box.dataset.dom : '';
     const agName = ((typeof AG !== 'undefined' ? AG : []).find(x => x.domain === dom) || {}).name || (FOR && FOR.ag) || dom;
     const ms = FOR && !anyRed(FOR.key) ? [FOR] : [];
-    const L = ms.length ? letter(agName, ms) : { html: '', text: '' };
-    compose({ to: [addr], cc: [], subject: SUBJECT, html: L.html, text: L.text });
+    /* 1.2.160 (user, 12 Nov 2026: "several templates saved to select from when sending an email ... Save that template.
+       I will add more eventually"): ✉ first asks which template; the Model inquiry is saved as the first one */
+    tplPick(a, addr, agName, ms, dom);
     a.classList.add('illusent'); a.title = 'Opened in Hiworks';
     /* kept for Data Analytics: who wrote to which agency, when, about whom (docs hwlog/<id>-<YYYY-MM>) */
     try{
@@ -278,7 +401,21 @@ document.head.appendChild(st);
     '#illutoast{position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:95;padding:9px 16px;border-radius:22px;background:var(--surf);border:1px solid var(--line);font:500 12.5px var(--sans);color:var(--ink);box-shadow:0 10px 30px -12px rgba(0,0,0,.4);opacity:0;transition:opacity .2s;pointer-events:none}' +
     '#illutoast[data-on="1"]{opacity:1}' +
     '.ctbhd .illufor{flex-basis:100%;margin:6px 0 0;font-size:12.5px;color:var(--mut)}.ctbhd .illufor b{color:var(--ink);font-weight:600}' +
-    'a.ctmail.illusent{color:var(--acc)}';
+    'a.ctmail.illusent{color:var(--acc)}' +
+    '#illutpl{position:fixed;inset:0;z-index:9200;display:grid;place-items:center}#illutpl[hidden]{display:none}' +
+    '#illutpl .tplveil{position:absolute;inset:0;background:rgba(20,12,24,.4)}' +
+    '#illutpl .tplbox{position:relative;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 60px);overflow:auto;background:var(--paper,#fff);color:var(--ink,#211C26);border:1px solid var(--line);border-radius:14px;box-shadow:0 26px 70px rgba(20,14,38,.35);padding:18px 20px;display:flex;flex-direction:column;gap:10px;font:14px var(--sans)}' +
+    '#illutpl h3{margin:0;font-size:17px}#illutpl .tplto{margin:0;color:var(--mut);font-size:12.5px}#illutpl .tplto b{color:var(--ink)}' +
+    '#illutpl .tpllist{display:flex;flex-direction:column;gap:6px}#illutpl .tplrow{display:flex;gap:6px;align-items:stretch}' +
+    '#illutpl .tpluse{flex:1;text-align:left;border:1px solid var(--line);background:var(--surf,#fff);border-radius:10px;padding:9px 12px;cursor:pointer;color:inherit;font:inherit;display:flex;flex-direction:column;gap:2px}#illutpl .tpluse:hover{border-color:var(--acc)}#illutpl .tpluse small{color:var(--mut);font-size:11.5px}#illutpl .tpluse.blank{border-style:dashed}' +
+    '#illutpl .tpled{border:1px solid var(--line);background:var(--surf2,#f6f3f8);border-radius:10px;padding:0 12px;cursor:pointer;color:var(--mut);font:600 12px var(--sans)}' +
+    '#illutpl label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--mut)}#illutpl input,#illutpl textarea{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:14px var(--sans);color:var(--ink);background:var(--surf,#fff)}#illutpl textarea{resize:vertical;line-height:1.5}' +
+    '#illutpl .tplms{border:1px solid var(--line);border-radius:10px;padding:9px 11px;display:flex;flex-direction:column;gap:7px;background:var(--surf2,#faf8fb)}#illutpl .tplmsh{display:flex;align-items:center;gap:8px}#illutpl .tplmsh b{flex:1;font-size:12.5px}#illutpl .tplmsh button{border:0;background:none;color:var(--acc);font:600 12.5px var(--sans);cursor:pointer}' +
+    '#illutpl .tplchips{display:flex;flex-wrap:wrap;gap:5px}#illutpl .tplchip{display:inline-flex;align-items:center;gap:4px;background:var(--surf,#fff);border:1px solid var(--line);border-radius:999px;padding:3px 4px 3px 10px;font-size:12px;font-weight:600}#illutpl .tplchip button{border:0;background:none;cursor:pointer;color:var(--mut);font-size:11px}#illutpl .tplnone{margin:0;font-size:12px;color:var(--mut)}' +
+    '#illutpl .tplcc{border:1px solid var(--line);border-radius:10px;padding:9px 11px;display:flex;flex-direction:column;gap:6px}#illutpl .tplccl{display:flex;flex-direction:column;max-height:180px;overflow:auto}#illutpl .tplcc .tplm small{margin-left:auto;text-align:right}' +
+    '#illutpl .tplq{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px var(--sans)}#illutpl .tplml{max-height:240px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px 10px}#illutpl .tplm{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--ink);flex-direction:row;padding:3px 0;cursor:pointer}#illutpl .tplm small{color:var(--mut);font-size:10.5px;font-weight:400;margin-left:auto}#illutpl .tplm.red{opacity:.5}' +
+    '#illutpl .tplhelp{margin:0;font-size:12px;color:var(--mut);line-height:1.5}#illutpl .tplhelp b{color:var(--ink)}' +
+    '#illutpl .tplacts{display:flex;gap:8px;align-items:center}#illutpl .tplacts span{flex:1}#illutpl .tplacts button{border:1px solid var(--line);background:var(--surf,#fff);border-radius:20px;padding:7px 16px;cursor:pointer;color:var(--ink);font:500 13px var(--sans)}#illutpl .tplacts .tplgo{background:var(--acc);border-color:var(--acc);color:var(--on-acc,#fff)}#illutpl .tplacts .tpldel{color:#A3283F}';
   document.head.appendChild(st);
 })();
 
