@@ -674,8 +674,13 @@ async function bvOpenSrc(c, src, keepTab){
   if(!(window.illu && window.illu.bookingFiles)){ if(src === 'dbx') return bvLoadDbx(c); bvInput.click(); return; }
   if(!keepTab) bvNoteOnly('<h3>' + esc(c.nm || 'This model') + '</h3>' + (src === 'dbx'
     ? 'Opening the Dropbox folder\u2026' : 'Opening the folder on this computer\u2026'));
-  const got = await bvLocal(c, src);
+  let got = await bvLocal(c, src);
   if(!bv || bv.id !== c.id) return;
+  /* 1.2.142 (user, 12 Nov: "what happened to the material in Malika A's folder?"): her Dropbox folder had the 8 empty
+     subfolders only - the files are in the folder on this computer. An empty Dropbox copy never hides them: the folder
+     on this computer opens instead. */
+  const nOf = g => g && g.groups ? [...g.groups.values()].reduce((a, x) => a + x.length, 0) + ((g.other || []).length) : 0;
+  if(src === 'dbx' && !nOf(got)){ const pc = await bvLocal(c, 'pc'); if(!bv || bv.id !== c.id) return; if(nOf(pc)){ got = pc; got.dbxEmpty = true; } }
   if(got && got.groups){
     BVLOAD.set(c.id, got);
     const n = t => (got.groups.get(t) || []).length;
@@ -1205,7 +1210,7 @@ function bvDrawSide(c, got){
         (got.at ? ' \u00b7 updated ' +
         esc(dmy(got.at)) : '')
       : got
-      ? 'Showing <b>' + esc(got.folder) + '</b> from this computer. Nothing has been uploaded.'
+      ? 'Showing <b>' + esc(got.folder) + '</b> from this computer' + (got.dbxEmpty ? ' \u2014 her Dropbox folder has no files yet.' : '. Nothing has been uploaded.')
       : 'Files are kept in <b>BOOKING / ' + esc(bvFolderName(c)) +
         '</b>, on your computer and in Dropbox.') + '</div>';
   const pr = bvSide.querySelector('.bvprof');

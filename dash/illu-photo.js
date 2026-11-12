@@ -20,7 +20,7 @@
      It wins over every photo the crawler found; a photo saved onto the card (dropped / pasted / chosen file) still wins over it. */
   const PMAIN = new Map();
   /* shown through the program's own image loader (it sends the agency page as the referrer, like the slideshow does) */
-  const pmSrc = pm => pm && pm.u ? (window.illu && window.illu.modelPhotos ? 'illuimg://p/' + encodeURIComponent(pm.u) + '?r=' + encodeURIComponent(pm.r || '') + '&w=1000' : pm.u) : '';
+  const pmSrc = pm => pm && pm.u ? (/^\/_blob\//.test(pm.u) ? pm.u : window.illu && window.illu.modelPhotos ? 'illuimg://p/' + encodeURIComponent(pm.u) + '?r=' + encodeURIComponent(pm.r || '') + '&w=1000' : pm.u) : '';
   let ready = false;
   const idOf = k => 'p' + hkey(k).slice(1);
   /* 1.2.138 (user, 11 Nov 2026: photos missing on the booking cards): some agencies (Q Model Management) give
@@ -333,26 +333,39 @@
       return html.replace('<img class="agimg" src="' + esc(src) + '"', '<img class="agimg" data-orig="' + esc(src) + '" fetchpriority="high" src="' + esc(via) + '"');
     };
   }
+  /* 1.2.142 (user, 12 Nov 2026: "the main photos aren't appearing on the card on the pc"): a card photo stays hidden
+     until its load is seen (.gotimg). A picture that comes straight from the cache can finish before the page hears it,
+     and then the card stayed dark although the picture was there. Every 1.5 s any finished picture is shown. */
+  setInterval(() => {
+    document.querySelectorAll('.litpic:not(.gotimg) img.agimg').forEach(im => {
+      if(im.complete && im.naturalWidth > 1){ const c = im.closest('.litpic'); if(c){ c.classList.add('gotimg'); c.classList.remove('imgfail'); } }
+    });
+  }, 1500);
   /* a check-up note every minute while pictures are on screen (docs diag/<id>): what the photo
      cache did and what the cards show, so a picture problem can be looked at from anywhere */
   /* (every 10 minutes, and only when the window is in front - it was every minute, all day) */
   if(window.illu && window.illu.imgStat){
-    setInterval(async () => {
+    const diagNow = async () => {
       if(document.hidden) return;
       try{
         const cells = [...document.querySelectorAll('.litpic[data-pic]')].filter(c => c.offsetParent);
-        if(!cells.length) return;
+        if(!cells.length && ![...document.querySelectorAll('.uc')].some(u => u.offsetParent)) return;
         const imgs = cells.map(c => c.querySelector('img.agimg')).filter(Boolean);
         const st = await window.illu.imgStat();
         const dom = {cells: cells.length, withImg: imgs.length, shown: cells.filter(c => c.classList.contains('gotimg')).length,
           failed: cells.filter(c => c.classList.contains('imgfail')).length,
           complete: imgs.filter(i => i.complete && i.naturalWidth > 0).length, broken: imgs.filter(i => i.complete && !i.naturalWidth).length,
           waiting: imgs.filter(i => !i.complete).length, lazy: imgs.filter(i => i.loading === 'lazy').length,
-          sample: imgs.slice(0, 3).map(i => String(i.getAttribute('src') || '').slice(0, 220))};
+          sample: imgs.slice(0, 3).map(i => String(i.getAttribute('src') || '').slice(0, 220)),
+          cards: [...document.querySelectorAll('.uc')].filter(u => u.offsetParent).slice(0, 12).map(u => { const im = u.querySelector('.ucimg img'), c = u.querySelector('.ucimg .litpic');
+            return {k: String(u.dataset.ivk || u.dataset.uck || '').slice(0, 120), img: im ? im.className : '', src: im ? String(im.getAttribute('src') || '').slice(0, 160) : '', done: !!(im && im.complete), w: im ? im.naturalWidth : 0,
+              op: im ? getComputedStyle(im).opacity : '', cell: c ? c.className : '', h: im ? Math.round(im.getBoundingClientRect().height) : 0}; })};
         const id = (typeof ME !== 'undefined' && ME ? String(ME).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) : 'anon') || 'anon';
         await DB.doc('diag/' + id).set({at: new Date().toISOString(), view: typeof VIEW !== 'undefined' ? VIEW : '', dom, cache: st});
       }catch(e){}
-    }, 600000);
+    };
+    setInterval(diagNow, 180000); setTimeout(diagNow, 20000);
+    window.__illuDiagNow = diagNow;
   }
   /* pick a photo as the card photo / go back to the one the crawler found */
   /* a photo only this computer can open (one of the booking folder's files, /_blob/bk.…) or one whose link runs

@@ -268,6 +268,8 @@ body.ckmin #fbar,body.ckmin #d2bar.fbcol{margin-top:4px}
 #fbar .fbr1,#fbar .fbr2{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 #fbar .fbr2[hidden]{display:none}
 #fbar .fbsp{flex-grow:1}
+/* 1.2.143 (user, 12 Nov 2026): the count and Reset sit right after the last filter (Measurements), not at the far right */
+#fbar .fbr1 > .fbsp{order:1}
 #fbar .fbq{display:flex;align-items:center;gap:8px;height:36px;width:280px;box-sizing:border-box;padding:0 12px;border-radius:9px;border:1px solid transparent;background:var(--surf2)}
 #fbar .fbq svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;opacity:.6;flex:none}
 #fbar .fbq input{border:0!important;outline:0;flex-grow:1;font:inherit;font-size:13.5px;background:transparent!important;color:inherit;min-width:0;height:auto;padding:0!important;box-shadow:none!important}

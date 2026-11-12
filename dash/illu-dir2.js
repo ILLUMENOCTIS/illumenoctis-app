@@ -1032,9 +1032,8 @@
     if(VIEW !== 'dir' || !D2.sel || D2.sel === -1 || e.button !== 0 || !e.target.closest) return;
     if(e.target.closest(KEEP)) return;
     if(D2.open){ closeCard(); return; }   // first click closes what is open on top
-    if(D2.bopen) return;
-    const pane = document.getElementById('pane-dir'); if(!pane || pane.hidden) return;
-    deselect();
+    /* 1.2.144 (user, 12 Nov 2026): a click in the empty space between the photos only puts a card away - it never
+       leaves the agency's board for the start screen (that made the search start over) */
   });
   /* the open card can be dragged anywhere over the photos (not by its buttons, lamps or fields);
      it stays where it was put while it is open, and opens in its usual place next time */
@@ -1891,7 +1890,7 @@
     const subSeg = '<div class="rc2seg" role="group" aria-label="Board type">' + [['both', 'Both'], ['newfaces', 'New faces'], ['development', 'Development']].map(([k, l]) => '<button type="button" data-rcnf="' + k + '" aria-pressed="' + (RC.nfSub === k) + '">' + l + '</button>').join('') + '</div>';
     const body2 = !ready ? body
       : tab === 'kor' ? (list.length ? '<p class="rc2note">The best 9 by the Korean-market bands (women ' + KB().F.ht.join('–') + ' cm, men ' + KB().M.ht.join('–') + ' cm, plus bust, waist and hips). Green figures are inside the band. New picks shows the next 9.</p><div class="rc2grid">' + list.map(m => tile2(m, true)).join('') + '</div>' : '<div class="d2empty"><p>Nothing left to suggest for the Korean market under these filters. Change the filters, or press New picks to start again from the top.</p></div>')
-      : tab === 'nf' ? (PH ? '' : '<div class="rc2bar">' + subSeg + '<span class="rc2note">' + nfN.toLocaleString() + ' models with a photo on New face and Development boards' + (fon ? ' match your filters' : '') + ' · under 18s are never shown</span></div>') +
+      : tab === 'nf' ? (PH ? '' : '<div class="rc2bar"><span class="rc2note">' + nfN.toLocaleString() + ' models with a photo on New face and Development boards' + (fon ? ' match your filters' : '') + ' · under 18s are never shown</span></div>') +
           (list.length ? '<div class="rc2grid">' + list.map(m => tile2(m)).join('') + '</div>' + (nfPages > 1 ? '<nav class="rc2pg" aria-label="Pages"><button type="button" class="rcnb" data-rcpg="' + (RC.nfPg - 1) + '"' + (RC.nfPg ? '' : ' disabled') + '>‹ Previous</button><span>Page <b>' + (RC.nfPg + 1).toLocaleString() + '</b> of ' + nfPages.toLocaleString() + ' · ' + (RC.nfPg * 60 + 1).toLocaleString() + '–' + (RC.nfPg * 60 + list.length).toLocaleString() + ' of ' + nfN.toLocaleString() + '</span><button type="button" class="rcnb" data-rcpg="' + (RC.nfPg + 1) + '"' + (RC.nfPg < nfPages - 1 ? '' : ' disabled') + '>Next page ›</button></nav>' : '') : '<div class="d2empty"><p>No model on these boards matches your filters.</p></div>')
       : body + (strip.length ? '<section class="rc2nf" aria-label="From New face and Development boards"><div class="rc2bar"><div><b>From New face &amp; Development boards</b><span class="rc2note">' + nfN.toLocaleString() + ' models · ' + nfF.toLocaleString() + ' New face · ' + (nfN - nfF).toLocaleString() + ' Development</span></div>' + subSeg + '<button type="button" class="rcnb" data-rctab="nf">See all</button></div><div class="rc2strip">' + strip.map(m => tile2(m)).join('') + '</div></section>' : '');
     const G0 = $('.d2body'), gTop = G0 ? G0.scrollTop : 0;
@@ -1900,15 +1899,17 @@
         '<button type="button" role="tab" data-rctab="' + k + '" aria-selected="' + (tab === k) + '">' + esc(l) + (n !== '' ? ' <s>' + n + '</s>' : '') + '</button>').join('') + '</div>';
     const sub2 = tab === 'you' ? sub : tab === 'kor' ? 'Measured models from the whole Directory that best fit the Korean-market bands' : 'Models on the agencies\' New face and Development boards';
     const NFL = {both: 'Both', newfaces: 'New faces', development: 'Development'};
+    /* Both / New faces / Development: a list that opens and closes (phone row; on the PC beside the two tabs - user, 12 Nov 2026) */
+    const ddH = (tab === 'nf' ? '<span class="rcdd"><button type="button" class="rcddb" data-rcdd aria-haspopup="listbox" aria-expanded="' + !!RC.ddOpen + '">' + (NFL[RC.nfSub] || 'Both') + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + (RC.ddOpen ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6') + '"/></svg></button>' +
+        (RC.ddOpen ? '<span class="rcddl" role="listbox" aria-label="Board type">' + Object.keys(NFL).map(k => '<button type="button" role="option" data-rcnf="' + k + '" aria-selected="' + (RC.nfSub === k) + '">' + NFL[k] + '</button>').join('') + '</span>' : '') + '</span>' : '');
     const phRow = !PH ? '' : '<div class="rcph">' +
       '<button type="button" class="rcphb" data-rcfull aria-pressed="' + !!RC.full + '" aria-label="' + (RC.full ? 'Exit full screen' : 'Full screen') + '" title="' + (RC.full ? 'Exit full screen' : 'Full screen') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (RC.full ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>') + '</svg></button>' +
       '<span class="rcper" role="group" aria-label="Cards in a row">' + [1, 2].map(n => '<button type="button" data-rcper="' + n + '" aria-pressed="' + (rcPer() === n) + '" aria-label="' + n + (n === 1 ? ' card' : ' cards') + ' in a row" title="' + n + (n === 1 ? ' card' : ' cards') + ' in a row"><svg viewBox="0 0 24 24" aria-hidden="true">' + (n === 1 ? '<rect x="5" y="4" width="14" height="16" rx="2"/>' : '<rect x="3" y="4" width="7.5" height="16" rx="1.5"/><rect x="13.5" y="4" width="7.5" height="16" rx="1.5"/>') + '</svg></button>').join('') + '</span>' +
       '<span class="rcsp"></span>' +
-      (tab === 'nf' ? '<span class="rcdd"><button type="button" class="rcddb" data-rcdd aria-haspopup="listbox" aria-expanded="' + !!RC.ddOpen + '">' + (NFL[RC.nfSub] || 'Both') + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + (RC.ddOpen ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6') + '"/></svg></button>' +
-        (RC.ddOpen ? '<span class="rcddl" role="listbox" aria-label="Board type">' + Object.keys(NFL).map(k => '<button type="button" role="option" data-rcnf="' + k + '" aria-selected="' + (RC.nfSub === k) + '">' + NFL[k] + '</button>').join('') + '</span>' : '') + '</span>' : '') +
+      ddH +
       '<button type="button" class="rcbtn" data-rcref' + (!ready || !pool.length ? ' disabled' : '') + '>New picks</button></div>';
     pane.classList.toggle('rcper1', PH && rcPer() === 1); pane.classList.toggle('rcper2', PH && rcPer() === 2); pane.classList.toggle('rcphone', PH);
-    pane.innerHTML = '<div class="rcwrap"><div class="rchd"><div>' + (PH ? '' : '<h2>Suggestiones</h2>') + tabs + (PH ? phRow : '<p>' + esc(sub2) + '</p>' + (tab === 'you' ? '<p class="rcprog">' + esc(prog) + '</p>' : '')) + '</div>' +
+    pane.innerHTML = '<div class="rcwrap"><div class="rchd"><div>' + (PH ? '' : '<h2>Suggestiones</h2>') + (PH ? tabs : '<div class="rctabrow">' + tabs + ddH + '</div>') + (PH ? phRow : '<p>' + esc(sub2) + '</p>' + (tab === 'you' ? '<p class="rcprog">' + esc(prog) + '</p>' : '')) + '</div>' +
       '<button type="button" class="illufs" data-rcfull aria-pressed="' + !!RC.full + '" title="' + (RC.full ? 'Exit full screen (Esc)' : 'Show Suggestiones on the whole screen') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (RC.full ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>') + '</svg><span>' + (RC.full ? 'Exit full screen' : 'Full screen') + '</span></button>' +
       (tab === 'you' && RC.sets && RC.sets.length > 1 ? '<div class="rcnav" role="group" aria-label="Earlier sets">' +
         '<button type="button" class="rcnb" data-rcstep="-1"' + (RC.at > 0 ? '' : ' disabled') + ' title="The set shown before this one (Alt ←)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Back</span></button>' +
@@ -1943,6 +1944,14 @@
     '.rc2seg button s{text-decoration:none;font-weight:500;opacity:.8;margin-left:3px;font-variant-numeric:tabular-nums}' +
     '.rc2seg button[aria-selected="true"],.rc2seg button[aria-pressed="true"]{background:var(--acc,#6b2a63);color:#fff}' +
     '.rchd .rc2tabs{margin:6px 0 4px}' +
+    '.rchd .rctabrow{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:6px 0 4px}.rchd .rctabrow .rc2tabs{margin:0}' +
+    '#pane-arr:not(.rcphone) .rcdd{position:relative;flex:none}' +
+    '#pane-arr:not(.rcphone) .rcddb{height:42px;border-radius:11px;border:1px solid var(--line,#e3dde8);background:var(--surf,#fff);padding:0 12px;display:flex;align-items:center;gap:6px;font:600 13px var(--sans,Inter,system-ui,sans-serif);color:var(--acc,#5A2C57);cursor:pointer;white-space:nowrap}' +
+    '#pane-arr:not(.rcphone) .rcddb[aria-expanded="true"]{border-color:var(--acc,#5A2C57);background:var(--accbg,#F3ECF3)}' +
+    '#pane-arr:not(.rcphone) .rcddb svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}' +
+    '#pane-arr:not(.rcphone) .rcddl{position:absolute;left:0;top:48px;min-width:160px;background:var(--surf,#fff);border:1px solid var(--line,#E7E2EC);border-radius:12px;box-shadow:0 14px 34px rgba(20,10,30,.18);padding:4px;display:flex;flex-direction:column;gap:2px;z-index:30}' +
+    '#pane-arr:not(.rcphone) .rcddl button{border:0;background:none;border-radius:8px;padding:9px 12px;font:500 13.5px var(--sans,Inter,system-ui,sans-serif);color:var(--ink,#211C26);text-align:left;cursor:pointer;white-space:nowrap}' +
+    '#pane-arr:not(.rcphone) .rcddl button:hover{background:var(--surf2,#F4F0F6)}#pane-arr:not(.rcphone) .rcddl button[aria-selected="true"]{background:var(--acc,#5A2C57);color:#fff;font-weight:600}' +
     '#pane-arr .rc2grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(190px * var(--pz,1)),1fr));gap:16px;padding:4px 2px 12px}' +
     '#pane-arr .rc2c{background:var(--surf,#fff);border:1px solid var(--line,#e6e0ea);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-width:0}' +
     '#pane-arr .rc2c .rc2ph.d2t{border-radius:0;box-shadow:none;transform:none!important}' +
