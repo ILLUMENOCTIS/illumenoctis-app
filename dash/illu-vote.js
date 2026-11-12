@@ -1292,8 +1292,8 @@
         keys.map(k => { const i = info(k), th = mfThumb(k), n = likedBy.get(k); return '<tr class="' + (n > 1 ? 'sh' : '') + '"><td class="l"><span class="mftm" data-mfopen="' + H(k) + '" role="button" tabindex="0"><span class="mfph sm">' + (th ? '<img src="' + H(th) + '" alt="" loading="lazy">' : '') + '</span><span class="mfmt"><b>' + H(i.nm || '') + '</b><span>' + H((i.ag || '') + ' · ' + mfMs(k)) + '</span>' + mfVote(k) + '</span></span></td>' +
           picked.map(p => { const v = (FAV.get(p) || new Map()).get(k); return '<td>' + (v ? '<span class="mfyes" title="' + H(when(v.at)) + '">♥</span>' : '<span class="mfno">–</span>') + '</td>'; }).join('') + '<td><b>' + n + '</b></td></tr>'; }).join('') + '</tbody></table></div>';
     }
-    return bar + '<div class="mfcols" style="--mfn:' + Math.min(picked.length, 4) + '">' + picked.map(p => { const items = favOf(p).filter(x => !shared || (likedBy.get(x.k) || 0) > 1);
-      return '<section class="mfcol"><header>' + disc(p, 'sm') + '<b>' + H(nm(p)) + '</b><span>' + items.length + ' ' + L('favorites', '즐겨찾기') + '</span></header><div class="mfcl">' + (items.length ? items.map(mini).join('') : '<p class="mfnone">' + (shared ? L('No favorite shared with the others', '다른 멤버와 겹치는 즐겨찾기 없음') : L('No favorites yet', '아직 즐겨찾기 없음')) + '</p>') + '</div></section>'; }).join('') + '</div>';
+    return bar + '<div class="mfcols" style="--mfn:' + picked.length + '">' + picked.map(p => { const items = favOf(p).filter(x => !shared || (likedBy.get(x.k) || 0) > 1);
+      return '<section class="mfcol"><div class="mfch">' + disc(p, 'sm') + '<b>' + H(nm(p)) + '</b><span>' + items.length + ' ' + L('favorites', '즐겨찾기') + '</span></div><div class="mfcl">' + (items.length ? items.map(mini).join('') : '<p class="mfnone">' + (shared ? L('No favorite shared with the others', '다른 멤버와 겹치는 즐겨찾기 없음') : L('No favorites yet', '아직 즐겨찾기 없음')) + '</p>') + '</div></section>'; }).join('') + '</div>';
   }
   document.addEventListener('click', e => {
     const t = e.target; if(!t || !t.closest) return;
@@ -1324,20 +1324,22 @@
 .mflnk{border:0;background:none;color:var(--acc,#5A2C57);font:600 13px var(--sans,Inter,system-ui,sans-serif);cursor:pointer}
 .mfok{border:0;background:var(--acc,#5A2C57);color:#fff;border-radius:9px;height:32px;padding:0 14px;font:600 13px var(--sans,Inter,system-ui,sans-serif);cursor:pointer}
 .mfsum{font-size:13px;color:var(--mut,#6D6577)}
-.mfcols{display:grid;grid-template-columns:repeat(var(--mfn,3),minmax(0,1fr));gap:16px;align-items:start}
+.mfcols{display:grid;grid-template-columns:repeat(var(--mfn,3),minmax(230px,1fr));gap:16px;align-items:start;overflow-x:auto;padding-bottom:6px}
 .mfcol{background:var(--surf2,#FBF9FC);border:1px solid var(--line,#EEE9F1);border-radius:16px;padding:12px;min-width:0}
-.mfcol header{display:flex;align-items:center;gap:8px;margin-bottom:10px}.mfcol header b{font-size:15px}.mfcol header span{font-size:12px;color:var(--mut,#8A8093);margin-left:auto}
+.mfcol .mfch{display:flex;align-items:center;gap:8px;margin-bottom:10px;position:static}.mfcol .mfch b{font-size:15px}.mfcol .mfch span{font-size:12px;color:var(--mut,#8A8093);margin-left:auto;white-space:nowrap}
 .mfcl{display:flex;flex-direction:column;gap:8px}
-.mfmini{display:flex;gap:10px;align-items:center;padding:8px;border:1px solid var(--line,#EEE9F1);border-radius:12px;background:var(--surf,#fff);cursor:pointer;position:relative;min-width:0}
+.mfmini{display:flex;gap:10px;align-items:center;padding:8px;height:96px;box-sizing:border-box;overflow:hidden;flex:none;border:1px solid var(--line,#EEE9F1);border-radius:12px;background:var(--surf,#fff);cursor:pointer;position:relative;min-width:0}
 .mfmini:hover{border-color:#C9B6CB}
 .mfmini.sh,.mft tr.sh td{box-shadow:inset 0 0 0 1.5px var(--acc,#5A2C57);background:#FCF8FC}
 .mfph{width:46px;height:60px;border-radius:8px;flex:none;overflow:hidden;background:#EDE7F0}.mfph.sm{width:36px;height:46px}
 .mfph img{width:100%;height:100%;object-fit:cover;object-position:50% 20%;display:block}
 .mfmt{display:flex;flex-direction:column;gap:1px;min-width:0;font-size:12px;color:var(--mut,#6D6577)}
 .mfmt b{font-size:13px;color:var(--ink,#211C26);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mfmini .mfmt{flex:1}.mfmini .mfmt > b{padding-right:44px}
 .mfmt > span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mftag{position:absolute;right:8px;top:8px;font-size:10.5px;font-weight:700;color:#fff;background:var(--acc,#5A2C57);border-radius:999px;padding:2px 7px}
-.mfvt{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:3px}
+.mfvt{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;overflow:hidden;white-space:nowrap;margin-top:3px}
+.mfvt .mfvb{flex:none}.mfvt .mfva{flex:none;margin-left:-3px}
 .mfvb{font-weight:700;border-radius:999px;padding:1px 7px;font-size:10.5px}
 .mfvb.open{background:#FFF4E5;color:#9A5B12}.mfvb.appr{background:#E8F7EA;color:#2F7A3D}.mfvb.cxl{background:#FBE9EC;color:#A3283F}
 .mfva{display:inline-flex}.mfva .ivdisc{position:static!important;margin:0!important;width:16px!important;height:16px!important;font-size:7.5px!important}
