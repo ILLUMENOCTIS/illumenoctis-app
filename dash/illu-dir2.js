@@ -1789,10 +1789,22 @@
      so nothing moves whatever the figures are. The photo still opens the model's card. */
   const isKo = () => typeof LANG !== 'undefined' && LANG === 'ko';
   const TIERL = {main: ['Main board', '메인 보드'], newfaces: ['New face', '뉴 페이스'], development: ['Development', '디벨롭먼트'], direct: ['Direct', '다이렉트'], commercial: ['Commercial', '커머셜']};
+  /* 1.2.147 (user, 12 Nov 2026: "why are the photos not appearing on the cards?" - My / Member Favorites on the PC):
+     cards drawn for the vote and favourites boards kept the agency's own address in the photo, and the PC program
+     refuses a picture asked straight from another site - only the program's photo cache (illuimg://) may fetch it.
+     Every card photo on the PC now goes through the cache, whichever board draws the card. */
+  const viaCache = (html, key, href) => {
+    if(window.__noVia || !(window.illu && window.illu.modelPhotos && !window.illu.web)) return html;
+    return html.replace(/<img class="agimg"([^>]*?) src="(https?:[^"]+)"/, (all, pre, src) => {
+      const raw = src.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+      const ref = href || (/^https?:/i.test(String(key)) ? key : '');
+      return '<img class="agimg"' + pre + ' data-orig="' + esc(raw) + '" src="' + esc('illuimg://p/' + encodeURIComponent(raw) + (ref ? '?r=' + encodeURIComponent(ref) : '')) + '"';
+    });
+  };
   function ucard(m, o){
     o = o || {};
     const f = litFacts(m), minor = isMinor(m.key);
-    const pc = picCell(m.key, m.nm, minor ? '' : f.photo).replace('<img class="agimg"', '<img class="agimg" loading="lazy" decoding="async"').replace(' fetchpriority="high"', '');
+    const pc = viaCache(picCell(m.key, m.nm, minor ? '' : f.photo), m.key, m.href).replace('<img class="agimg"', '<img class="agimg" loading="lazy" decoding="async"').replace(' fetchpriority="high"', '');
     const band = o.kor ? KB()[m.g === 'M' ? 'M' : 'F'] : null;
     const ht = n1(f.ht), bu = n1(f.bu), wa = n1(f.wa), hp = n1(f.hp), eu = n1(f.eu);
     /* 1.2.130: the top bar's units (cm / in, one shoe size); the band check still reads centimetres */

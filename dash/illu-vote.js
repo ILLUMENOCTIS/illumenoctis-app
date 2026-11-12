@@ -1195,7 +1195,7 @@
       const ref = document.getElementById('pane-arr');
       if(!ref || !window.__illuShellAdd){ setTimeout(mount, 200); return; }
       ref.parentNode.insertBefore(el, ref);
-      window.__illuShellAdd(id, {label, title, el, count, show: () => { el.__h = ''; p.render(); }});
+      window.__illuShellAdd(id, {label, title, el, count, show: () => { el.__h = ''; p.render(); /* 1.2.147: a photo check-up note 6 s and 30 s after a board opens (dark Favorites cards on the owner PC) */ clearTimeout(el.__dg); clearTimeout(el.__dg2); el.__dg = setTimeout(() => { try{ window.__illuDiagNow && window.__illuDiagNow(); }catch(e){} }, 6000); el.__dg2 = setTimeout(() => { try{ window.__illuDiagNow && window.__illuDiagNow(); }catch(e){} }, 30000); }});
     }
     mount();
   }

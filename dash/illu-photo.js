@@ -22,6 +22,7 @@
   /* shown through the program's own image loader (it sends the agency page as the referrer, like the slideshow does) */
   const pmSrc = pm => pm && pm.u ? (/^\/_blob\//.test(pm.u) ? pm.u : window.illu && window.illu.modelPhotos ? 'illuimg://p/' + encodeURIComponent(pm.u) + '?r=' + encodeURIComponent(pm.r || '') + '&w=1000' : pm.u) : '';
   let ready = false;
+  window.__illuPmDbg = () => ({ready, pmain: [...PMAIN.keys()].slice(0, 20), plink: PLINK.size});
   const idOf = k => 'p' + hkey(k).slice(1);
   /* 1.2.138 (user, 11 Nov 2026: photos missing on the booking cards): some agencies (Q Model Management) give
      photo links that stop working after a few days (signed links: X-Amz-Expires, Expires=...). Such a link is
@@ -359,9 +360,9 @@
           sample: imgs.slice(0, 3).map(i => String(i.getAttribute('src') || '').slice(0, 220)),
           cards: [...document.querySelectorAll('.uc')].filter(u => u.offsetParent).slice(0, 12).map(u => { const im = u.querySelector('.ucimg img'), c = u.querySelector('.ucimg .litpic');
             return {k: String(u.dataset.ivk || u.dataset.uck || '').slice(0, 120), img: im ? im.className : '', src: im ? String(im.getAttribute('src') || '').slice(0, 160) : '', done: !!(im && im.complete), w: im ? im.naturalWidth : 0,
-              op: im ? getComputedStyle(im).opacity : '', cell: c ? c.className : '', h: im ? Math.round(im.getBoundingClientRect().height) : 0}; })};
+              op: im ? getComputedStyle(im).opacity : '', cell: c ? c.className : '', h: im ? Math.round(im.getBoundingClientRect().height) : 0, n: u.querySelectorAll('.ucimg img').length, pm: PMAIN.has(String(u.dataset.ivk || u.dataset.uck || '')), lazy: im ? im.loading : '', vis: (() => { try{ const r = u.getBoundingClientRect(); return Math.round(r.top) + ',' + Math.round(r.height); }catch(e){ return ''; } })()}; })};
         const id = (typeof ME !== 'undefined' && ME ? String(ME).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) : 'anon') || 'anon';
-        await DB.doc('diag/' + id).set({at: new Date().toISOString(), view: typeof VIEW !== 'undefined' ? VIEW : '', dom, cache: st});
+        await DB.doc('diag/' + id).set({at: new Date().toISOString(), view: typeof VIEW !== 'undefined' ? VIEW : '', pane: (() => { try{ const pn = [...document.querySelectorAll('.pane')].find(x => !x.hidden && x.offsetParent); return pn ? pn.id : ''; }catch(e){ return ''; } })(), ver: (window.illu && window.illu.version) || '', dom, cache: st});
       }catch(e){}
     };
     setInterval(diagNow, 180000); setTimeout(diagNow, 20000);
