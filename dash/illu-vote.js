@@ -975,28 +975,29 @@
   const LNI = '<svg class="gsln" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>';
   function pnGuar(k, c, can){
     const g = gOf(k, c), dis = can ? '' : ' disabled';
-    const cell = (show, lab, body, extra, cls) => '<label class="gscell' + (cls ? ' ' + cls : '') + '">' + '<small>' + (show ? LNI : '') + H(lab) + '</small><span class="gsval">' + body + '</span>' + (extra || '') + '</label>';
+    const cell = (show, lab, body, extra, cls) => '<label class="gscell' + (cls ? ' ' + cls : '') + '">' + '<small' + (show ? ' title="' + H(c ? L('The same boxes as her booking card contract', '부킹 카드 계약서와 같은 칸') : L('Goes into her contract when she has a booking card', '부킹 카드가 생기면 계약서로 들어갑니다')) + '"' : '') + '>' + (show ? LNI : '') + H(lab) + '</small><span class="gsval">' + body + '</span>' + (extra || '') + '</label>';
     const inp = (f, val, ph, attrs) => '<input data-gin="' + f + '" value="' + H(val) + '" placeholder="' + H(ph) + '"' + (attrs || '') + dis + '>';
     let rows = '';
-    if(g.gty === 'net') rows += cell(1, L('Guarantee', '개런티'), '<span class="gscur">₩</span>' + inp('amt', g.amt, L('Amount', '금액'), ' inputmode="numeric"') +
+    if(g.gty === 'net') rows += cell(1, L('Amount', '금액'), '<span class="gscur">₩</span>' + inp('amt', g.amt, L('Amount', '금액'), ' inputmode="numeric"') +
       '<span class="gstog" role="group" aria-label="' + H(L('Amount is for', '금액 기준')) + '">' + [['term', L('Term', '전체')], ['month', L('Month', '월')]].map(([v, t]) => '<button type="button" data-gmode="' + v + '" aria-pressed="' + (g.mode === v) + '"' + dis + '>' + t + '</button>').join('') + '</span>');
     if(g.gty === 'cond') rows += cell(1, L('Per month', '월'), '<span class="gscur">₩</span>' + inp('cgm', g.cgm, L('Full guarantee', '월 개런티 전액'), ' inputmode="numeric"')) +
       cell(1, L('If', '조건'), inp('jobs', g.jobs, '5', ' inputmode="numeric" class="gsjobs"') + '<span class="gsunit">' + L('full-day jobs / 30 days', '풀데이 잡 / 30일') + '</span>');
     if(g.gty === 'no') rows += '<div class="gscell none"><small>' + L('Guarantee', '개런티') + '</small><span class="gsval">' + L('None. Nothing to fill in.', '없음. 입력할 것이 없습니다.') + '</span></div>';
-    /* 1.2.171 (user: "title name AVAILABILITY & GUARANTEE ... Stay on top. Then Available ... Then Guarantee Type at the end"):
-       Stay and Available in the first box, then the guarantee type with its own boxes under it */
-    const grows = rows; rows = '';
-    rows += cell(1, L('Stay', '체류'), inp('days', g.days, '–', ' inputmode="numeric" class="gsdays" style="width:' + (Math.max(2, (g.days || '–').length) + 0.6) + 'ch"') + '<span class="gsunit">' + L('days', '일') + '</span>',
-      '<span class="gschips">' + ['60', '90'].map(d => '<button type="button" data-gdays="' + d + '" aria-pressed="' + (g.days === d) + '"' + dis + '>' + d + L(' days', '일') + '</button>').join('') + '</span>');
-    rows += cell(0, L('Available', '가능'), inp('avf', g.avf, '', ' maxlength="40"'), '<span class="gsestn">' + L('Rough estimate. Not in the contract.', '대략적인 예상. 계약서에는 들어가지 않습니다.') + '</span>', 'est');
+    /* 1.2.191 (user, 14 Nov 2026, approved "Model side panel, cleaner" with "have Available be on top and Stay in the
+       middle"): one neutral box - Available, Stay (60 / 90 on the same line), Guarantee (Net / Condition / None on the
+       same line); the amount lines appear under it only for Net or Condition. The chain marks what goes into her
+       contract; the words are in its tooltip. */
+    const grows = g.gty === 'no' ? '' : rows;
+    const lnk = H(c ? L('The same boxes as her booking card contract', '부킹 카드 계약서와 같은 칸') : L('Goes into her contract when she has a booking card', '부킹 카드가 생기면 계약서로 들어갑니다'));
+    let top = cell(0, L('Available', '가능'), inp('avf', g.avf, L('e.g. mid-Dec (estimate)', '예: 12월 중순 (예상)'), ' maxlength="40" title="' + H(L('Rough estimate. Not in the contract.', '대략적인 예상. 계약서에는 들어가지 않습니다.')) + '"'));
+    top += cell(1, L('Stay', '체류'), inp('days', g.days, '–', ' inputmode="numeric" class="gsdays" style="width:' + (Math.max(2, (g.days || '–').length) + 0.6) + 'ch"') + '<span class="gsunit">' + L('days', '일') + '</span>');   /* user: "just manually input the numbers instead of selecting 60 or 90 days" */
+    top += '<div class="gscell gsg"><small title="' + lnk + '">' + LNI + H(L('Guarantee', '개런티')) + '</small><span class="gsval"><span class="gsseg" role="group" aria-label="' + H(L('Guarantee type', '개런티 유형')) + '">' +
+      [['net', L('Net', '넷')], ['cond', L('Condition', '컨디션')], ['no', L('None', '없음')]].map(([v, t]) => '<button type="button" data-ggty="' + v + '" aria-pressed="' + (g.gty === v) + '"' + dis + '>' + t + '</button>').join('') + '</span></span></div>';
     let ex = '';
     if(!c){ const p = preOf(k) || {}; const bits = [p.age ? L('Age ', '나이 ') + p.age : '', p.entry ? L('Entry ', '입국 ') + p.entry : ''].filter(Boolean);
       if(bits.length || p.anote) ex = '<div class="pnkvx">' + (bits.length ? '<span>' + H(bits.join(' · ')) + '</span>' : '') + (p.anote ? '<p>' + H(p.anote) + '</p>' : '') + '</div>'; }
-    return '<section class="pns gs">' + pnSecH(L('Availability', '가능 기간'), '<span class="gssync" title="' + H(c ? L('The same boxes as her booking card contract', '부킹 카드 계약서와 같은 칸') : L('Goes into her contract when she has a booking card', '부킹 카드가 생기면 계약서로 들어갑니다')) + '">' + LNI + (c ? L('Same as contract', '계약서와 동일') : L('Goes into her contract', '계약서로 연결')) + '</span>') +
-      '<div class="gsbox">' + rows + '</div>' +
-      '<div class="gssub">' + LNI + H(L('Guarantee type', '개런티 유형')) + '</div>' +
-      '<div class="gsseg" role="group" aria-label="' + H(L('Guarantee type', '개런티 유형')) + '">' + [['net', L('Net', '넷')], ['cond', L('Condition', '컨디션')], ['no', L('No guarantee', '노 개런티')]].map(([v, t]) => '<button type="button" data-ggty="' + v + '" aria-pressed="' + (g.gty === v) + '"' + (g.gty === v ? ' title="' + H(L('Press again to clear', '다시 누르면 선택 해제')) + '"' : '') + dis + '>' + t + '</button>').join('') + '</div>' +
-      (grows ? '<div class="gsbox">' + grows + '</div>' : '') + ex + '</section>';
+    return '<section class="pns gs">' + pnSecH(L('Availability & guarantee', '가능 기간 & 개런티')) +
+      '<div class="gsbox" title="">' + top + grows + '</div>' + ex + '</section>';
   }
   /* typing: saved when the box is left (or Enter), so the panel never redraws under the cursor */
   const gKey = el => { const m = el && el.closest && el.closest('.mx'); return m ? m.dataset.mxk : ''; };
@@ -1103,7 +1104,7 @@
     const st = stateOf(k), fav = myFav().has(k);
     const facts = factsOf(k), aa = Object.assign({facts}, a);
     return '<div class="mx pn pn2" data-mxk="' + H(k) + '" data-mxab="' + H(JSON.stringify({nm: a.nm || '', ag: a.ag || '', city: a.city || '', country: a.country || ''})) + '">' +
-      pnHead(k, aa, c, fav) + pnMeas(k, aa, c) + pnStatus(k, aa, c, st, can, nm) + pnGuar(k, c, can) + pnAgency(k, aa) + availSec(k, aa, can) + pnTabs(k, c, nm, can) + pnAdmin(k, aa, c) + '</div>';
+      pnHead(k, aa, c, fav) + pnMeas(k, aa, c) + pnStatus(k, aa, c, st, can, nm) + pnGuar(k, c, can) + pnAgency(k, aa) + pnTabs(k, c, nm, can)   /* 1.2.191 (user, 14 Nov 2026): no "Agency said" on the panel */ + pnAdmin(k, aa, c) + '</div>';
   }
   document.addEventListener('click', e => {
     const t = e.target.closest && e.target.closest('.mx [data-ptab],.mx [data-pedit]'); if(!t) return;
@@ -1120,7 +1121,7 @@
     const can = signedIn(), a = about || {}, nm = a.nm || info(k).nm || L('her', '모델');
     let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){}
     return '<div class="mx" data-mxk="' + H(k) + '" data-mxab="' + H(JSON.stringify({nm: a.nm || '', ag: a.ag || '', city: a.city || '', country: a.country || ''})) + '">' +
-      statusSec(k, a, c, stateOf(k), can, nm) + availSec(k, a, can) + notesSec(k, nm, can) + linksSec(k, c, can) + '</div>';
+      statusSec(k, a, c, stateOf(k), can, nm) + notesSec(k, nm, can) + linksSec(k, c, can) + '</div>';
   }
   window.__illuModelExtras = extras;
   /* 1.2.129: paint the Booking / Notes / Links block into any card's panel; what is being typed (a note, a link,
@@ -1980,7 +1981,7 @@
     const chipA = (k2, en, ko) => { const n = all.filter(v => k2 === 'all' || v.t === k2).length; return '<button type="button" class="' + (cat === k2 ? 'on' : '') + '" data-ivset="avc=' + k2 + '">' + L(en, ko) + ' · ' + n + '</button>'; };
     return '<div class="ivhead"><div class="ivseg">' + chipA('all', 'All', '전체') + chipA('no', 'Not available', '불가') + chipA('nokr', 'Not for Korea', '한국 불가') + chipA('later', 'On hold', '보류') + '</div><span class="ivsp"></span><span class="ivkick">' + H(cat === 'later' ? L('Not now, but a chance later — with the date to ask again', '지금은 안 되지만 나중에 가능 — 다시 물어볼 날짜와 함께') : cat === 'nokr' ? L('The agency will not place her in Korea', '에이전시가 한국에는 보내지 않습니다') : cat === 'no' ? L('Not available at all', '전혀 불가') : L('Every model an agency said no or not now to', '에이전시가 불가 또는 보류라고 한 모델')) + '</span></div>' +
       (list.length ? '<div class="ivgrid ivtv ivunav">' + list.map(v => '<div class="ivcw">' + (info(v.k).nm ? mcard(v.k) : (() => { try{ return (window.__illuCard({key: v.k, nm: v.nm || '', ag: v.ag || '', href: v.k}) || ''); }catch(e){ return ''; } })()) + '<div class="avcap ' + v.t + '" title="' + H(v.why || '') + '"><b>' + H(window.__illuAvailLabel(v)) + '</b>' + (v.why ? '<span>“' + H(v.why) + '”</span>' : '') + '<small>' + H([v.from, v.at ? new Date(v.at).toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short'}) : ''].filter(Boolean).join(' · ')) + '</small></div></div>').join('') + '</div>'
-        : empty(L('No one here', '없음'), L('When an agency says she is not available, not for Korea, or maybe later, open her card and set it under "Agency said". She shows here and is marked on every board.', '에이전시가 불가, 한국 불가, 보류라고 하면 카드의 "에이전시 답변"에서 설정하세요. 여기와 모든 보드에 표시됩니다.')));
+        : empty(L('No one here', '없음'), L('Models an agency said are not available, not for Korea, or on hold (for example a booking cancelled for that reason) show here.', '에이전시가 불가, 한국 불가, 보류라고 한 모델(예: 그 이유로 취소된 부킹)이 여기에 표시됩니다.')));
   }, () => [...AV.values()].filter(v => v.t && AVT[v.t]).length || '');
   add('cxl', ['Cancelled', '취소'], () => {
     const list = decided('cxl').filter(gw);
@@ -2538,14 +2539,14 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .pnrow .pnlk{margin-left:0}
 .pn2 .pnlk:disabled{opacity:.5;cursor:default}
 .pn2 .pnbk{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 10px;background:var(--okbg,#DFECE4);color:var(--ok,#2E6845);border-radius:10px;padding:8px 10px;font-size:12.5px;font-weight:600}
-.pn2 .pnvb{background:var(--holdbg,#F4EBD5);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
-.pn2 .pnvb.ok{background:var(--okbg,#DFECE4)}.pn2 .pnvb.x{background:var(--nobg,#FBEAEC)}
+.pn2 .pnvb{background:var(--surf,#fff);border:1px solid var(--line);border-radius:11px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.pn2 .pnvb.ok,.pn2 .pnvb.x{background:var(--surf,#fff)}
 .pn2 .pnvh{display:flex;align-items:baseline;gap:8px;font-size:13px}
-.pn2 .pnvh b{color:var(--hold,#84610F)}.pn2 .pnvb.ok .pnvh b{color:var(--ok,#2E6845)}.pn2 .pnvb.x .pnvh b{color:var(--no,#A8323C)}
+.pn2 .pnvh b{color:var(--ink)}.pn2 .pnvb.ok .pnvh b{color:var(--ok,#2E6845)}.pn2 .pnvb.x .pnvh b{color:var(--no,#A8323C)}
 .pn2 .pnvh span{margin-left:auto;font-size:11.5px;color:var(--mut);white-space:nowrap}
-.pn2 .pnbar{display:flex;gap:3px}.pn2 .pnbar i{flex:1;height:5px;border-radius:3px;background:var(--line)}.pn2 .pnbar i.in{background:var(--hold,#84610F)}
+.pn2 .pnbar{display:flex;gap:3px}.pn2 .pnbar i{flex:1;height:5px;border-radius:3px;background:var(--line)}.pn2 .pnbar i.in{background:var(--acc)}
 .pn2 .pnvote{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.pn2 .pnvb p{margin:0;font-size:12px;color:var(--mut)}.pn2 .pnvb p b{color:var(--hold,#84610F)}
+.pn2 .pnvb p{margin:0;font-size:11.5px;color:var(--faint)}.pn2 .pnvb p b{color:var(--acc)}
 .pn2 .pnkv{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .pn2 .pnkv>div{padding:7px 10px;min-width:0}.pn2 .pnkv>div+div{border-left:1px solid var(--line)}
 .pn2 .pnkv small{display:block;font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
@@ -2575,16 +2576,17 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .gssub{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--mut);margin:12px 0 6px;display:flex;align-items:center;gap:5px}
 .pn2 .gs .gssync{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;color:var(--ok,#2E7D4F);white-space:nowrap}
 .pn2 .gsln{width:11px;height:11px;stroke:var(--ok,#2E7D4F);fill:none;stroke-width:2.2;flex:none}
-.pn2 .gsseg{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--surf2,var(--wash));margin-bottom:8px}.pn2 .gsseg:last-child{margin-bottom:0}
-.pn2 .gsseg button{font:inherit;font-size:12.5px;font-weight:600;border:0;background:none;color:var(--mut);border-radius:7px;padding:6px 2px;cursor:pointer}
-.pn2 .gsseg button[aria-pressed="true"]{background:var(--acc);color:var(--on-acc,#fff)}
+.pn2 .gsseg{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:2px;border-radius:8px;background:var(--surf2,var(--wash));width:100%}
+.pn2 .gsseg button{font:inherit;font-size:11.5px;font-weight:600;border:0;background:none;color:var(--mut);border-radius:6px;padding:5px 2px;cursor:pointer;white-space:nowrap}
+.pn2 .gsseg button[aria-pressed="true"]{background:var(--surf,#fff);color:var(--ink);box-shadow:0 1px 2px rgba(20,10,30,.14)}
 .pn2 .gsbox{border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.pn2 .gscell{display:grid;grid-template-columns:86px minmax(0,1fr);align-items:center;gap:4px 8px;padding:8px 11px;border-top:1px solid var(--line);cursor:text;min-height:42px;margin:0}
+.pn2 .gscell{display:grid;grid-template-columns:78px minmax(0,1fr);align-items:center;gap:4px 8px;padding:6px 10px;border-top:1px solid var(--line);cursor:text;min-height:38px;margin:0}
+.pn2 .gscell.gsg{cursor:default}
 .pn2 .gscell:first-child{border-top:0}
 .pn2 .gscell:hover{background:var(--surf2,var(--wash))}
-.pn2 .gscell > small{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--mut);display:flex;align-items:center;gap:5px}
-.pn2 .gsval{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
-.pn2 .gsval input{font:inherit;font-size:14.5px;font-weight:600;color:var(--ink,inherit);background:transparent;border:0;border-bottom:1.5px dashed transparent;border-radius:0;padding:2px 0;min-width:0;flex:1 1 70px;width:100%;font-variant-numeric:tabular-nums;box-shadow:none}
+.pn2 .gscell > small{font-size:11.5px;font-weight:600;color:var(--mut);display:flex;align-items:center;gap:4px}
+.pn2 .gsval{display:flex;align-items:center;justify-content:flex-end;gap:5px;min-width:0;flex-wrap:nowrap}
+.pn2 .gsval input{text-align:right;font:inherit;font-size:13px;font-weight:600;color:var(--ink,inherit);background:transparent;border:0;border-bottom:1.5px dashed transparent;border-radius:0;padding:2px 0;min-width:0;flex:1 1 70px;width:100%;font-variant-numeric:tabular-nums;box-shadow:none}
 .pn2 .gsval input.gsdays,.pn2 .gsval input.gsjobs{flex:none}
 .pn2 .gsval input.gsjobs{width:3ch}
 .pn2 .gsval input::placeholder{color:var(--faint);font-weight:500}
@@ -2595,11 +2597,10 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .gstog{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;flex:none}
 .pn2 .gstog button{font:inherit;font-size:11px;font-weight:600;border:0;background:none;color:var(--mut);padding:2px 8px;cursor:pointer}
 .pn2 .gstog button[aria-pressed="true"]{background:var(--acc);color:var(--on-acc,#fff)}
-.pn2 .gschips{display:flex;gap:5px;grid-column:2}
+.pn2 .gschips{display:flex;gap:4px;flex:none}
 .pn2 .gschips button{font:inherit;font-size:11.5px;border:1px solid var(--line);background:var(--surf);color:var(--mut);border-radius:999px;padding:1px 9px;cursor:pointer}
 .pn2 .gschips button[aria-pressed="true"]{border-color:var(--acc);color:var(--acc);font-weight:600}
-.pn2 .gscell.est,.pn2 .gscell.est:hover{background:var(--holdbg,#F6EED8)}
-.pn2 .gscell.est > small,.pn2 .gsestn{color:var(--hold,#84610F)}
+.pn2 .gsestn{color:var(--faint)}
 .pn2 .gsestn{grid-column:2;font-size:11px;margin-top:-2px}
 .pn2 .gscell.none{cursor:default}.pn2 .gscell.none .gsval{color:var(--faint);font-size:13px}
 .pn2 .gs button:disabled,.pn2 .gs input:disabled{cursor:default;opacity:.7}
