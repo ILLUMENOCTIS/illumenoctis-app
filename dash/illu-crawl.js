@@ -20,6 +20,8 @@
   if(!window.illu || !window.illu.crawlProfile) return;
   const isOwner = () => { try{ return isAdmin(); }catch(e){ return false; } };
   const wait = ms => new Promise(r => setTimeout(r, ms));
+  /* 1.2.182: a reading that never comes back no longer holds the whole crawl (stuck at 901 of 904, 13 Nov 2026) */
+  const TO = (p, ms) => Promise.race([Promise.resolve(p), wait(ms).then(() => ({error: 'no answer in ' + Math.round(ms / 1000) + ' s', ok: false}))]);
   const LS = { get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k, v){ try{ localStorage.setItem(k, v); }catch(e){} } };
   const C = { busy: false, paused: LS.get('illu.crawl.pause') === '1', list: null, done: 0, total: 0, lanes: {}, found: 0, read: 0, t0: 0, last: '' };
   window.__illuCrawl = C;
@@ -103,7 +105,7 @@
       const home0 = a.site || (a.domain ? 'https://' + a.domain : '');
       if(home0){
         L.step = 'reading contact details';
-        try{ const r = await illu.crawlContacts(home0); const g = await mergeContacts(a, r);
+        try{ const r = await TO(illu.crawlContacts(home0), 300000); const g = await mergeContacts(a, r);
           st.contacts = r && r.error ? {error: r.error} : {emails: (r.emails || []).length, phones: (r.phones || []).length, address: !!r.address, added: g, pages: r.pages || []}; }
         catch(e){ st.contacts = {error: String(e && e.message || e).slice(0, 120)}; }
       }
@@ -115,12 +117,12 @@
       L.step = 'finding boards';
       const found = [];
       const reread = [];
-      for(const b of brk){ const r = await illu.crawlBoard(b.u); if(r && r.models && r.models.length >= 3) reread.push({u: b.u, d: b.d, g: b.g, t: b.t, m: r.models.map(([h, n]) => [n || '', '|' + h])}); }
+      for(const b of brk){ const r = await TO(illu.crawlBoard(b.u), 600000); if(r && r.models && r.models.length >= 3) reread.push({u: b.u, d: b.d, g: b.g, t: b.t, m: r.models.map(([h, n]) => [n || '', '|' + h])}); }
       if(!a.boards.length){
         const home = a.site || (a.domain ? 'https://' + a.domain : '');
         if(!home){ st.state = 'failed'; st.error = 'no website'; }
         else {
-          const r = await illu.crawlLinks(home);
+          const r = await TO(illu.crawlLinks(home), 180000);
           if(!r || r.error){ st.state = 'failed'; st.error = 'home page: ' + ((r && r.error) || 'no answer'); }
           else {
             let host = ''; try{ host = new URL(r.at || home).host.replace(/^www\./, ''); }catch(e){}
@@ -142,7 +144,7 @@
             const have = new Set();
             for(const c of cand.slice(0, 14)){
               L.step = 'reading board ' + c.d;
-              const br = await illu.crawlBoard(c.u);
+              const br = await TO(illu.crawlBoard(c.u), 600000);
               const ms = (br && br.models || []).filter(([h]) => !have.has(h) && !OUT.test(h));
               if(ms.length < 3) continue;
               ms.forEach(([h]) => have.add(h));
@@ -187,7 +189,7 @@
       let since = 0;
       for(const [k, h] of todo){
         while(C.paused) await wait(2000);
-        const r = await illu.crawlProfile(h);
+        const r = await TO(illu.crawlProfile(h), 180000);
         st.read++; L.read++; C.read++;
         /* 1.2.170: a photo already standing for 2 other models of this agency is its logo / placeholder - never kept */
         if(r && r.ok && r.rec && r.rec[6]){ const u = r.rec[6], same = Object.keys(E).filter(x => x !== k && E[x] && E[x][6] === u);

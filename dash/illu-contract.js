@@ -372,6 +372,7 @@
     const c = BOOK.get(bid); if(!c) return;
     try{ if(!SIGNED()){ nudgeSignIn(); return; } }catch(e){}
     c[field] = c[field] === k ? '' : k;
+    if(field === 'gty' && !c.gty) try{ window.__illuPreClearGty && window.__illuPreClearGty(c.k); }catch(e){}   /* 1.2.177: stays cleared */
     try{ saveBook(bid, true); }catch(e){}
     try{ renderBook(); }catch(e){}
     try{ if(typeof bv !== 'undefined' && bv && bv.id === bid && typeof bvDraw === 'function') bvDraw(); }catch(e){}
@@ -381,6 +382,12 @@
     if(field === 'gty') document.querySelectorAll('.ctpanel[data-ctp="' + CSS.escape(bid) + '"]').forEach(p => { p.outerHTML = panel(c); });
     try{ window.__illuBvLeft && window.__illuBvLeft(); }catch(e){}
   }
+  /* 1.2.177: the side panel's Guarantee type (illu-vote.js) is the same card field - redraw this card's type row and
+     contract panel wherever they are open when it changes there */
+  window.__illuContractRedraw = bid => { const c = BOOK.get(bid); if(!c) return;
+    document.querySelectorAll('[data-ctype="' + CSS.escape(bid + '|gty') + '"]').forEach(box => { box.outerHTML = typeRow(c, 'gty', GTY, L('Guarantee Type', '개런티 유형')); });
+    document.querySelectorAll('.ctpanel[data-ctp="' + CSS.escape(bid) + '"]').forEach(p => { p.outerHTML = panel(c); });
+    try{ window.__illuBvLeft && window.__illuBvLeft(); }catch(e){} };
   function say(bid, s){ SAY.set(bid, s); document.querySelectorAll('.ctpanel[data-ctp="' + CSS.escape(bid) + '"] [data-ctsay]').forEach(x => { x.textContent = s; }); }
   /* 1.2.119 (user, 9 Nov 2026): every part still to fill is light red/pink, the count is kept at the top, and a
      notice says to fill them in (weight is optional). "Show me" / Make the contract go to the first one. */

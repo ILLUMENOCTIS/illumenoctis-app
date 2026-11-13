@@ -116,7 +116,7 @@
     const ns = Array.isArray(c.anotes) ? c.anotes : [];
     const list = all || S.all.has(c.id) ? ns : ns.slice(-2);
     return '<div class="adnts">' + (ns.length > list.length ? '<button type="button" class="adnmore" data-adall="' + H(c.id) + '">' + L('Show all ' + ns.length + ' notes', '메모 ' + ns.length + '개 모두 보기') + '</button>' : '') +
-      list.map(n => '<div class="adnt">' + disc(n.by) + '<div><b>' + H(pname(n.by) || '') + '</b> <span>' + H(at(n.at)) + '</span><p>' + H(n.t) + '</p></div></div>').join('') +
+      list.map(n => '<div class="adnt">' + disc(n.by) + '<div><b>' + H(pname(n.by) || '') + '</b> <span>' + H(at(n.at)) + '</span><p>' + H(n.t) + '</p>' + (window.__illuTr ? window.__illuTr('b' + c.id, n.at, n.t) : '') + '</div></div>').join('') +
       (ns.length ? '' : '<p class="admut sm">' + L('No notes yet.', '아직 메모가 없습니다.') + '</p>') +
       '<form class="adnadd" data-adnote="' + H(c.id) + '"><input name="t" maxlength="2000" placeholder="' + H(L('Leave a note on ' + String(c.nm || '').split(' ')[0] + '’s card…', String(c.nm || '').split(' ')[0] + ' 카드에 메모 남기기…')) + '" autocomplete="off"><button type="submit">' + L('Add', '추가') + '</button></form></div>';
   }

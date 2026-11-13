@@ -61,12 +61,32 @@
   }
   /* 1.2.105: the old Cards board is gone, so the card's status and its Delete live here (user, 8 Nov 2026) */
   let arm = '';
+  /* 1.2.180 (user, 13 Nov 2026: "Anyone who created their booking card should have control over deleting the card"):
+     Delete is shown to, and works for, the person who made the card - the first holder, also after it was handed over -
+     and the Admin. Everyone else can still change its status. A card made before anyone was recorded: the Admin only. */
+  const pidOf = p => { try{ return typeof realPid === 'function' ? realPid(p) : p; }catch(e){ return p; } };
+  const makerOf = c => { if(!c) return ''; const lg = Array.isArray(c.bylog) && c.bylog.length ? c.bylog[0] : null; return (lg && lg.from) || c.by || ''; };
+  const canDel = c => { try{ if(typeof isAdmin === 'function' && isAdmin()) return true; const m = makerOf(c); return !!m && !!ME && pidOf(m) === pidOf(ME); }catch(e){ return false; } };
+  window.__illuBkCanDel = canDel;
+  try{
+    if(typeof dropBook === 'function' && !dropBook.__own){
+      const od = dropBook;
+      dropBook = async function(bid){
+        const c = BOOK.get(bid);
+        if(c && !canDel(c)){ try{ (window.__illuToast || (() => {}))(L('Only the person who made this card can delete it.', '이 카드를 만든 사람만 삭제할 수 있습니다.')); }catch(e){} return; }
+        return od.apply(this, arguments);
+      };
+      dropBook.__own = true;
+    }
+  }catch(e){}
+  const maker = c => { const m = makerOf(c); let n = ''; try{ const r = PEOPLE.get(m) || PEOPLE.get(pidOf(m)); n = r ? r.n : ''; }catch(e){} return n; };
   function status(c){
     let cur = 'proc'; try{ cur = bkStOf(c); }catch(e){}
     const S = [['proc', 'Processing', '진행 중'], ['done', 'Completed', '완료'], ['canc', 'Cancelled', '취소']];
     return '<div class="bvlp"><div class="bvlk">' + L('Status', '상태') + '</div><div class="bvlst" role="group">' +
       S.map(([k, en, ko]) => '<button type="button" class="bvls ' + k + '" data-bvlmove="' + k + '" aria-pressed="' + (cur === k) + '">' + H(L(en, ko)) + '</button>').join('') + '</div>' +
-      '<button type="button" class="bvldel' + (arm === c.id ? ' arm' : '') + '" data-bvldel>' + H(arm === c.id ? L('Press again to delete this card', '한 번 더 누르면 이 카드를 삭제합니다') : L('Delete this card', '이 카드 삭제')) + '</button></div>';
+      (canDel(c) ? '<button type="button" class="bvldel' + (arm === c.id ? ' arm' : '') + '" data-bvldel>' + H(arm === c.id ? L('Press again to delete this card', '한 번 더 누르면 이 카드를 삭제합니다') : L('Delete this card', '이 카드 삭제')) + '</button>'
+        : '<p class="bvlnodel">' + H(maker(c) ? L('Only ' + maker(c) + ', who made this card, can delete it.', '이 카드를 만든 ' + maker(c) + '님만 삭제할 수 있습니다.') : L('Only the person who made this card can delete it.', '이 카드를 만든 사람만 삭제할 수 있습니다.')) + '</p>') + '</div>';
   }
   function paint(){
     if(typeof bv === 'undefined' || !bv) return;
@@ -147,6 +167,7 @@
 .bvleft .bvlp{container-type:inline-size}
 @container (max-width:250px){.bvleft .bvlst{flex-direction:column}.bvleft .bvls{flex:none;height:28px}}
 .bvleft .bvls[aria-pressed="true"].proc{background:#C68A00;color:#fff}.bvleft .bvls[aria-pressed="true"].done{background:var(--ivg,#1EE07F);color:#0b3d23}.bvleft .bvls[aria-pressed="true"].canc{background:var(--ivr,#FF3F6C);color:#fff}
+.bvleft .bvlnodel{margin:8px 0 0;font-size:11.5px;color:var(--mut,#8a8291);line-height:1.4}
 .bvleft .bvldel{margin-top:8px;width:100%;height:30px;border:1px dashed var(--line);border-radius:8px;background:none;font:inherit;font-size:12px;color:var(--mut);cursor:pointer}
 .bvleft .bvldel:hover{border-color:#C81E48;color:#C81E48}
 .bvleft .bvldel.arm{border-style:solid;border-color:#C81E48;background:#C81E48;color:#fff}

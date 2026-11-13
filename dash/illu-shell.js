@@ -28,6 +28,7 @@
     com: '<circle cx="9" cy="9" r="3.2"/><circle cx="16.5" cy="10.5" r="2.6"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6M14.5 15.2c2.6-.4 4.9.9 5.6 3.8"/>',
     bk: '<rect x="3.5" y="6" width="17" height="13" rx="2.5"/><path d="M8.5 6V4.5h7V6M3.5 11.5h17"/>',
     cmp: '<rect x="4" y="4" width="7" height="9" rx="1.5"/><rect x="13" y="4" width="7" height="5" rx="1.5"/><rect x="13" y="11" width="7" height="9" rx="1.5"/><rect x="4" y="15" width="7" height="5" rx="1.5"/>',
+    more: '<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>',
     bkl: '<path d="M6 4h10.5A1.5 1.5 0 0 1 18 5.5v13a1.5 1.5 0 0 1-1.5 1.5H6z"/><path d="M9.5 8.5h5M9.5 12h5M9.5 15.5h3"/>',
     404: '<path d="M12 4 21 19.5H3z"/><path d="M12 10v4.2M12 17v.2"/>',
     bld: '<path d="M2.5 12S6 6 12 6s9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><path d="M4 20 20 4"/>',
@@ -39,13 +40,30 @@
   const GROUPS = {
     'g-atlas': {label: ['Atlas', '아틀라스'], icon: 'atl', tabs: ['atl', 'dir', 'cmpb', 'ig', 'favag']},
     'g-opus': {label: ['Opus', '오푸스'], icon: 'bk', tabs: ['fav', 'mfav', 'team', 'appr', 'tie', 'cxl', 'unav', 'bk', 'stay', 'cmp']},
-    'g-404': {label: ['404 · Blind spots', '404 · 크롤 불가'], icon: '404', tabs: ['404', 'bld']}
+    /* 1.2.177 (user, 13 Nov 2026: "combine these 2 and name it more ... choose when selecting the icon"): Backlog and
+       404 · Blind spots are one rail button, More; pointing at it (or clicking / tapping) opens a small menu */
+    'g-more': {label: ['More', '더보기'], icon: 'more', tabs: ['bkl', '404', 'bld']}
   };
-  const TABLAB = {atl: ['Map', '지도'], '404': ['404 · left their board', '404 · 보드에서 내려감'], bld: ['Blind spots', '크롤 불가']};
+  const TABLAB = {atl: ['Map', '지도'], bkl: ['Backlog', '백로그'], '404': ['404 · Left their board', '404 · 보드에서 내려감'], bld: ['Blind spots', '크롤 불가']};
+  const TABSUB = {bkl: ['Hidden agencies and model cards', '숨긴 에이전시와 모델 카드'], '404': ['Profiles agencies took down', '에이전시가 내린 프로필'], bld: ['Sites the crawler cannot read', '크롤러가 읽지 못하는 사이트']};
   const groupOf = v => Object.keys(GROUPS).find(g => GROUPS[g].tabs.includes(v)) || '';
+  /* 1.2.183 (user, 13 Nov 2026: "combining these boards and having sub-boards for them ... that row has too many sub-boards",
+     approved demo): Opus's 10 boards in 4 tabs, the boards inside each as a framed second row. A tab's number adds up
+     its boards; orange when a vote waits for you. Each tab remembers the board last opened in it. */
+  const SETS = {
+    'g-opus': [
+      {id: 'favs', label: ['Favorites', '즐겨찾기'], icon: 'fav', tabs: ['fav', 'mfav'], sub: {fav: ['Mine', '내 즐겨찾기'], mfav: ['Members', '멤버']}},
+      {id: 'vote', label: ['Team Vote', '팀 투표'], icon: 'team', tabs: ['team', 'tie', 'appr', 'cxl'], sub: {team: ['Voting', '투표 중'], tie: ['Tie-breaker', '타이브레이커'], appr: ['Approved', '승인'], cxl: ['Cancelled', '취소']}, hot: true},
+      {id: 'bkg', label: ['Booking', '부킹'], icon: 'bk', tabs: ['bk', 'unav', 'stay'], sub: {bk: ['Booking cards', '부킹 카드'], unav: ['Unavailable / On hold', '불가 / 보류'], stay: ['Current / On-Stay', '현재 / 체류 중']}},
+      {id: 'cmp', label: null, icon: 'cmp', tabs: ['cmp'], sub: {}}
+    ]
+  };
+  const setOf = (g, v) => (SETS[g] || []).find(s => s.tabs.includes(v)) || null;
+  const setLast = s => { try{ const v = localStorage.getItem('illu.shset.' + s.id); if(v && s.tabs.includes(v) && exists(v)) return v; }catch(e){} return s.tabs.find(exists) || s.tabs[0]; };
+  window.__illuShellSets = SETS;
   const MENU = [
     [null, [['today', 'Today', '오늘']]],
-    [null, [['arr'], ['g-atlas'], ['g-opus'], ['arrd'], ['bkl'], ['g-404'], ['ana']]]
+    [null, [['arr'], ['g-atlas'], ['g-opus'], ['arrd'], ['ana'], ['g-more']]]
   ];
   /* two pages under one menu entry, with tabs at the top (approved pictures: "Mine (Lumen) · Everyone
      (Communicatus)" and "404 · Blind spots") */
@@ -72,7 +90,7 @@
       for(const it of items){
         const v = it[0], gi = GROUPS[v];
         h += '<button type="button" class="shnv" data-shv="' + v + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (IC[gi ? gi.icon : v] || '') + '</svg>' +
-          '<span class="shnl"></span><em class="shnc"></em><i class="shdot"></i></button>';
+          '<span class="shnl"></span><em class="shnc"></em><i class="shdot"></i>' + (v === 'g-more' ? '<b class="shmorel">' + H(L('More', '더보기')) + '</b>' : '') + '</button>';
       }
     }
     const cl = false && window.illu && window.illu.claudeToggle ? '<button type="button" class="shnv shclaude" data-clbtn="1" aria-label="Claude"><span class="shclg" aria-hidden="true">✦</span><span class="shnl">Claude</span></button>' : '';
@@ -145,15 +163,41 @@
   function paintSub(){
     let bar = document.getElementById('shsub');
     const g = showing ? '' : groupOf(page);
-    if(!g){ if(bar) bar.hidden = true; return; }
+    if(!g){ if(bar) bar.hidden = true; const b2 = document.getElementById('shsub2'); if(b2) b2.hidden = true; return; }
     try{ localStorage.setItem('illu.shlast.' + g, page); }catch(e){}
     const host = document.getElementById('fbar') || document.getElementById('pane-arr'); if(!host) return;
     if(!bar){ bar = document.createElement('nav'); bar.id = 'shsub'; bar.setAttribute('role', 'tablist');
-      bar.addEventListener('click', e => { const t = e.target.closest('[data-shsub]'); if(t){ goingFromShell = true; try{ go(t.dataset.shsub); } finally { goingFromShell = false; } } }); }
+      bar.addEventListener('click', e => { const t = e.target.closest('[data-shsub],[data-shset]'); if(!t) return;
+        let v = t.dataset.shsub;
+        if(t.dataset.shset){ const s = (SETS[groupOf(page)] || []).find(x => x.id === t.dataset.shset); if(!s) return; v = setLast(s); }
+        goingFromShell = true; try{ go(v); } finally { goingFromShell = false; } }); }
     if(bar.nextElementSibling !== host) host.parentNode.insertBefore(bar, host);
     bar.hidden = false;
-    const h = GROUPS[g].tabs.filter(exists).map(x => { const c = tabCount(x); return '<button type="button" role="tab" data-shsub="' + x + '" aria-selected="' + (x === page) + '" class="' + (x === page ? 'on' : '') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (IC[x] || '') + '</svg><span>' + H(tabText(x)) + '</span>' + (c ? '<em>' + H(c) + '</em>' : '') + '</button>'; }).join('');
+    const sets = SETS[g], cur = sets ? setOf(g, page) : null;
+    let h;
+    if(sets){
+      try{ if(cur) localStorage.setItem('illu.shset.' + cur.id, page); }catch(e){}
+      const num = x => { const n = parseInt(String(tabCount(x) || '').replace(/[^\d]/g, ''), 10); return isNaN(n) ? 0 : n; };
+      let wait = 0; try{ wait = window.__illuVoteWaiting ? window.__illuVoteWaiting() : 0; }catch(e){}
+      h = sets.filter(s => s.tabs.some(exists)).map(s => {
+        const one = s.tabs.filter(exists), lab = s.label ? L(s.label[0], s.label[1]) : tabText(one[0]), on = s === cur;
+        const tot = one.reduce((a, x) => a + num(x), 0), hot = s.hot && wait > 0;
+        return '<button type="button" role="tab" data-shset="' + s.id + '" aria-selected="' + on + '" class="' + (on ? 'on' : '') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (IC[s.icon] || IC[one[0]] || '') + '</svg><span>' + H(lab) + '</span>' +
+          (hot ? '<em class="hot" title="' + H(L(wait + ' waiting for your vote', '내 투표 대기 ' + wait)) + '">' + wait + '</em>' : tot ? '<em>' + tot + '</em>' : '') + '</button>';
+      }).join('');
+    } else h = GROUPS[g].tabs.filter(exists).map(x => { const c = tabCount(x); return '<button type="button" role="tab" data-shsub="' + x + '" aria-selected="' + (x === page) + '" class="' + (x === page ? 'on' : '') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (IC[x] || '') + '</svg><span>' + H(tabText(x)) + '</span>' + (c ? '<em>' + H(c) + '</em>' : '') + '</button>'; }).join('');
     if(bar.__h !== h){ bar.__h = h; bar.innerHTML = h; }
+    /* the boards inside the tab: a framed row under it */
+    let b2 = document.getElementById('shsub2');
+    const inner = cur ? cur.tabs.filter(exists) : [];
+    if(inner.length < 2){ if(b2) b2.hidden = true; return; }
+    if(!b2){ b2 = document.createElement('nav'); b2.id = 'shsub2'; b2.setAttribute('role', 'tablist');
+      b2.addEventListener('click', e => { const t = e.target.closest('[data-shsub]'); if(t){ goingFromShell = true; try{ go(t.dataset.shsub); } finally { goingFromShell = false; } } }); }
+    if(b2.previousElementSibling !== bar) bar.parentNode.insertBefore(b2, bar.nextSibling);
+    b2.hidden = false;
+    const h2 = inner.map(x => { const c = tabCount(x), lb = cur.sub[x] ? L(cur.sub[x][0], cur.sub[x][1]) : tabText(x), hot = x === 'tie' && /^[1-9]/.test(String(c || ''));
+      return '<button type="button" role="tab" data-shsub="' + x + '" aria-selected="' + (x === page) + '" class="' + (x === page ? 'on' : '') + '"><span>' + H(lb) + '</span>' + (c ? '<em' + (hot ? ' class="hot"' : '') + '>' + H(c) + '</em>' : '') + '</button>'; }).join('');
+    if(b2.__h !== h2){ b2.__h = h2; b2.innerHTML = h2; }
   }
 
   /* ---------- moving between pages ---------- */
@@ -206,8 +250,42 @@
     if(e.target.closest('[data-shk]')){ openK(); return; }
     if(e.target.closest('.shbrand')) setTimeout(flare, 60);
     const b = e.target.closest('[data-shv]'); if(!b) return;
+    if(b.dataset.shv === 'g-more'){ e.preventDefault(); if(moreEl && !moreEl.hidden && moreEl.__by === 'click') closeMore(); else openMore(b, 'click'); return; }
     goingFromShell = true; try{ go(b.dataset.shv); } finally { goingFromShell = false; }
   });
+  /* ---------- 1.2.177: the More menu (Backlog · 404 · Blind spots) ---------- */
+  let moreEl = null, moreT = 0;
+  const phoneRail = () => { const r = rail.getBoundingClientRect(); return r.width > r.height; };
+  function moreHTML(){
+    const g = GROUPS['g-more'];
+    return '<div class="shmh">' + H(L('More', '더보기')) + '</div>' + g.tabs.filter(exists).map(v => { const c = tabCount(v), sub = TABSUB[v];
+      return '<button type="button" role="menuitem" class="shmi' + (v === page ? ' on' : '') + '" data-shmore="' + v + '"><span class="shmic"><svg viewBox="0 0 24 24" aria-hidden="true">' + (IC[v] || '') + '</svg></span>' +
+        '<span class="shmt"><b>' + H(tabText(v)) + '</b>' + (sub ? '<small>' + H(L(sub[0], sub[1])) + '</small>' : '') + '</span>' + (c ? '<em>' + H(c) + '</em>' : '') + '</button>'; }).join('') +
+      (phoneRail() ? '<button type="button" class="shmclose" data-shmclose>' + H(L('Close', '닫기')) + '</button>' : '');
+  }
+  function openMore(b, by){
+    clearTimeout(moreT); hideTip();
+    if(!moreEl){
+      moreEl = document.createElement('div'); moreEl.id = 'shmore'; moreEl.setAttribute('role', 'menu'); moreEl.hidden = true; document.body.appendChild(moreEl);
+      moreEl.addEventListener('click', e => { if(e.target === moreEl || e.target.closest('[data-shmclose]')){ closeMore(); return; }
+        const t = e.target.closest('[data-shmore]'); if(!t) return; closeMore(); goingFromShell = true; try{ go(t.dataset.shmore); } finally { goingFromShell = false; } });
+      moreEl.addEventListener('mouseenter', () => clearTimeout(moreT));
+      moreEl.addEventListener('mouseleave', () => { if(moreEl.__by === 'hover') moreT = setTimeout(closeMore, 250); });
+    }
+    moreEl.innerHTML = '<div class="shmbox">' + moreHTML() + '</div>';
+    moreEl.__by = by; moreEl.hidden = false;
+    const sheet = phoneRail(); moreEl.classList.toggle('sheet', sheet);
+    const box = moreEl.firstChild;
+    if(!sheet){ const r = b.getBoundingClientRect(); box.style.left = (r.right + 10) + 'px'; box.style.top = Math.max(8, Math.min(innerHeight - box.offsetHeight - 8, r.top - 8)) + 'px'; }
+    else { box.style.left = ''; box.style.top = ''; }
+    b.setAttribute('aria-expanded', 'true');
+    const f = box.querySelector('[data-shmore]'); if(by !== 'hover' && f) try{ f.focus({preventScroll: true}); }catch(e){}
+  }
+  function closeMore(){ clearTimeout(moreT); if(!moreEl || moreEl.hidden) return; moreEl.hidden = true; const b = rail.querySelector('[data-shv="g-more"]'); if(b) b.setAttribute('aria-expanded', 'false'); }
+  rail.addEventListener('mouseover', e => { const b = e.target.closest('[data-shv="g-more"]'); if(b && !phoneRail() && (!moreEl || moreEl.hidden)) openMore(b, 'hover'); else if(b) clearTimeout(moreT); });
+  rail.addEventListener('mouseout', e => { const b = e.target.closest('[data-shv="g-more"]'); if(b && moreEl && moreEl.__by === 'hover' && !(e.relatedTarget && moreEl.contains(e.relatedTarget))) moreT = setTimeout(closeMore, 250); });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape' && moreEl && !moreEl.hidden){ closeMore(); const b = rail.querySelector('[data-shv="g-more"]'); if(b) b.focus(); } });
+  document.addEventListener('mousedown', e => { if(moreEl && !moreEl.hidden && !moreEl.contains(e.target) && !(e.target.closest && e.target.closest('[data-shv="g-more"]'))) closeMore(); }, true);
 
   /* ---------- Today ---------- */
   let showing = false, pane = null, ckHome = null;
@@ -661,6 +739,23 @@ body.shtoday #abck.shwoff{opacity:.55}
 body.shextra #appbar #ababout,body.shextra #appbar #abtools,body.shextra #appbar .abflt,body.shextra #fbar,body.shextra .shell .pane:not(.shcur),body.shextra .mkkey{display:none!important}
 body.shextra #appbar #shtitle{display:block}
 /* the tabs of a place (Atlas, Opus, 404): one row under the top bar, as in the Studio demo */
+#shrail .shnv[data-shv="g-more"]{height:56px;grid-template-rows:auto auto;align-content:center;gap:1px}
+#shrail .shnv[data-shv="g-more"] .shmorel{display:block;font:600 10px/1 var(--sans,Inter,system-ui,sans-serif);letter-spacing:.02em}
+#shrail .shnv[data-shv="g-more"][aria-expanded="true"]{background:color-mix(in srgb,var(--acc,#6b2a63) 12%,var(--surf,#fff));color:var(--acc,#6b2a63)}
+#shmore{position:fixed;inset:0;z-index:9400;pointer-events:none}
+#shmore[hidden]{display:none}
+#shmore .shmbox{position:fixed;pointer-events:auto;width:300px;background:var(--surf,#fff);border:1px solid var(--line,#e5e3e9);border-radius:14px;box-shadow:0 16px 40px -12px rgba(27,23,36,.35);padding:8px;display:flex;flex-direction:column;gap:2px;font-family:var(--sans,Inter,system-ui,sans-serif);color:var(--ink)}
+#shmore .shmh{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mut,#6c6875);padding:6px 10px 4px;text-transform:uppercase}
+#shmore .shmi{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:8px 10px;border:0;border-radius:10px;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer}
+#shmore .shmi:hover,#shmore .shmi:focus-visible,#shmore .shmi.on{background:color-mix(in srgb,var(--acc,#6b2a63) 7%,var(--surf,#fff));outline:0}
+#shmore .shmic{width:36px;height:36px;border-radius:10px;flex:none;display:grid;place-items:center;background:color-mix(in srgb,var(--acc,#6b2a63) 11%,var(--surf,#fff));color:var(--acc,#6b2a63)}
+#shmore .shmic svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+#shmore .shmt{display:flex;flex-direction:column;gap:2px;flex-grow:1;min-width:0}#shmore .shmt b{font-size:14px;font-weight:600}#shmore .shmt small{font-size:12px;color:var(--mut,#6c6875)}
+#shmore .shmi em{font-style:normal;font-size:12px;font-weight:700;color:var(--acc,#6b2a63);background:color-mix(in srgb,var(--acc,#6b2a63) 11%,transparent);padding:3px 9px;border-radius:999px}
+#shmore.sheet{pointer-events:auto;background:rgba(23,21,28,.42)}
+#shmore.sheet .shmbox{left:0!important;right:0;bottom:0;top:auto!important;width:auto;border-radius:18px 18px 0 0;padding:14px 14px calc(18px + env(safe-area-inset-bottom,0px))}
+#shmore.sheet .shmi{min-height:60px}
+#shmore .shmclose{margin-top:6px;min-height:48px;border-radius:12px;border:1px solid var(--line,#e5e3e9);background:var(--surf,#fff);font:inherit;font-size:15px;color:inherit;cursor:pointer}
 #shsub{display:flex;align-items:center;gap:4px;margin:0 0 14px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none;font-family:var(--sans,Inter,system-ui,sans-serif)}
 #shsub::-webkit-scrollbar{display:none}
 #shsub[hidden]{display:none}
@@ -671,6 +766,15 @@ body.shextra #appbar #shtitle{display:block}
 #shsub button.on{color:var(--ink);border-bottom-color:var(--ink)}
 #shsub button.on svg{color:var(--acc)}
 #shsub button.on em{background:var(--wash,#f4ecf2);color:var(--acc)}
+#shsub button em.hot,#shsub2 button em.hot{background:#FDE7D6;color:#B4540A}
+#shsub2{display:flex;gap:4px;flex-wrap:wrap;width:fit-content;max-width:100%;margin:-4px 0 14px;padding:4px;border:1px solid var(--line);border-radius:12px;background:var(--surf2,#f6f4f7);font-family:var(--sans,Inter,system-ui,sans-serif)}
+#shsub2[hidden]{display:none}
+#shsub2 button{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:0 12px;border:0;border-radius:9px;background:none;font:inherit;font-size:12.5px;font-weight:600;color:var(--mut,var(--faint));cursor:pointer;white-space:nowrap}
+#shsub2 button:hover{color:var(--ink)}
+#shsub2 button.on{background:var(--surf,#fff);color:var(--ink);box-shadow:0 1px 3px rgba(30,20,40,.12)}
+#shsub2 button em{font:500 11px var(--mono,ui-monospace,monospace);font-style:normal;color:var(--faint);background:var(--surf,#fff);border-radius:6px;padding:1px 6px}
+#shsub2 button.on em{background:var(--wash,#f4ecf2);color:var(--acc)}
+@media (max-width:760px){#shsub2{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;width:auto}#shsub2::-webkit-scrollbar{display:none}}
 #appbar #shtitle{display:none;font-size:18px;font-weight:700;color:var(--ink);padding:0 6px 0 4px;white-space:nowrap}
 body.shtoday #appbar #shtitle{display:block}
 body.shtoday #appbar #ababout,body.shtoday #appbar #abtools,body.shtoday #appbar .abflt,body.shtoday #fbar,body.shtoday .shell .pane:not(#pane-today),body.shtoday .mkkey{display:none!important}
