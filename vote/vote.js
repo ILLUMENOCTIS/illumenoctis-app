@@ -31,7 +31,84 @@
     if (/fetch|network|Failed/i.test(m)) return L('No connection. Check the internet and try again.', '연결할 수 없습니다. 인터넷을 확인하고 다시 해 보세요.');
     return m;
   }
-  addEventListener('error', e => { const t = e.target; if (t && t.tagName === 'IMG' && t.closest('.vc')) t.remove(); }, true);
+  /* 1.2.171 (user: "allow me look through all the photos available on the slideshow from the link"): every photo the
+     program published for the card (her BOOK, the agency's photos), with ‹ › / swipe on the card and a full-screen view */
+  const IDX = new Map(), BAD = new Set(), OBJ = new Map();
+  const galOf = h => { const p = PUB[h] || {}; return [...new Set([p.ph].concat(p.ps || []).filter(Boolean))].filter(u => !BAD.has(u)); };
+  const small = (u, w) => /^https?:\/\//i.test(u) && !/\.(gif|svg)(\?|$)/i.test(u) ? 'https://images.weserv.nl/?url=' + encodeURIComponent(u) + '&w=' + w + '&we&output=jpg&q=82&default=' + encodeURIComponent(u) : u;
+  /* a stored photo (/_blob/<id>) is read with the sign-in */
+  async function blobUrl(u) {
+    const id = u.replace(/^\/_blob\//, '').split('?')[0];
+    if (OBJ.has(id)) return OBJ.get(id);
+    const pr = (async () => { const { data, error } = await sb.storage.from('assets').download(id); if (error || !data) throw error || new Error('no photo'); return URL.createObjectURL(data); })();
+    OBJ.set(id, pr); pr.catch(() => OBJ.delete(id)); return pr;
+  }
+  function setImg(img, u, w) {
+    img.dataset.u = u;
+    if (/^\/_blob\//.test(u)) { img.removeAttribute('src'); blobUrl(u).then(s => { if (img.dataset.u === u) img.src = s; }, () => { if (img.dataset.u === u) bad(img); }); }
+    else img.src = small(u, w);
+  }
+  function bad(img) {
+    const u = img.dataset.u; if (u) BAD.add(u);
+    const vc = img.closest('.vc'); if (vc) paintImg(vc.dataset.h); else if (img.closest('#vv')) vvShow(0);
+  }
+  function paintImg(h) {
+    const el = box.querySelector('.vc[data-h="' + h + '"] .img'); if (!el) return;
+    const g = galOf(h); let i = Math.min(IDX.get(h) || 0, Math.max(0, g.length - 1)); IDX.set(h, i);
+    let img = el.querySelector('img');
+    if (!g.length) { if (img) img.remove(); el.querySelectorAll('.gnav,.gct').forEach(x => x.remove()); return; }
+    if (!img) { img = document.createElement('img'); img.alt = ''; el.prepend(img); }
+    setImg(img, g[i], 900);
+    el.querySelectorAll('.gnav,.gct').forEach(x => x.remove());
+    if (g.length > 1) el.insertAdjacentHTML('beforeend', '<button type="button" class="gnav p" data-gp="' + H(h) + '" aria-label="' + H(L('Previous photo', '이전 사진')) + '">‹</button><button type="button" class="gnav n" data-gn="' + H(h) + '" aria-label="' + H(L('Next photo', '다음 사진')) + '">›</button><span class="gct">' + (i + 1) + ' / ' + g.length + '</span>');
+  }
+  const step = (h, d) => { const g = galOf(h); if (g.length < 2) return; IDX.set(h, ((IDX.get(h) || 0) + d + g.length) % g.length); paintImg(h); };
+  /* full screen */
+  let VV = null;
+  function vvOpen(h) {
+    const g = galOf(h); if (!g.length) return;
+    VV = { h };
+    let v = document.getElementById('vv');
+    if (!v) { v = document.createElement('div'); v.id = 'vv'; v.setAttribute('role', 'dialog'); v.setAttribute('aria-modal', 'true'); document.body.appendChild(v); }
+    v.innerHTML = '<img alt=""><button type="button" class="vvx" data-vvx aria-label="' + H(L('Close', '닫기')) + '">×</button><button type="button" class="gnav p" data-vvp aria-label="' + H(L('Previous photo', '이전 사진')) + '">‹</button><button type="button" class="gnav n" data-vvn aria-label="' + H(L('Next photo', '다음 사진')) + '">›</button><span class="gct"></span><div class="vvs"></div>';
+    v.hidden = false; document.body.style.overflow = 'hidden'; vvShow(0);
+  }
+  function vvShow(d) {
+    const v = document.getElementById('vv'); if (!v || !VV) return;
+    const g = galOf(VV.h); if (!g.length) { vvClose(); return; }
+    const i = ((IDX.get(VV.h) || 0) + d + g.length) % g.length; IDX.set(VV.h, i);
+    setImg(v.querySelector('img'), g[i], 1600);
+    v.querySelector('.gct').textContent = (i + 1) + ' / ' + g.length;
+    v.querySelectorAll('.gnav').forEach(b => { b.hidden = g.length < 2; });
+    const s = v.querySelector('.vvs');
+    if (s.dataset.sig !== g.join('|')) { s.dataset.sig = g.join('|'); s.innerHTML = g.map((u, n) => '<button type="button" data-vvt="' + n + '"><img alt=""></button>').join(''); s.querySelectorAll('img').forEach((im, n) => setImg(im, g[n], 160)); }
+    s.querySelectorAll('[data-vvt]').forEach((b, n) => b.classList.toggle('on', n === i));
+    const on = s.querySelector('.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' });
+    paintImg(VV.h);
+  }
+  function vvClose() { const v = document.getElementById('vv'); if (v) v.hidden = true; document.body.style.overflow = ''; VV = null; }
+  document.addEventListener('click', e => {
+    const t = e.target;
+    const p = t.closest('[data-gp]'), n = t.closest('[data-gn]');
+    if (p || n) { e.preventDefault(); step((p || n).dataset.gp || (p || n).dataset.gn, p ? -1 : 1); return; }
+    if (t.closest('#vv')) {
+      if (t.closest('[data-vvx]')) vvClose(); else if (t.closest('[data-vvp]')) vvShow(-1); else if (t.closest('[data-vvn]')) vvShow(1);
+      else if (t.closest('[data-vvt]')) { IDX.set(VV.h, +t.closest('[data-vvt]').dataset.vvt); vvShow(0); }
+      else if (t === document.getElementById('vv')) vvClose();
+      return;
+    }
+    const im = t.closest('.vc .img'); if (im && !t.closest('a,button')) { const vc = im.closest('.vc'); if (vc && galOf(vc.dataset.h).length) vvOpen(vc.dataset.h); }
+  });
+  addEventListener('keydown', e => { if (!VV) return; if (e.key === 'Escape') vvClose(); else if (e.key === 'ArrowLeft') vvShow(-1); else if (e.key === 'ArrowRight') vvShow(1); });
+  /* swipe on the card photo and in the full-screen view */
+  let SW = null;
+  document.addEventListener('touchstart', e => { const el = e.target.closest('.vc .img, #vv'); if (!el || e.touches.length > 1) { SW = null; return; } SW = { x: e.touches[0].clientX, y: e.touches[0].clientY, el }; }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (!SW) return; const t = e.changedTouches[0], dx = t.clientX - SW.x, dy = t.clientY - SW.y, el = SW.el; SW = null;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+    if (el.id === 'vv') vvShow(dx < 0 ? 1 : -1); else { const vc = el.closest('.vc'); if (vc) step(vc.dataset.h, dx < 0 ? 1 : -1); }
+  }, { passive: true });
+  addEventListener('error', e => { const t = e.target; if (t && t.tagName === 'IMG' && (t.closest('.vc') || t.closest('#vv'))) { if (t.closest('.vvs')) { t.closest('button').remove(); return; } bad(t); } }, true);
   const say = (t, err) => { box.innerHTML = '<p class="msg' + (err ? ' err' : '') + '">' + H(t) + '</p>'; };
 
   /* ---------- signing in ---------- */
@@ -133,7 +210,7 @@
     const sentBy = pname(o.by);
     return '<article class="vc' + (st.open ? '' : ' closed') + '" data-h="' + H(hash(o.k)) + '">' +
       '<div class="top"><span>' + H(sentBy ? L('Sent by ', '보낸 사람: ') + sentBy : '') + '</span><span>' + H(st.open ? L(st.n + ' of ' + st.of + ' voted', st.of + '명 중 ' + st.n + '명 투표') + (st.round > (o.base || 1) ? L(' · tie-breaker', ' · 타이브레이커') : '') : '') + '</span></div>' +
-      '<div class="img">' + (p.ph ? '<img src="' + H(p.ph) + '" alt="" loading="lazy">' : '') + '<div class="nm"><b>' + H(o.nm || '') + '</b></div></div>' +
+      '<div class="img">' + '<div class="nm"><b>' + H(o.nm || '') + '</b></div></div>' +
       /* 1.2.149: who has voted and who is still to vote (never how) */
       (st.open ? (() => { const nm = id => id === ME ? L('You', '나') : (pname(id) || '?'); const dn = st.voters.filter(id => voteOf(id, o.k, st.round)), wt = st.voters.filter(id => !voteOf(id, o.k, st.round));
         return '<div class="who">' + (dn.length ? '<span class="wd">✓ ' + H(L('Voted: ', '투표함: ') + dn.map(nm).join(', ')) + '</span>' : '') + (wt.length ? '<span class="ww">' + H(L('Waiting for: ', '대기 중: ') + wt.map(nm).join(', ')) + '</span>' : '') + '</div>'; })() : '') +
@@ -154,6 +231,7 @@
     }
     h += '<div class="foot"><a class="sec" href="../index.html">' + H(L('Open the full program', '전체 프로그램 열기')) + '</a></div>';
     box.innerHTML = h;
+    box.querySelectorAll('.vc[data-h]').forEach(vc => paintImg(vc.dataset.h));
     window.scrollTo(0, 0);
   }
   const btns = (o, st) => '<div class="btns"><button type="button" class="vb g' + (st.mine === 'g' ? ' on' : '') + '" data-v="g" data-k="' + H(hash(o.k)) + '">✓ ' + H(L('Go', '찬성')) + '</button><button type="button" class="vb r' + (st.mine === 'r' ? ' on' : '') + '" data-v="r" data-k="' + H(hash(o.k)) + '">✕ ' + H(L('Pass', '반대')) + '</button></div>';
