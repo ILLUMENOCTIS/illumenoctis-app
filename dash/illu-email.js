@@ -152,14 +152,44 @@
        the agency's other mail (read because it came from her contacts) is simply not hers */
     const {first: fn} = nameParts(c), fre = fn.length > 1 ? new RegExp('(^|[^\\p{L}])' + rx(fn) + '(?=$|[^\\p{L}])', 'u') : null;
     let skipped = 0;
-    EM.list = EM.list.filter(e => { const ok = agOk(c, e, A) && nameOk(c, e.subject, e.body || e.summary); if(!ok && fre && fre.test((String(e.subject || '') + ' ' + String(e.body || e.summary || '')).toLowerCase())) skipped++; return ok; });
-    EM.unr = (r.unr || []).filter(u => agOk(c, {addr: u.addr, to: u.to || [], cc: [], subject: u.subject}, A) && nameOk(c, u.subject, '') && !exOf(c)[threadKey(u.subject)]);
+    EM.list = EM.list.filter(e => { const ok = recent(c, e) && agOk(c, e, A) && nameOk(c, e.subject, e.body || e.summary); if(!ok && fre && fre.test((String(e.subject || '') + ' ' + String(e.body || e.summary || '')).toLowerCase())) skipped++; return ok; });
+    EM.unr = (r.unr || []).filter(u => recent(c, u) && agOk(c, {addr: u.addr, to: u.to || [], cc: [], subject: u.subject}, A) && nameOk(c, u.subject, '') && !exOf(c)[threadKey(u.subject)]);
     EM.unread = EM.unr.length;
     const n = countNew(c, EM);
     keepBodies(c.id, EM.list).then(() => records(c));
     for(const e of EM.list) delete e.body;
-    EM.by = 'program'; merge(c, EM); try{ saveBook(c.id, true); }catch(e){}
-    return {n, skipped, kept: EM.list.length};
+    EM.by = 'program'; merge(c, EM);
+    const pruned = prune(c, A);
+    try{ saveBook(c.id, true); }catch(e){}
+    return {n, skipped: skipped + pruned, kept: emOf(c).list.length};
+  }
+  /* 1.2.186 (user, 14 Nov 2026, Malika A: "these emails and everything to the prior dates don't pertain to this Malika"):
+     emails put on a card before 1.2.178 were matched by her first name only, so another Malika's old conversations
+     (another agency, 2021-2022) stayed on her card - merge() only ever adds. Now every Collect looks again at what is
+     on the card: a conversation in which no email is with her agency (its contacts, its web address, or her agency's
+     name in the text) and none names her is taken off the card. A conversation with her agency stays whole, our own
+     replies included. Nothing is taken off when nothing is known about her agency. */
+  /* 1.2.186 (user, 14 Nov 2026): "base it off the email contact address related to the model, the agency name, model and
+     recent timeline. There are cases when we book the models several months ahead in advance, but it is unnecessary to
+     have to backtrack so far back." An email more than 6 months older than her booking card is not about this booking. */
+  const BACK_MONTHS = 6;
+  function since(c){ const d = new Date(c.at || ''); if(isNaN(d)) return ''; d.setMonth(d.getMonth() - BACK_MONTHS); return d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0'); }
+  const recent = (c, e) => { const s0 = since(c); return !s0 || dtKey(e.dt).slice(0, 8) >= s0; };
+  function prune(c, A){
+    let cur = emOf(c); if(!cur.list.length) return 0;
+    const n0 = cur.list.length, fresh = cur.list.filter(e => recent(c, e));
+    if(fresh.length !== n0){ c.em = Object.assign({}, cur, {list: fresh}); cur = emOf(c); }
+    if(!A.dom && !(Array.isArray(c.emc) && c.emc.length)) return n0 - cur.list.length;   /* the agency rule only when her agency's web address or contacts are known */
+    const ok = new Set();
+    /* our own email sent since her card was made also keeps its conversation (Hiworks gives no "to" for sent mail) */
+    const made = (() => { const d = new Date(c.at || ''); return isNaN(d) ? '' : d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0'); })();
+    for(const e of cur.list){
+      if(agOk(c, e, A) && nameOk(c, e.subject, e.summary)) ok.add(threadKey(e.subject));
+      else if(made && (e.dir === 'out' || MYDOM.test(e.addr || '')) && dtKey(e.dt).slice(0, 8) >= made && nameOk(c, e.subject, e.summary)) ok.add(threadKey(e.subject));
+    }
+    const keep = cur.list.filter(e => ok.has(threadKey(e.subject)));
+    if(keep.length !== cur.list.length) c.em = Object.assign({}, cur, {list: keep});
+    return n0 - keep.length;
   }
   async function collect(c, quiet){
     if(!c || HWBUSY) return null;
