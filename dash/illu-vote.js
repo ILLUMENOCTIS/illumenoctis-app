@@ -1489,7 +1489,7 @@
     const o = onVote(k); const p = o ? o.by : '';
     if(!p) return '';
     const at = startAt(k, stateOf(k));
-    return '<span class="ivtop"><span class="ivfirst" title="' + H(L('Sent to the Team Vote by ' + pname(p) + ' ' + (at ? dfmt(at) : ''), '팀 투표로 보낸 사람: ' + pname(p) + ' ' + (at ? dfmt(at) : ''))) + '">' + disc(p, 'xs') + '<b>' + H(pname(p)) + '</b></span></span>';
+    return '<span class="ivtop"><span class="ivfirst" title="' + H(L('Sent to the Team Vote by ' + pname(p) + ' ' + (at ? dfmt(at) : ''), '팀 투표로 보낸 사람: ' + pname(p) + ' ' + (at ? dfmt(at) : ''))) + '" aria-label="' + H(pname(p)) + '">' + disc(p, 'xs') + '</span></span>';   /* 1.2.186 (user, 14 Nov 2026): only the circle with the first letter; the name is in the tooltip */
   }
   /* the live part: every second, each open vote's clock, its Vote Now ribbon and the speed of its glow */
   const CLKI = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>';
@@ -2349,7 +2349,7 @@ p.pnag{cursor:default}
 .ivbtn.on{border-color:var(--bea)}
 .ivtop{position:absolute;z-index:3;left:8px;top:8px;right:8px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;pointer-events:none}
 .ivfirst{display:inline-flex;align-items:center;gap:5px;max-width:100%;box-sizing:border-box;background:rgba(18,12,22,.58);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:#fff;border-radius:999px;font-size:11px;line-height:1.2;pointer-events:auto}
-.ivfirst{padding:2px 9px 2px 2px}
+.ivfirst{padding:2px}
 .ivfirst b{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .ivfirst s{text-decoration:none;opacity:.75;font-weight:600}
 .ivstrip{position:absolute;z-index:4;left:0;right:0;top:0;height:28px;padding:0 6px 0 9px;box-sizing:border-box;display:flex;align-items:center;gap:6px;background:linear-gradient(rgba(12,8,16,.74),rgba(12,8,16,.5));-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);color:#fff;font-size:11px;white-space:nowrap;pointer-events:auto}
