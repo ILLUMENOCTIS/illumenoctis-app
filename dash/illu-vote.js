@@ -1095,8 +1095,39 @@
     /* 1.2.107: data-at = when the card went up for the vote (the clock and the speed of the glow count from it);
        "late" = 3 hours or more and I still have not voted -> Vote Now */
     const at = (!st || st.open) ? startAt(k, st) : '', need = needK(k, st);
-    return '<span class="vmk' + (need ? ' need' : '') + (need && at && ageH(at) >= 3 ? ' late' : '') + glow + '" data-mk="' + H(k) + '"' + (at ? ' data-at="' + H(at) + '"' : '') + ' data-nm="' + H(nm || '') + '" data-meta="' + H(meta || '') + '" data-url="' + H(url || '') + '">' + heart + '<span class="ivsp"></span>' + right + '</span>';
+    return '<span class="vmk' + (need ? ' need' : '') + (need && at && ageH(at) >= 3 ? ' late' : '') + glow + '" data-mk="' + H(k) + '"' + (at ? ' data-at="' + H(at) + '"' : '') + ' data-nm="' + H(nm || '') + '" data-meta="' + H(meta || '') + '" data-url="' + H(url || '') + '">' + heart + noteBtn(k) + '<span class="ivsp"></span>' + right + '</span>';
   }
+  /* 1.2.175 (user: "when something is written in the notes section, have a note cursor appear by the heart ... light tone
+     yellow. selecting/clicking on the note will open up the important note that needs to be read"): a yellow note
+     beside the heart when the team has written notes on her; it opens them */
+  function noteBtn(k){
+    let ns = []; try{ ns = notesOf(k).filter(n => String(n.t || '').trim()); }catch(e){}
+    if(!ns.length) return '';
+    return '<button type="button" class="ivnt" data-ivnt="' + H(k) + '" title="' + H(L(ns.length + (ns.length === 1 ? ' note' : ' notes') + ' — click to read', '메모 ' + ns.length + '개 — 눌러서 읽기')) + '" aria-label="' + H(L('Read the notes', '메모 읽기')) + '">' +
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h10l4 4v14H5z"/><path d="M15 3v4h4M8.5 11h7M8.5 14.5h7M8.5 18h4"/></svg>' + (ns.length > 1 ? '<b>' + ns.length + '</b>' : '') + '</button>';
+  }
+  let NTPOP = null;
+  function closeNotePop(){ if(NTPOP){ NTPOP.remove(); NTPOP = null; } }
+  function openNotePop(btn){
+    closeNotePop();
+    const k = btn.dataset.ivnt; let ns = []; try{ ns = notesOf(k).filter(n => String(n.t || '').trim()).sort((a, b) => String(b.at).localeCompare(String(a.at))); }catch(e){}
+    let nm = ''; try{ nm = (btn.closest('.vmk') || {}).dataset ? btn.closest('.vmk').dataset.nm || '' : ''; if(!nm) nm = info(k).nm || ''; }catch(e){}
+    const d = document.createElement('div'); d.id = 'ivntpop'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', L('Notes', '메모'));
+    d.innerHTML = '<div class="ivnth"><b>' + H(L('Notes', '메모')) + (nm ? ' · ' + H(nm) : '') + '</b><button type="button" data-ivntx aria-label="' + H(L('Close', '닫기')) + '">×</button></div>' +
+      ns.map(n => '<div class="ivntn"><div class="ivntm"><b>' + H(pname(n.p)) + '</b> <span>' + H(when(n.at)) + '</span></div><p>' + H(n.t) + '</p>' + (n.ed ? '<span class="ivnte">' + H(L('edited by ' + pname(n.ed.by), pname(n.ed.by) + ' 수정')) + '</span>' : '') + '</div>').join('');
+    document.body.appendChild(d); NTPOP = d;
+    const r = btn.getBoundingClientRect(), w = Math.min(340, innerWidth - 24);
+    d.style.width = w + 'px';
+    d.style.left = Math.max(12, Math.min(innerWidth - w - 12, r.left - 8)) + 'px';
+    const h = d.offsetHeight; d.style.top = (r.bottom + 8 + h > innerHeight - 8 ? Math.max(8, r.top - h - 8) : r.bottom + 8) + 'px';
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-ivnt]');
+    if(b){ e.preventDefault(); e.stopPropagation(); if(NTPOP && NTPOP.__k === b.dataset.ivnt){ closeNotePop(); return; } openNotePop(b); if(NTPOP) NTPOP.__k = b.dataset.ivnt; return; }
+    if(NTPOP && (e.target.closest('[data-ivntx]') || !e.target.closest('#ivntpop'))) closeNotePop();
+  }, true);
+  document.addEventListener('keydown', e => { if(e.key === 'Escape' && NTPOP){ e.stopPropagation(); closeNotePop(); } }, true);
+  addEventListener('scroll', closeNotePop, true);
   window.__illuVoteLamps = foot;
   window.__illuVoteMine = k => { const s = stateOf(k); return s ? s.mine || '' : ''; };
   /* repaint every footer of one model in place */
@@ -1111,6 +1142,8 @@
     const box = e.target.closest && e.target.closest('.vmk[data-mk]'); if(!box) return;
     e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation();
     const k = box.dataset.mk;
+    const nb = e.target.closest('[data-ivnt]'); if(nb){ if(NTPOP && NTPOP.__k === nb.dataset.ivnt){ closeNotePop(); return; } openNotePop(nb); if(NTPOP) NTPOP.__k = nb.dataset.ivnt; return; }
+    if(NTPOP) closeNotePop();
     if(e.target.closest('[data-ivfav]')){ toggleFav(k, {nm: box.dataset.nm, ag: String(box.dataset.meta || '').split(' · ')[0]}); return; }
     if(e.target.closest('[data-ivsend]')){ sendVote(k, {nm: box.dataset.nm, ag: String(box.dataset.meta || '').split(' · ')[0]}); return; }
     const l = e.target.closest('[data-ivv]'); if(l){ cast(k, l.dataset.ivv, {nm: box.dataset.nm, ag: String(box.dataset.meta || '').split(' · ')[0]}); return; }
@@ -1996,6 +2029,19 @@ p.pnag{cursor:default}
 :root{--bea:#E3BE72}
 .vmk{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
 .vmk .ivsp,.ivp .ivsp,.ivrow .ivsp,.ivhead .ivsp{flex:1}
+.vmk .ivnt{height:28px;min-width:28px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;gap:2px;flex:none;border:1px solid #F0DC8A;background:#FFF4C2;color:#9A7400;cursor:pointer;padding:0 6px;margin-left:2px;transition:transform .15s}
+.vmk .ivnt:hover{transform:scale(1.08);background:#FFEC99}
+.vmk .ivnt svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linejoin:round;stroke-linecap:round}
+.vmk .ivnt b{font-size:11px;font-weight:700}
+#ivntpop{position:fixed;z-index:9000;background:#FFFBE6;border:1px solid #F0DC8A;border-radius:12px;box-shadow:0 14px 40px -12px rgba(60,45,0,.35);padding:10px 12px;max-height:60vh;overflow:auto;color:#3B2F00;font:13px/1.5 var(--sans,system-ui)}
+#ivntpop .ivnth{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+#ivntpop .ivnth b{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#7A5C00}
+#ivntpop .ivnth button{border:0;background:none;font-size:18px;line-height:1;cursor:pointer;color:#7A5C00;padding:2px 4px}
+#ivntpop .ivntn{padding:7px 0;border-top:1px solid #F3E6A8}
+#ivntpop .ivntn:first-of-type{border-top:0}
+#ivntpop .ivntm{font-size:11.5px;color:#7A6A2A}#ivntpop .ivntm b{color:#3B2F00}
+#ivntpop p{margin:2px 0 0;white-space:pre-wrap;word-break:break-word}
+#ivntpop .ivnte{font-size:11px;color:#9A8A4A}
 .vmk .ivh{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;flex:none;border:0;background:none;color:var(--faint,#8a8090);cursor:pointer;padding:0;transition:transform .15s,color .15s}
 .vmk .ivh svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8}
 .vmk .ivh:hover{color:#D5536B;transform:scale(1.1)}
