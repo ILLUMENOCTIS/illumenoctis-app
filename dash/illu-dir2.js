@@ -1875,7 +1875,9 @@
     const offices = m.boards ? new Set(m.boards.map(b => b.off)).size : 1;
     /* 1.2.170 (user, 13 Nov 2026, approved demo "A + C, 2 - shades of purple"): a liked model whose booking is in progress
        has a slowly moving purple ring and an "In booking · who" label - on the Directory, Suggestiones and every board */
-    let bk = null; try{ bk = window.__illuBkRing ? window.__illuBkRing(m.key, m.nm, m.ag) : null; }catch(e){}
+    /* 1.2.172 (user: "let's get rid of the frame/border around the card when booking, it's too messy. let's revert
+       back to the previous style"): the purple In-booking ring (1.2.170) is off; the cards look as before */
+    const bk = null;
     return '<article class="uc' + (bk ? ' ucbk' : '') + '" data-uck="' + esc(m.key) + '">' +
       (bk ? '<span class="ucbkt" title="' + esc((isKo() ? '부킹 진행 중 · ' : 'In booking · ') + bk.who + (bk.st ? ' · ' + bk.st : '')) + '">' + (isKo() ? '부킹 중 · ' : 'In booking · ') + esc(bk.who) + '</span>' : '') +
       '<div class="ucimg"><div class="d2t ucph" data-d2k="' + esc(m.key) + '" title="' + esc(m.nm) + '">' + pc + '</div>' +
