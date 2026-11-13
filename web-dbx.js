@@ -125,7 +125,7 @@
       const rel = e.path_display.slice(dir.length + 1), parts = rel.split('/');
       if (parts.length > 5 || parts.some(x => x.startsWith('.')) || /^(desktop\.ini|thumbs\.db|~\$.*)$/i.test(e.name)) continue;
       const rid = 'bk.' + await hash('web|' + e.path_lower + '|' + e.rev);
-      map[rid] = { p: e.path_lower, n: e.name };
+      map[rid] = { p: e.path_lower, n: e.name }; RIDS.set(rid, { p: e.path_lower, n: e.name, base: base.toLowerCase() });
       files.push({ rel, size: e.size, mtime: Date.parse(e.server_modified || e.client_modified) || 0, rid });
     }
     /* the service worker learns which Dropbox file each address is */
@@ -134,6 +134,15 @@
     return { ok: true, found: true, web: true, folder: dir.split('/').pop(), root: 'Dropbox' + base, files };
   }
   window.illu.bookingFiles = bookingFiles;
+  /* 1.2.174: delete a wrong photo or video from her Dropbox folder (it goes to Dropbox's deleted files) */
+  const RIDS = new Map();
+  const ridOf = u => String(u || '').replace(/^\/_blob\//, '').split('?')[0];
+  window.illu.bookingWhere = async u => { const f = RIDS.get(ridOf(u)); return f ? { ok: true, place: 'dbx', name: f.n } : { ok: false }; };
+  window.illu.bookingTrash = async u => {
+    const f = RIDS.get(ridOf(u)); if (!f) return { ok: false, why: 'not a file in a booking folder' };
+    if (!f.p.startsWith(f.base + '/') || f.p.slice(f.base.length + 1).split('/').length < 2) return { ok: false, why: 'not inside a model folder' };
+    try { await api('files/delete_v2', { path: f.p }); RIDS.delete(ridOf(u)); return { ok: true, place: 'dbx', name: f.n }; } catch (e) { return { ok: false, why: 'Dropbox: ' + (e.summary || e.message) }; }
+  };
   window.illu.dropboxConnect = connect;
   window.illu.dropboxStatus = async () => { const s = S(); return s ? { connected: true, name: s.name || '', email: s.email || '', base: s.base || '' } : { connected: false }; };
   window.illu.dropboxDisconnect = async () => { LS.del('illu.dbx'); try { const c = await caches.open('illu-auth'); await c.delete('/__illu_dbx'); await c.delete('/__illu_bkmap'); } catch (e) {} return { ok: true }; };
