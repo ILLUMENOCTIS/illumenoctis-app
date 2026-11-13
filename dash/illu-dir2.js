@@ -366,6 +366,14 @@
         const hay = (n.name + ' ' + n.members.map(a => a.name + ' ' + a.city + ' ' + a.country).join(' ') + ' ' + n.domain + ' ' + ctsHay(n.domain)).toLowerCase();
         if(!hay.includes(term)) continue;
       }
+      /* 1.2.185 (user, 13 Nov 2026: "I'm unable to find ANM MANAGEMENT on the directory list"): ANM was there, but sixth -
+         under agencies that only had "anm" inside a word or a web address (cosmopolit-anm-odel.com). An agency whose
+         name matches comes first: the exact name, then names starting with it, then a word starting with it, then the rest */
+      let rk = 9;
+      if(term){ const t = fold(term), st = squash(term), nm = fold(n.name), sn = squash(n.name), wre = new RegExp('(^|[^a-z0-9])' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const w0 = nm.split(/[^a-z0-9]+/).filter(Boolean);
+        rk = nm === t || sn === st ? 0 : w0[0] === t || nm.startsWith(t + ' ') ? 1 : nm.startsWith(t) ? 2 : w0.includes(t) ? 3 : wre.test(nm) ? 4 : sn.startsWith(st) ? 5 : sn.includes(st) ? 6
+          : n.members.some(a => fold(a.name).includes(t)) ? 7 : n.members.some(a => fold(a.city + ' ' + a.country).includes(t)) ? 8 : 9; }
       /* the full people list is only built when lamps or measurements decide; otherwise a cached count */
       let ms = null, cnt;
       if(marks.length || byMeas){
@@ -387,7 +395,7 @@
         const view = {name: n.name, domain: n.domain, id: n.id, at: n.at, boards: n.boards, net: n,
           city: cities.join(' · '), country: g ? co : [...new Set(os.map(o => o.country).filter(Boolean))].join(' · '),
           region: os[0].region, offices: offs, allCities};
-        out.push({id: n.i + '|' + co, net: n, a: view, bs, n: cnt, fit, co, rg: subOf(os[0].region, os[0].country)});
+        out.push({id: n.i + '|' + co, net: n, a: view, bs, n: cnt, fit, co, rg: subOf(os[0].region, os[0].country), rk});
       }
     }
     const coll = COLL;
@@ -398,6 +406,12 @@
     else if(D2.sort === 'name') out.sort((p, q) => coll(p.a.name, q.a.name));
     else if(D2.sort === 'fits' && byMeas) out.sort((p, q) => q.fit - p.fit || q.n - p.n);
     else out.sort((p, q) => q.n - p.n || coll(p.a.name, q.a.name));
+    /* searching: the best name match leads (by place, its region and country come first, so the bars stay together) */
+    if(term){
+      if(D2.sort === 'place'){ const rb = new Map(), cb = new Map(), k = x => rg(x) + '\u0001' + ct(x);
+        for(const x of out){ rb.set(rg(x), Math.min(rb.has(rg(x)) ? rb.get(rg(x)) : 9, x.rk)); cb.set(k(x), Math.min(cb.has(k(x)) ? cb.get(k(x)) : 9, x.rk)); }
+        out.sort((p, q) => rb.get(rg(p)) - rb.get(rg(q)) || coll(rg(p), rg(q)) || cb.get(k(p)) - cb.get(k(q)) || coll(ct(p), ct(q)) || p.rk - q.rk); }
+      else out.sort((p, q) => p.rk - q.rk); }
     /* subregion tabs: counts of agencies in each, before the tab narrows the list */
     const subN = new Map(EUSUBS.map(r => [r, new Set()])), euAll = new Set();
     for(const x of out) if(subN.has(x.rg)){ subN.get(x.rg).add(x.net); euAll.add(x.net); }
@@ -509,6 +523,11 @@
     const chosen = D2.bsel.size ? tabs.filter(t => D2.bsel.has(t.j)) : tabs;
     const cur = chosen.length === 1 ? chosen[0] : null;
     let ms = chosen.length === tabs.length ? all : all.filter(m => chosen.some(t => t.ms.includes(m)));
+    /* 1.2.185 (user, 13 Nov 2026: "another filter, to type in the name of the model ... when opening up the agency roster"):
+       a name box over the agency's models - it looks through all of the agency's boards, accents and spaces ignored */
+    if(D2.mqFor !== r.id){ D2.mqFor = r.id; D2.mq = ''; }
+    const mq = squash(D2.mq || '');
+    if(mq) ms = all.filter(m => squash(m.nm).includes(mq) || fold(m.nm).split(/[^a-z0-9]+/).some(w => w && w.startsWith(fold(D2.mq).trim())));
     const marks = checked('mark');
     if(marks.length) ms = ms.filter(m => marks.includes(lampOf(m.key) || ''));
     const fitN = byMeas ? ms.filter(m => fits(m.key)) : null;
@@ -525,16 +544,19 @@
       (canRemove() && !D2.showRemoved ? '<button type="button" class="d2hb d2hideb" data-d2hideag="' + esc(r.id) + '" title="Hide this agency for everyone (Admin)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg><span>Hide agency</span></button>' : '') +
       '</div>' +
       '<div class="d2ph2">' + boardMenu(tabs, all, byMeas) + '</div>' +
-      '<div class="d2ph3"><span class="d2shown">' + (byMeas ? dirN(ms.length) + ' fit' : dirN(ms.length) + ' ' + (ms.length === 1 ? 'model' : 'models')) +
-        (tabs.length > 1 ? ' · ' + (D2.bsel.size ? chosen.length + ' of ' + tabs.length + ' boards' : 'all ' + tabs.length + ' boards') : '') + '</span>' +
-      (cur && bs[cur.j] && bs[cur.j].u ? '<a class="d2ob" href="' + esc(bs[cur.j].u) + '" target="_blank" rel="noopener noreferrer">Open board ↗</a>' : '') +
+      '<div class="d2ph3"><label class="d2mq" title="Find a model at this agency by name (all of its boards)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>' +
+        '<input type="search" id="d2mq" placeholder="Find a model by name…" autocomplete="off" spellcheck="false" aria-label="Find a model at this agency by name" value="' + esc(D2.mq || '') + '"></label>' +
+      '<span class="d2shown">' + (mq ? dirN(ms.length) + ' ' + (ms.length === 1 ? 'model' : 'models') + ' found · all ' + tabs.length + (tabs.length === 1 ? ' board' : ' boards')
+        : (byMeas ? dirN(ms.length) + ' fit' : dirN(ms.length) + ' ' + (ms.length === 1 ? 'model' : 'models')) +
+        (tabs.length > 1 ? ' · ' + (D2.bsel.size ? chosen.length + ' of ' + tabs.length + ' boards' : 'all ' + tabs.length + ' boards') : '')) + '</span>' +
+      (cur && !mq && bs[cur.j] && bs[cur.j].u ? '<a class="d2ob" href="' + esc(bs[cur.j].u) + '" target="_blank" rel="noopener noreferrer">Open board ↗</a>' : '') +
       '<span class="d2sp"></span>' +
       ((D2.pz || 1) !== 1 && !D2.names ? '<button type="button" class="d2pz" data-d2pz0 title="Photos back to normal size (Ctrl 0 over the photos)">Photos ' + Math.round(D2.pz * 100) + '% ✕</button>' : '') +
       '<button type="button" class="d2bfb illufs" data-d2bfull aria-pressed="' + !!D2.bfull + '" title="' + (D2.bfull ? 'Exit full screen (Esc)' : 'Show this board on the whole screen') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (D2.bfull ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>') + '</svg><span>' + (D2.bfull ? 'Exit full screen' : 'Full screen') + '</span></button>' +
       '<span class="d2seg" role="group" aria-label="Show as"><button type="button" data-d2names="0" aria-pressed="' + !D2.names + '">Photos</button><button type="button" data-d2names="1" aria-pressed="' + D2.names + '">Names</button></span>' +
       '</div></div>';
     const body = !ms.length
-      ? '<div class="d2empty"><p>' + (byMeas ? 'No model on this board fits the measurements.' : (a.boards.length ? 'No models on this board.' : 'Its boards have not been read yet.')) + '</p></div>'
+      ? '<div class="d2empty"><p>' + (mq ? 'No model at ' + esc(a.name) + ' has a name with “' + esc(D2.mq.trim()) + '”.' : byMeas ? 'No model on this board fits the measurements.' : (a.boards.length ? 'No models on this board.' : 'Its boards have not been read yet.')) + '</p></div>'
       : D2.names ? '<div class="mlist d2names">' + ms.map(m => nameRow(m, a)).join('') + '</div>'
       : '<div class="d2grid">' + ms.map(tile).join('') + '</div>';
     let pop = '';
@@ -778,6 +800,11 @@
     };
     setTimeout(look, 30);
   }
+  /* the model name box: redraw the photos as you type, and keep typing in the box */
+  document.addEventListener('input', e => { if(!e.target || e.target.id !== 'd2mq') return;
+    const v = e.target.value, c = e.target.selectionStart; D2.mq = v; refresh();
+    const n = document.getElementById('d2mq'); if(n && document.activeElement !== n){ n.focus(); try{ n.setSelectionRange(c, c); }catch(err){} } });
+  document.addEventListener('keydown', e => { if(e.target && e.target.id === 'd2mq'){ e.stopPropagation(); if(e.key === 'Escape' && e.target.value){ e.preventDefault(); e.target.value = ''; e.target.dispatchEvent(new Event('input', {bubbles: true})); } } }, true);
   function setSearch(v){ const q = $('#d2q'); if(!q) return; q.value = v; q.dispatchEvent(new Event('input', {bubbles: true})); }
   /* the program's own search (Ctrl K, illu-shell.js) reads the same index and opens agencies the same way */
   /* Compare boards (illu-cmpb.js) reads the same agencies, boards and model lists */
@@ -976,7 +1003,8 @@
       const r0 = rgOf(x); if(!rgN.has(r0)) rgN.set(r0, new Set()); rgN.get(r0).add(x.net);
       const c0 = r0 + '\u0001' + (x.co || ''); coN.set(c0, (coN.get(c0) || 0) + 1);
     }
-    const vis = place && !(eu && eu.on) ? list.filter(x => !D2.fold.has(rgOf(x))) : list;
+    const searching = !!(((($('#q') || {}).value) || '').trim());   /* 1.2.185: a folded region does not hide what was searched for */
+    const vis = place && !(eu && eu.on) && !searching ? list.filter(x => !D2.fold.has(rgOf(x))) : list;
     const shown = vis.slice(0, D2.shown);
     let heads = [];
     if(place){
@@ -2402,6 +2430,11 @@ body.d2max .d2tog{left:-17px;width:17px}
 .d2bc s{text-decoration:none;opacity:.75;font-size:11.5px}.d2bc i{font-style:normal;font-size:10px;opacity:.8;margin-left:2px}.d2bc:hover i{opacity:1}
 .d2bclr{height:30px;padding:0 8px;border:0;background:transparent;color:var(--acc);font:inherit;font-size:12px;cursor:pointer}
 .d2ph3{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.d2mq{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:var(--surf,#fff);flex:0 1 240px;min-width:170px}
+.d2mq:focus-within{border-color:var(--acc);box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 18%,transparent)}
+.d2mq svg{width:14px;height:14px;fill:none;stroke:var(--mut);stroke-width:2;stroke-linecap:round;flex:none}
+.d2mq input{border:0;outline:0;background:transparent;font:inherit;font-size:13px;color:var(--ink);min-width:0;width:100%;padding:0}
+@media (max-width:760px){.d2mq{flex:1 1 100%}}
 .d2shown{font-size:12.5px;color:var(--mut)}
 .d2pill{display:inline-flex;gap:5px;align-items:center;height:30px;padding:0 11px;border-radius:999px;border:1px solid var(--line);background:var(--surf);font:inherit;font-size:12px;font-weight:500;color:inherit;cursor:pointer}
 .d2pill s{text-decoration:none;opacity:.6;font-weight:400}
