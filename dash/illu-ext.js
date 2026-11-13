@@ -200,6 +200,23 @@ document.head.appendChild(st);
     else (window.__illuComposed = window.__illuComposed || []).push(job);
   }
   window.__illuCompose = compose;
+  /* 1.2.171 (user: "When an email gets sent out via Hiworks regarding a model, I want the Email Stage to automatically
+     change the status of the Email to Processing"): the program confirms the email in Hiworks' Sent side (main.js);
+     each model in it that has a booking card gets Email = In process, unless it is already In process or Done */
+  function emailSent(d) {
+    const done = [];
+    for (const k of (d && d.about) || []) {
+      let c = null; try { c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : (typeof bkForKey === 'function' ? bkForKey(k) : null); } catch (e) {}
+      if (!c || !c.id) continue;
+      const st = (c.s && c.s.email) || {}, now = (st.p === 'g' || st.p === 'y') ? st.p : (st.d ? 'g' : '');
+      if (now) continue;
+      try { window.__illuSetStage && window.__illuSetStage(c.id, 'email', 'y'); done.push(c.nm || ''); } catch (e) {}
+    }
+    if (done.length) { try { const t = document.createElement('div'); t.className = 'illusenttoast'; t.setAttribute('role', 'status'); t.textContent = 'Email sent · ' + done.join(', ') + ' — Email stage is now In process'; document.body.appendChild(t); setTimeout(() => t.remove(), 6000); } catch (e) {} }
+    return done;
+  }
+  window.__illuEmailSent = emailSent;
+  try { if (window.illu && window.illu.onHiworksSent) window.illu.onHiworksSent(emailSent); } catch (e) {}
 
   /* ---------- email templates (docs mailtpl/<id>: {name, subject, body, kind, by, at, o}) ---------- */
   const TPL = new Map();
@@ -254,7 +271,7 @@ document.head.appendChild(st);
       return;
     }
     box.innerHTML = '<div class="tplveil" data-tplx></div><div class="tplbox" role="dialog" aria-modal="true"><h3>Which email?</h3><p class="tplto">To <b>' + escT(PK.addr) + '</b>' + (PK.ms.length ? ' · about <b>' + escT(PK.ms.map(m => String(m.nm || '').toUpperCase()).join(', ')) + '</b>' : '') + '</p>' +
-      '<div class="tpllist">' + L.map(t => '<div class="tplrow"><button type="button" class="tpluse" data-tpluse="' + escT(t.id) + '"><b>' + escT(t.name) + '</b><small>' + escT(t.subject || '') + (t.id === last ? ' · last used' : '') + '</small></button><button type="button" class="tpled" data-tpled="' + escT(t.id) + '" title="Edit">Edit</button></div>').join('') +
+      '<div class="tpllist">' + L.map(t => '<div class="tplrow"><button type="button" class="tpluse" data-tpluse="' + escT(t.id) + '"><b>' + escT(t.name) + '</b><small>' + escT(t.subject || '') + (t.id === last ? ' · last used' : '') + '</small></button><button type="button" class="tpled" data-tpled="' + escT(t.id) + '" title="Edit">Edit</button>' + (t.id !== BUILTIN.id ? '<button type="button" class="tpled tpldx' + (PK.arm === t.id ? ' on' : '') + '" data-tpldel="' + escT(t.id) + '" title="Delete this template">' + (PK.arm === t.id ? 'Delete?' : 'Delete') + '</button>' : '') + '</div>').join('') +
       '<div class="tplrow"><button type="button" class="tpluse blank" data-tpluse=""><b>Blank email</b><small>Only the address — write it yourself</small></button></div></div>' +
       '<div class="tplacts"><button type="button" data-tplnew>+ New template</button><span></span><button type="button" data-tplx>Cancel</button></div></div>';
     /* the models in this email */
@@ -297,14 +314,25 @@ document.head.appendChild(st);
     if (b.hasAttribute('data-tpluse')) {
       const id = b.dataset.tpluse, t = id ? list().find(x => x.id === id) : null;
       const f = t ? fill(t, PK.agName, PK.ms) : { subject: '', html: '', text: '' };
-      compose({ to: [PK.addr], cc: PK.cc.slice(), subject: f.subject, html: f.html, text: f.text });
+      compose({ to: [PK.addr], cc: PK.cc.slice(), subject: f.subject, html: f.html, text: f.text, about: PK.ms.map(m => m.key).filter(Boolean) });
       try { localStorage.setItem('illu.tpl.last.' + me, id); } catch (er) {}
       box.hidden = true; PK = null; return;
     }
     if (b.dataset.tpled) { PK.edit = Object.assign({}, list().find(x => x.id === b.dataset.tpled)); paintPick(); return; }
     if (b.hasAttribute('data-tplnew')) { PK.edit = { name: '', subject: SUBJECT, body: 'Dear {agency} Team,\n\n\n\nThank you!' }; paintPick(); return; }
     if (b.hasAttribute('data-tplback')) { PK.edit = null; paintPick(); return; }
-    if (b.dataset.tpldel) { if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Delete — press again'; return; } try { await DB.doc('mailtpl/' + b.dataset.tpldel).set(Object.assign({}, TPL.get(b.dataset.tpldel) || {}, { off: { by: me, at: new Date().toISOString() } })); } catch (er) {} TPL.delete(b.dataset.tpldel); PK.edit = null; paintPick(); return; }
+    /* 1.2.171 (user: "I also want to be able to Delete the Templates"): Delete on every row of the list too (not only
+       inside Edit). First press asks ("Delete?"), second press deletes; Undo brings it back. The standard inquiry stays. */
+    if (b.dataset.tpldel) {
+      const id = b.dataset.tpldel;
+      if (PK.edit) { if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Delete — press again'; return; } }
+      else if (PK.arm !== id) { PK.arm = id; clearTimeout(PK.armT); PK.armT = setTimeout(() => { if (PK && PK.arm === id) { PK.arm = null; paintPick(); } }, 4000); paintPick(); return; }
+      const keep = Object.assign({}, TPL.get(id) || {}); delete keep.id; delete keep.off;
+      try { await DB.doc('mailtpl/' + id).set(Object.assign({}, keep, { off: { by: me, at: new Date().toISOString() } })); } catch (er) {}
+      TPL.delete(id); PK.arm = null; PK.edit = null; paintPick();
+      try { window.__illuUndo && window.__illuUndo.push('Template "' + (keep.name || '') + '" deleted', async () => { TPL.set(id, Object.assign({ id }, keep)); try { await DB.doc('mailtpl/' + id).set(keep); } catch (er) {} paintPick(); }); } catch (er) {}
+      return;
+    }
     if (b.hasAttribute('data-tplsave')) {
       if (typeof SIGNED === 'function' && !SIGNED()) { if (typeof nudgeSignIn === 'function') nudgeSignIn(); return; }
       const nm = box.querySelector('#tplnm').value.trim(), sub = box.querySelector('#tplsub').value.trim(), body = box.querySelector('#tplbody').value.replace(/\r/g, '');
@@ -335,7 +363,8 @@ document.head.appendChild(st);
     FOR = modelAround(chip);
     /* 1.2.168: from a booking card's Email stage, the email is about that card's model */
     if (!FOR) { const w = chip.closest('[data-emfor]'); const c = w && typeof BOOK !== 'undefined' ? BOOK.get(w.dataset.emfor) : null;
-      if (c && c.k) { const hit = index().get(c.k); FOR = hit ? Object.assign({ key: c.k }, hit) : { key: c.k, nm: c.nm || '', url: /^https?:/i.test(c.k) ? c.k : '', dom: c.agd || '', ag: c.ag || '', g: '?' }; } }
+      if (c && c.k) { const hit = index().get(c.k); FOR = hit ? Object.assign({ key: c.k }, hit) : { key: c.k, nm: c.nm || '', url: /^https?:/i.test(c.k) ? c.k : '', dom: c.agd || '', ag: c.ag || '', g: '?' }; }
+      else if (c && c.id) FOR = { key: 'bid:' + c.id, nm: c.nm || '', url: '', dom: c.agd || '', ag: c.ag || '', g: '?' }; }
     /* 1.2.160: from her photo view / panel, the email is about her */
     if (!FOR && chip.closest('#illufv') && window.__illuFvNow) { const v = window.__illuFvNow(); if (v && v.key && !/^bid:/.test(v.key)) { const hit = index().get(v.key); FOR = hit ? Object.assign({ key: v.key }, hit) : { key: v.key, nm: v.nm, url: v.url || v.key, dom: chip.dataset.dom || '', ag: '', g: '?' }; } }
     setTimeout(() => {
@@ -409,6 +438,8 @@ document.head.appendChild(st);
     '#illutpl .tpllist{display:flex;flex-direction:column;gap:6px}#illutpl .tplrow{display:flex;gap:6px;align-items:stretch}' +
     '#illutpl .tpluse{flex:1;text-align:left;border:1px solid var(--line);background:var(--surf,#fff);border-radius:10px;padding:9px 12px;cursor:pointer;color:inherit;font:inherit;display:flex;flex-direction:column;gap:2px}#illutpl .tpluse:hover{border-color:var(--acc)}#illutpl .tpluse small{color:var(--mut);font-size:11.5px}#illutpl .tpluse.blank{border-style:dashed}' +
     '#illutpl .tpled{border:1px solid var(--line);background:var(--surf2,#f6f3f8);border-radius:10px;padding:0 12px;cursor:pointer;color:var(--mut);font:600 12px var(--sans)}' +
+    '.illusenttoast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999;background:#2A1F2E;color:#fff;font:500 13px var(--sans);padding:10px 16px;border-radius:999px;box-shadow:0 10px 30px rgba(0,0,0,.25);max-width:calc(100vw - 32px)}' +
+    '#illutpl .tpldx{color:#A3283F}#illutpl .tpldx.on{background:#A3283F;border-color:#A3283F;color:#fff}' +
     '#illutpl label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--mut)}#illutpl input,#illutpl textarea{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:14px var(--sans);color:var(--ink);background:var(--surf,#fff)}#illutpl textarea{resize:vertical;line-height:1.5}' +
     '#illutpl .tplms{border:1px solid var(--line);border-radius:10px;padding:9px 11px;display:flex;flex-direction:column;gap:7px;background:var(--surf2,#faf8fb)}#illutpl .tplmsh{display:flex;align-items:center;gap:8px}#illutpl .tplmsh b{flex:1;font-size:12.5px}#illutpl .tplmsh button{border:0;background:none;color:var(--acc);font:600 12.5px var(--sans);cursor:pointer}' +
     '#illutpl .tplchips{display:flex;flex-wrap:wrap;gap:5px}#illutpl .tplchip{display:inline-flex;align-items:center;gap:4px;background:var(--surf,#fff);border:1px solid var(--line);border-radius:999px;padding:3px 4px 3px 10px;font-size:12px;font-weight:600}#illutpl .tplchip button{border:0;background:none;cursor:pointer;color:var(--mut);font-size:11px}#illutpl .tplnone{margin:0;font-size:12px;color:var(--mut)}' +

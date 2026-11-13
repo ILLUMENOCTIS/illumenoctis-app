@@ -926,15 +926,20 @@
     if(g.gty === 'cond') rows += cell(1, L('Per month', '월'), '<span class="gscur">₩</span>' + inp('cgm', g.cgm, L('Full guarantee', '월 개런티 전액'), ' inputmode="numeric"')) +
       cell(1, L('If', '조건'), inp('jobs', g.jobs, '5', ' inputmode="numeric" class="gsjobs"') + '<span class="gsunit">' + L('full-day jobs / 30 days', '풀데이 잡 / 30일') + '</span>');
     if(g.gty === 'no') rows += '<div class="gscell none"><small>' + L('Guarantee', '개런티') + '</small><span class="gsval">' + L('None. Nothing to fill in.', '없음. 입력할 것이 없습니다.') + '</span></div>';
+    /* 1.2.171 (user: "title name AVAILABILITY & GUARANTEE ... Stay on top. Then Available ... Then Guarantee Type at the end"):
+       Stay and Available in the first box, then the guarantee type with its own boxes under it */
+    const grows = rows; rows = '';
     rows += cell(1, L('Stay', '체류'), inp('days', g.days, '–', ' inputmode="numeric" class="gsdays" style="width:' + (Math.max(2, (g.days || '–').length) + 0.6) + 'ch"') + '<span class="gsunit">' + L('days', '일') + '</span>',
       '<span class="gschips">' + ['60', '90'].map(d => '<button type="button" data-gdays="' + d + '" aria-pressed="' + (g.days === d) + '"' + dis + '>' + d + L(' days', '일') + '</button>').join('') + '</span>');
     rows += cell(0, L('Available', '가능'), inp('avf', g.avf, '', ' maxlength="40"'), '<span class="gsestn">' + L('Rough estimate. Not in the contract.', '대략적인 예상. 계약서에는 들어가지 않습니다.') + '</span>', 'est');
     let ex = '';
     if(!c){ const p = preOf(k) || {}; const bits = [p.age ? L('Age ', '나이 ') + p.age : '', p.entry ? L('Entry ', '입국 ') + p.entry : ''].filter(Boolean);
       if(bits.length || p.anote) ex = '<div class="pnkvx">' + (bits.length ? '<span>' + H(bits.join(' · ')) + '</span>' : '') + (p.anote ? '<p>' + H(p.anote) + '</p>' : '') + '</div>'; }
-    return '<section class="pns gs">' + pnSecH(L('Guarantee & availability', '개런티 · 가능 기간'), '<span class="gssync" title="' + H(c ? L('The same boxes as her booking card contract', '부킹 카드 계약서와 같은 칸') : L('Goes into her contract when she has a booking card', '부킹 카드가 생기면 계약서로 들어갑니다')) + '">' + LNI + (c ? L('Same as contract', '계약서와 동일') : L('Goes into her contract', '계약서로 연결')) + '</span>') +
+    return '<section class="pns gs">' + pnSecH(L('Availability & guarantee', '가능 기간 · 개런티'), '<span class="gssync" title="' + H(c ? L('The same boxes as her booking card contract', '부킹 카드 계약서와 같은 칸') : L('Goes into her contract when she has a booking card', '부킹 카드가 생기면 계약서로 들어갑니다')) + '">' + LNI + (c ? L('Same as contract', '계약서와 동일') : L('Goes into her contract', '계약서로 연결')) + '</span>') +
+      '<div class="gsbox">' + rows + '</div>' +
+      '<div class="gssub">' + LNI + H(L('Guarantee type', '개런티 유형')) + '</div>' +
       '<div class="gsseg" role="group" aria-label="' + H(L('Guarantee type', '개런티 유형')) + '">' + [['net', L('Net', '넷')], ['cond', L('Condition', '컨디션')], ['no', L('No guarantee', '노 개런티')]].map(([v, t]) => '<button type="button" data-ggty="' + v + '" aria-pressed="' + (g.gty === v) + '"' + dis + '>' + t + '</button>').join('') + '</div>' +
-      '<div class="gsbox">' + rows + '</div>' + ex + '</section>';
+      (grows ? '<div class="gsbox">' + grows + '</div>' : '') + ex + '</section>';
   }
   /* typing: saved when the box is left (or Enter), so the panel never redraws under the cursor */
   const gKey = el => { const m = el && el.closest && el.closest('.mx'); return m ? m.dataset.mxk : ''; };
@@ -1195,6 +1200,52 @@
      in vpub/board. A program that can't see a photo keeps the one another program already put there. */
   let pubT = 0;
   function pubSoon(){ if(pubT) return; pubT = setTimeout(() => { pubT = 0; try{ publishBoard(); }catch(e){} }, 4000); }
+  /* 1.2.171 (user: "the photo isn't appearing from the shared link to vote. allow me look through all the photos
+     available on the slideshow from the link"): each open card's photos for the vote page - her BOOK (then SNAPS)
+     from her booking folder, saved once as the program's own copies (1400 px) because only this computer can open
+     them, and the photos on her agency page. Gathered once a session per card, then published with the card. */
+  const GAL = new Map();     // hash -> {ps, sm, at, busy, done}
+  let GALQ = Promise.resolve();   // one card at a time
+  async function shrinkUp(url){
+    let ASSETS = null; try{ ASSETS = await (window.claude && window.claude.use ? window.claude.use('assets') : null); }catch(e){}
+    if(!ASSETS) return '';
+    const r = await fetch(url); if(!r.ok) return '';
+    const b0 = await r.blob(); if(!b0.size || (b0.type && !/^image\//i.test(b0.type))) return '';
+    let b = b0;
+    try{ const bmp = await createImageBitmap(b0); const z = Math.min(1, 1400 / Math.max(bmp.width, bmp.height)); const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * z); cv.height = Math.round(bmp.height * z); cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height); b = (await new Promise(res => cv.toBlob(res, 'image/jpeg', .85))) || b0; }catch(e){}
+    const res = await ASSETS.upload(new File([b], 'vote.jpg', {type: b.type || 'image/jpeg'}));
+    return res && res.id ? '/_blob/' + res.id : '';
+  }
+  async function gather(k, h, old){
+    const g = {ps: [], sm: Object.assign({}, (old && old.sm) || {}), at: Date.now(), busy: true, done: false}; GAL.set(h, g);
+    const out = [];
+    try{
+      if(window.__illuMatPhotos){
+        const mat = (await window.__illuMatPhotos(k, true)) || [];
+        let pick = mat.filter(x => x.t === 'book'); if(!pick.length) pick = mat.filter(x => x.t === 'snaps');
+        for(const x of pick.slice(0, 15)){
+          const rel = x.r || x.u;
+          if(/^https:/i.test(x.u)){ out.push(x.u); continue; }
+          if(!/^\/_blob\/bk\./.test(x.u)){ out.push(x.u.split('?')[0]); continue; }
+          let id = g.sm[rel];
+          if(!id){ try{ id = await shrinkUp(x.u.split('?')[0]); }catch(e){ id = ''; } if(id) g.sm[rel] = id; }
+          if(id) out.push(id);
+        }
+      }
+    }catch(e){}
+    try{
+      let href = ''; try{ href = (info(k) || {}).url || ''; }catch(e){}
+      if(!href){ const o = OPEN.get(h); href = (o && o.href) || ''; }
+      if(!href && /^https?:/i.test(k)) href = k;
+      if(href && /^https?:/i.test(href) && window.illu && window.illu.modelPhotos){
+        const r = await window.illu.modelPhotos(href);
+        if(r && !r.why) for(const p of (r.photos || []).slice(0, 25)){ const u = p && p.url || p; if(/^https:\/\//i.test(u || '')) out.push(u); }
+      }
+    }catch(e){}
+    g.ps = [...new Set(out)].slice(0, 40); g.busy = false; g.done = true; g.at = Date.now();
+    pubSoon();
+  }
+  window.__illuVoteGal = GAL;
   function publishBoard(){
     if(ready !== 7 || !me()) return;
     try{ if(!SIGNED()) return; }catch(e){ return; }
@@ -1203,9 +1254,13 @@
       if(!st.open) continue;
       const h = st.h, old = PUBNOW[h] || {};
       let f = {}; try{ f = factsOf(st.k).f || {}; }catch(e){}
-      const ph = /^https:\/\//i.test(f.photo || '') ? f.photo : (old.ph || '');
+      const gal = GAL.get(h), ps = gal && gal.done ? gal.ps : (old.ps || []), sm = Object.assign({}, old.sm || {}, (gal && gal.sm) || {});
+      /* 1.2.171: a stored photo (/_blob/<id>) opens on the vote page too; one only this computer has is replaced by its stored copy */
+      let ph = /^https:\/\//i.test(f.photo || '') || /^\/_blob\/(?!bk\.)[A-Za-z0-9._-]+/.test(f.photo || '') ? String(f.photo).split('?')[0] : (old.ph || '');
+      if(!ph && ps.length) ph = ps[0];
       const m = {}; for(const key of ['ht', 'bu', 'wa', 'hp', 'eu', 'us']){ const v = num(f[key]); if(v != null) m[key] = v; else if(old.m && old.m[key] != null) m[key] = old.m[key]; }
-      c[h] = {ph, m};
+      c[h] = {ph, m}; if(ps.length) c[h].ps = ps; if(Object.keys(sm).length) c[h].sm = sm;
+      if(!gal || (!gal.busy && Date.now() - gal.at > 6 * 3600 * 1000)){ GAL.set(h, {ps: (gal && gal.ps) || old.ps || [], sm: Object.assign({}, old.sm || {}), at: Date.now(), busy: true, done: !!gal}); const k0 = st.k, o0 = old; GALQ = GALQ.then(() => gather(k0, h, o0)).catch(() => {}); }
     }
     if(JSON.stringify(c) === JSON.stringify(PUBNOW)) return;
     PUBNOW = c; save('vpub/board', {c, at: nowIso(), by: me()});
@@ -2261,10 +2316,11 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .pntabs s{text-decoration:none;font-size:11px;color:var(--acc);margin-left:3px}
 .pn2 .mxs{gap:7px}
 /* 1.2.136 Guarantee & availability, typed in place (approved Vote Card Final Design) */
-.pn2 .gs .pnsh{gap:8px}.pn2 .gs .pnsh h3{white-space:nowrap;min-width:0;letter-spacing:.09em}
-.pn2 .gs .gssync{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--ok,#2E7D4F);white-space:nowrap}
+.pn2 .gs .pnsh{gap:6px}.pn2 .gs .pnsh h3{white-space:nowrap;min-width:0;letter-spacing:.06em}
+.pn2 .gssub{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--mut);margin:12px 0 6px;display:flex;align-items:center;gap:5px}
+.pn2 .gs .gssync{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;color:var(--ok,#2E7D4F);white-space:nowrap}
 .pn2 .gsln{width:11px;height:11px;stroke:var(--ok,#2E7D4F);fill:none;stroke-width:2.2;flex:none}
-.pn2 .gsseg{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--surf2,var(--wash));margin-bottom:8px}
+.pn2 .gsseg{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--surf2,var(--wash));margin-bottom:8px}.pn2 .gsseg:last-child{margin-bottom:0}
 .pn2 .gsseg button{font:inherit;font-size:12.5px;font-weight:600;border:0;background:none;color:var(--mut);border-radius:7px;padding:6px 2px;cursor:pointer}
 .pn2 .gsseg button[aria-pressed="true"]{background:var(--acc);color:var(--on-acc,#fff)}
 .pn2 .gsbox{border:1px solid var(--line);border-radius:12px;overflow:hidden}
