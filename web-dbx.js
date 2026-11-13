@@ -102,7 +102,12 @@
     const hit = dirs.find(d => bkNorm(d) === want); if (hit) return base + '/' + hit;
     const f = bkNorm(first).split(/[\s-]+/)[0] || ''; if (f.length < 2) return null;
     const fits = [];
-    for (const d of dirs.filter(d => bkNorm(d).split(/[\s-]+/).includes(f))) { try { if ((await listAll(base + '/' + d, false)).some(x => x['.tag'] === 'folder' && TABRE.test(x.name.trim()))) fits.push(d); } catch (e) {} }
+    const agOf = s => { const i = String(s || '').indexOf(' - '); return i < 0 ? '' : bkNorm(String(s).slice(i + 3)).replace(/[^a-z0-9\u0400-\u04ff\uac00-\ud7a3]+/g, ''); };
+    /* 1.2.168: the second name has to agree too (Alina B = Alina Bron, not Alina Polukhina) */
+    const nmOf = s => { const i = String(s || '').indexOf(' - '); return bkNorm(i < 0 ? s : String(s).slice(0, i)).replace(/[.,]/g, ' ').split(/[\s-]+/).filter(Boolean); };
+    const sameNm = d => { const x = nmOf(d), y = nmOf(name); if (!x.length || !y.length || x[0] !== y[0]) return false; if (x.length < 2 || y.length < 2) return true; return x[1].startsWith(y[1]) || y[1].startsWith(x[1]); };
+    const sameAg = d => { const x = agOf(d), y = agOf(name); return !x || !y || x === y || x.includes(y) || y.includes(x); };   /* 1.2.153: same first name, other agency = another girl */
+    for (const d of dirs.filter(d => bkNorm(d).split(/[\s-]+/).includes(f) && sameAg(d) && sameNm(d))) { try { if ((await listAll(base + '/' + d, false)).some(x => x['.tag'] === 'folder' && TABRE.test(x.name.trim()))) fits.push(d); } catch (e) {} }
     return fits.length === 1 ? base + '/' + fits[0] : null;
   }
   async function hash(s) { const d = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(s)); return [...new Uint8Array(d)].map(x => x.toString(16).padStart(2, '0')).join('').slice(0, 32); }
