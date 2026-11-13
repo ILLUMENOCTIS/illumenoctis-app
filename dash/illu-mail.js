@@ -141,28 +141,30 @@
   function reader(c, t, v, s){
     const X = EM();
     const sm = s && s.t ? s.t[t.tk] : null;
-    const seen = new Set();
+    /* 1.2.188 (user, 14 Nov 2026): "just have the summary of the emails and downloadable links available. I want to see
+       the emails from Newest to Latest" - each email is its one-line summary (Claude's, else its first lines) and its
+       links with Get files; newest first. Each link still shows once, on the email that first brought it. */
+    const firstOf = new Map();
+    for(const e of t.list) for(const f of (e.files || [])) if(f.url && !firstOf.has(f.url)) firstOf.set(f.url, e.k);
+    const msum = (sm && sm.m) || {};
     let day = '';
-    const msgs = t.list.map(e => {
+    const msgs = t.list.slice().reverse().map(e => {
       let h = '';
       const d = dayOf(e.dt); if(d !== day){ day = d; h += '<div class="mlday">' + E(d) + '</div>'; }
       const body = v ? v.b[e.k] : null;
       const sp = body ? split(body) : null;
       const files = (e.files || []).filter(f => f.kind !== 'link' && !f.url);
-      const links = (e.files || []).filter(f => f.url && !seen.has(f.url) && (seen.add(f.url), true));
+      const links = (e.files || []).filter(f => f.url && firstOf.get(f.url) === e.k && (firstOf.set(f.url, '#'), true));
+      const one = msum[e.k] ? (ko() && msum[e.k].ko ? msum[e.k].ko : msum[e.k].en || '') : '';
       const ql = MV.quoted[e.k];
       h += '<article class="mlm ' + (e.dir === 'in' ? 'in' : 'out') + '">' +
         '<header><b>' + E(e.dir === 'in' ? (e.name || e.addr) : T('You (MDI)', '나 (MDI)')) + '</b><span>' + E(timeOf(e.dt)) + '</span></header>' +
-        '<div class="mlad">' + E(e.dir === 'in' ? (e.name ? e.addr : '') : (e.to || []).length ? 'to ' + e.to.join(', ') : '') + ((e.cc || []).length ? ' · cc ' + E(e.cc.join(', ')) : '') + '</div>' +
-        (sp ? '<div class="mltx">' + linkify(sp.own) + '</div>' + (sp.quoted ? '<button type="button" class="mlqb" data-mlqt="' + E(e.k) + '">' + (ql ? T('Hide the earlier emails quoted here', '인용된 이전 메일 숨기기') : T('Show the earlier emails quoted here', '인용된 이전 메일 보기')) + '</button>' + (ql ? '<div class="mltx mlqt">' + linkify(sp.quoted) + '</div>' : '') : '')
-           : v ? '<div class="mltx">' + E(e.summary || '') + (e.summary && e.summary.length >= 195 ? ' …' : '') + '</div>'
-           : '<div class="mltx mlload">' + E(e.summary || '') + '</div>') +
+        (one ? '<div class="mltx mlone">' + E(one) + '</div>' : '<div class="mltx mlone mlpre">' + E(String(e.summary || '').replace(/\s+/g, ' ').trim()) + '</div>') +
         (files.length ? '<div class="mlfs">' + files.map(f => '<span class="mlf">📎 ' + E(f.name) + '</span>').join('') + '</div>' : '') +
         (links.length ? '<div class="mllk">' + links.map(f => { let host = ''; try{ host = new URL(f.url).hostname.replace(/^www\./, ''); }catch(err){}
           const lab = /drive\.google/.test(host) ? 'Google Drive' : /mediaslide/.test(host) ? 'Mediaslide' : /wetransfer|we\.tl/.test(host) ? 'WeTransfer' : /dropbox/.test(host) ? 'Dropbox' : /mega\.nz/.test(host) ? 'MEGA' : /netwalk/.test(host) ? 'Netwalk' : host;
           return '<div class="mll"><span class="mlli">' + E(lab.charAt(0).toUpperCase()) + '</span><span class="mllu"><b>' + E(lab) + '</b><small>' + E(f.url.replace(/^https?:\/\//, '')) + '</small></span>' +
             (!SOCIAL.test(f.url) ? '<button type="button" class="bvbtn mlget" data-emget="' + E(f.url) + '">' + T('Get files', '파일 받기') + '</button>' : '') + '<a class="mlopen" href="' + E(f.url) + '" target="_blank" rel="noopener" title="' + E(T('Open the link', '링크 열기')) + '">↗</a></div>'; }).join('') + '</div>' : '') +
-        (e.hw ? '<a class="mlhw" href="https://mails.office.hiworks.com' + E(e.hw) + '" target="_blank" rel="noopener">' + T('Open in Hiworks', 'Hiworks에서 열기') + ' ↗</a>' : '') +
         '</article>';
       return h;
     }).join('');
@@ -183,8 +185,8 @@
         '<div class="mlhda">' + (t.hid ? '<button type="button" class="bvbtn" data-mlunhide="' + E(t.tk) + '">' + T('Put it back on her card', '다시 카드에 넣기') + '</button>' : '<button type="button" class="bvbtn" data-mlhide="' + E(t.tk) + '" title="' + E(T('This conversation is about another model', '다른 모델에 대한 대화입니다')) + '">' + T('Not her', '이 모델 아님') + '</button>') +
         (t.lastE && t.lastE.hw ? '<a class="bvbtn" href="https://mails.office.hiworks.com' + E(t.lastE.hw) + '" target="_blank" rel="noopener">' + T('Reply in Hiworks', 'Hiworks에서 답장') + ' ↗</a>' : '') + '</div></div>' +
       (t.hid ? '<p class="mlhidn">' + E(T('Marked "Not her" — this conversation is kept off her card and her counts.', '"이 모델 아님"으로 표시됨 — 카드와 숫자에서 빠집니다.')) + '</p>' : sumH) +
-      (v && t.list.some(e => !v.b[e.k]) ? '<p class="mlpart">' + E(T('Some emails here show only their first lines. Press Collect from Hiworks to bring in the whole texts.', '일부 이메일은 앞부분만 보입니다. Hiworks에서 가져오기를 누르면 전체 내용이 들어옵니다.')) + '</p>' : '') +
-      '<div class="mlthread">' + msgs + unr + '</div>' +
+      /* 1.2.188: summaries only - no note about whole texts */
+      '<div class="mlthread">' + unr + msgs + '</div>' +
       '<div class="mlfoot">' + E(T('Each email is also saved as a page in her folder 9. EMAIL (this computer, Dropbox and Z:).', '각 이메일은 모델 폴더 9. EMAIL에도 저장됩니다 (이 컴퓨터, Dropbox, Z:).')) + '</div></div>';
   }
   async function hwStatus(){
@@ -365,7 +367,7 @@
     '.mlrow:hover{background:#faf7fb}.mlrow.on{background:#f3e9f2}.mlrow.hid{opacity:.6}',
     '.mlr1{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--mut,#6d6577)}.mlr1 span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
     '.mlr2{font-weight:600;font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}',
-    '.mlr3{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}.mlr3 i{font-style:normal;font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:99px;background:#f1eef4;color:#6d6577}',
+    '.mlr3{display:flex;flex-wrap:wrap;align-items:flex-start;align-content:flex-start;gap:4px;margin-top:3px}.mlr3 i{font-style:normal;font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:99px;background:#f1eef4;color:#6d6577}',
     '.mlr3 i.u{background:#fde8dc;color:#c2410c}.mlr3 i.l{background:#e5f3ea;color:#2E8A55}.mlr3 i.w{background:#fbf1e1;color:#a16207}',
     '.mlhid summary{padding:10px 14px;font-size:12px;color:var(--mut,#6d6577);cursor:pointer}',
     '.mlread{overflow:auto;min-height:0;padding:16px 24px 28px;display:flex;flex-direction:column;gap:14px}',
@@ -381,6 +383,7 @@
     '.mlm.in{align-self:flex-start;background:#f4f2f6;border-top-left-radius:4px}.mlm.out{align-self:flex-end;background:#f3e9f2;border-top-right-radius:4px}',
     '.mlm header{display:flex;justify-content:space-between;gap:14px;font-size:12px;color:var(--mut,#6d6577)}.mlm header b{color:var(--ink,#1b1724);font-weight:650}',
     '.mlad{font-size:11px;color:var(--mut,#8a8291);margin-top:-3px;overflow-wrap:anywhere}',
+    '.mlone{white-space:normal}.mlpre{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;color:#4a4352}' +
     '.mltx{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.3px;line-height:1.55}.mltx a{color:#6b2a5e}.mlqt{border-left:3px solid #ddd2e0;padding-left:10px;color:#6d6577;font-size:12.5px}.mlload{color:#888}',
     '.mlqb{align-self:flex-start;border:0;background:none;color:#6b2a5e;font:inherit;font-size:11.5px;padding:0;cursor:pointer;text-decoration:underline}',
     '.mlnote{margin:0;font-size:11.5px;color:#a16207}.mlfs{display:flex;flex-wrap:wrap;gap:5px}.mlf{font-size:11.5px;background:#fff;border:1px solid #e6e2ea;border-radius:6px;padding:1px 7px}',
