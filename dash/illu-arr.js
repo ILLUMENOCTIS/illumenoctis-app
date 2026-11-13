@@ -431,13 +431,42 @@
       return '<div class="adtlr' + (S.pick === m.id ? ' on' : '') + '"><button type="button" class="adtln" data-adpick="' + H(m.id) + '" data-adtl="1">' + thumb(m) + '<span><b>' + H(m.nm) + '</b><small>' + VIS(m.vty) + ' · ' + (m.tbd ? 'TBD' : L(m.len + ' days', m.len + '일')) + '</small></span></button><div class="adtlt grid">' + bar + ap + '</div></div>';
     }).join('');
     const ti = ix(today()), nowL = ti >= 0 && ti < N ? '<i class="adtlnow" style="left:calc(var(--nw) + var(--dw) * ' + (ti + .5) + ' - 1px)"><b class="adtlnowl">' + H(L('Today', '오늘') + ' · ' + today().toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'})) + '</b><b class="adtlnowl bot">' + H(today().toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short'})) + '</b></i>' : '';   /* 1.2.159 (user: "a clear indication of what date that long line is on") */
+    /* 1.2.184 (user, 13 Nov 2026: "create another long line that I can move around to see the dates better. I want it to
+       show how many days apart for the current date. Show me how many models will be left depending on the date it sets on.
+       I want the long line to be a red color"): a red line to drag along the timeline - its date, how many days from today,
+       and how many models are still in town that day (the bars of models gone by then fade) */
+    if(!S.pin || S.pin < a || S.pin >= z) S.pin = addD(today(), 14);
+    const pinL = '<i class="adtlpin" style="left:calc(var(--nw) + var(--dw) * ' + (ix(S.pin) + .5) + ' - 1px)" role="slider" tabindex="0" aria-label="' + H(L('Date line — drag, or use the arrow keys', '날짜선 — 끌거나 화살표 키')) + '"><b class="adtlpinl"></b><b class="adtlpinl bot"></b></i>';
+    PG.__pin = {a, N, counts, rows: rows.map(m => ({id: m.id, out: m.tbd ? null : m.out, ind: m.ind}))};
     return '<div class="adtlbar"><span class="adseg" role="group" aria-label="' + H(L('How much to show', '표시 기간')) + '">' + [1, 3, 6].map(k => '<button type="button" data-adtls="' + k + '" aria-pressed="' + (S.tls === k) + '">' + L(k + (k === 1 ? ' month' : ' months'), k + '개월') + '</button>').join('') + '</span>' +
       '<p class="adhint"><span><s></s>' + L('one bar per model: arrival → departure', '모델 한 명당 막대 하나: 도착 → 출국') + '</span><span><i style="background:#5B48C9"></i>' + L('appointment', '일정') + '</span><span>· ' + L('click a bar for flights and details · click a date to open that day', '막대를 누르면 항공·상세 · 날짜를 누르면 그날 일정') + '</span></p></div>' +
       '<div class="adtlw"><div class="adtl" style="--days:' + N + ';--dw:20px">' +
         '<div class="adtlh"><div class="adtln">' + L(rows.length + ' models', '모델 ' + rows.length + '명') + '</div><div class="adtlt"><div class="adtlmo">' + mo + '</div><div class="adtlwk">' + wk + '</div><div class="adtldy">' + dy + '</div></div></div>' +
         (rows.length ? body : '<div class="adtlr"><div class="adtln"></div><div class="adtlt"><p class="adempty">' + L('Nobody in Korea in these months.', '이 기간에 한국에 있는 모델이 없습니다.') + '</p></div></div>') +
-        '<div class="adtlc"><div class="adtln">' + L('In town', '체류') + '</div><div class="adtlt">' + cnt + '</div></div>' + ml + nowL + '</div></div>';
+        '<div class="adtlc"><div class="adtln">' + L('In town', '체류') + '</div><div class="adtlt">' + cnt + '</div></div>' + ml + nowL + pinL + '</div></div>';
   }
+  /* the red line: labels, faded bars, dragging */
+  function pinPaint(){
+    const P = PG.__pin, el = PG.querySelector('.adtlpin'); if(!P || !el || !S.pin) return;
+    const i = days(P.a, S.pin); el.style.left = 'calc(var(--nw) + var(--dw) * ' + (i + .5) + ' - 1px)'; el.setAttribute('aria-valuetext', fmt(S.pin));
+    const dd = days(today(), S.pin), n = P.counts[i] != null ? P.counts[i] : 0;
+    const rel = dd === 0 ? L('today', '오늘') : dd > 0 ? L('in ' + dd + (dd === 1 ? ' day' : ' days'), dd + '일 후') : L(-dd + (dd === -1 ? ' day ago' : ' days ago'), -dd + '일 전');
+    const [t, b] = el.querySelectorAll('.adtlpinl');
+    t.textContent = S.pin.toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'}) + ' · ' + rel;
+    b.textContent = L(n + (n === 1 ? ' model left' : ' models left'), n + '명 남음');
+    for(const r of P.rows){ const bar = PG.querySelector('.adtlb[data-adpick="' + CSS.escape(r.id) + '"]'); if(bar) bar.classList.toggle('pingone', !!r.out && r.out < S.pin || r.ind > S.pin); }
+  }
+  function pinAt(x){
+    const P = PG.__pin, t = PG.querySelector('.adtl'); if(!P || !t) return;
+    const nw = parseFloat(getComputedStyle(t).getPropertyValue('--nw')) || 190, dw = parseFloat(t.style.getPropertyValue('--dw')) || 20;
+    const i = Math.max(0, Math.min(P.N - 1, Math.floor((x - t.getBoundingClientRect().left - nw) / dw)));
+    const d = addD(P.a, i); if(!S.pin || !same(d, S.pin)){ S.pin = d; pinPaint(); }
+  }
+  let PDRAG = false;
+  document.addEventListener('pointerdown', e => { const el = e.target.closest && e.target.closest('.adtlpin'); if(!el || !PG.contains(el)) return; e.preventDefault(); PDRAG = true; el.classList.add('drag'); try{ el.setPointerCapture(e.pointerId); }catch(er){} }, true);
+  document.addEventListener('pointermove', e => { if(PDRAG) pinAt(e.clientX); }, true);
+  document.addEventListener('pointerup', () => { if(!PDRAG) return; PDRAG = false; const el = PG.querySelector('.adtlpin'); if(el) el.classList.remove('drag'); }, true);
+  document.addEventListener('keydown', e => { const el = e.target.closest && e.target.closest('.adtlpin'); if(!el || !S.pin) return; const k = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if(!k) return; e.preventDefault(); const P = PG.__pin, d = addD(S.pin, e.shiftKey ? k * 7 : k); if(P && d >= P.a && days(P.a, d) < P.N){ S.pin = d; pinPaint(); } }, true);
   function fitTl(){
     const w = PG.querySelector('.adtlw'), t = PG.querySelector('.adtl'); if(!w || !t) return;
     const nw = parseFloat(getComputedStyle(t).getPropertyValue('--nw')) || 190, N = +t.style.getPropertyValue('--days');
@@ -502,7 +531,7 @@
     PG.addEventListener('pointerdown', e => {
       if(e.button !== 0 || e.pointerType === 'touch') return;
       const w = e.target.closest && e.target.closest('.adtlw'); if(!w) return;
-      if(e.target.closest('input,select,textarea,a')) return;
+      if(e.target.closest('input,select,textarea,a,.adtlpin')) return;     // 1.2.184: the red line drags itself, not the timeline
       d = {w, x: e.clientX, y: e.clientY, l: w.scrollLeft, t: w.scrollTop, id: e.pointerId, on: false}; moved = false;
     });
     addEventListener('pointermove', e => {
@@ -539,7 +568,7 @@
     D.scrollTop = keepD; if(S.keepMain) MAIN.scrollTop = keepM; S.keepMain = false;
     const lg = PG.querySelector('.adhleg'); if(lg){ const kids = [...lg.children]; kids.forEach(k => k.hidden = false); for(let i = kids.length - 1; i > 0 && lg.scrollWidth > lg.clientWidth + 1; i--) kids[i].hidden = true; }   /* the legend drops its last items rather than being cut */
     const ov = PG.querySelector('.adov'); if(ov){ const mi = ov.querySelector('.admini'); ov.classList.toggle('tight', !!mi && mi.getBoundingClientRect().height < 190 && !phone); }
-    const jumped = fitTl(); if(tx && !jumped){ const w = PG.querySelector('.adtlw'); if(w){ w.scrollLeft = tx[0]; w.scrollTop = tx[1]; } }
+    const jumped = fitTl(); try{ pinPaint(); }catch(e){} if(tx && !jumped){ const w = PG.querySelector('.adtlw'); if(w){ w.scrollLeft = tx[0]; w.scrollTop = tx[1]; } }
     fitSigns(PG);
     if(S.focusApt){ S.focusApt = false; const f = PG.querySelector('.adaf input[name=title]'); if(f) f.focus(); }
     syncPick();
@@ -1155,6 +1184,12 @@ body.adfull #pane-arrd .adbd{height:100%}
 .adtlnow{position:absolute;top:0;bottom:0;width:2px;background:var(--acc);z-index:1;pointer-events:none;opacity:.8}
 .adtlnow .adtlnowl{position:absolute;top:var(--tlhd,58px);left:50%;transform:translateX(-50%);white-space:nowrap;background:var(--acc);color:#fff;font-style:normal;font-weight:700;font-size:10.5px;line-height:1;font-family:inherit;padding:4px 7px;z-index:3;border-radius:999px;box-shadow:0 2px 8px rgba(40,20,50,.25);opacity:1}
 .adtlnow .adtlnowl.bot{top:auto;bottom:6px}
+.adtlpin{position:absolute;top:0;bottom:0;width:2px;background:#E0283C;z-index:4;cursor:ew-resize;touch-action:none;outline:none}
+.adtlpin::before{content:"";position:absolute;top:0;bottom:0;left:-8px;right:-8px}
+.adtlpin .adtlpinl{position:absolute;top:calc(var(--tlhd,58px) + 26px);left:50%;transform:translateX(-50%);white-space:nowrap;background:#E0283C;color:#fff;font-style:normal;font-weight:700;font-size:10.5px;line-height:1;font-family:inherit;padding:4px 8px;border-radius:999px;box-shadow:0 2px 8px rgba(120,10,20,.3);cursor:ew-resize}
+.adtlpin .adtlpinl.bot{top:auto;bottom:30px}
+.adtlpin.drag{width:3px}.adtlpin:focus-visible .adtlpinl{outline:2px solid #fff;outline-offset:-4px}
+.adtlb.pingone{opacity:.28;filter:grayscale(.6)}
 .adtlb{position:absolute;top:8px;height:30px;border-radius:8px;border:1px solid color-mix(in srgb,var(--c) 55%,transparent);background:color-mix(in srgb,var(--c) 20%,var(--surf));display:flex;align-items:center;gap:6px;padding:0 6px;font:inherit;font-size:11.5px;white-space:nowrap;overflow:hidden;cursor:pointer;color:var(--ink);text-align:left}
 .adtlb:hover{background:color-mix(in srgb,var(--c) 30%,var(--surf))}
 .adtlb.cl{border-top-left-radius:0;border-bottom-left-radius:0;border-left-style:dashed}
