@@ -60,6 +60,7 @@
   const MOM = new Map();      // hash -> mother/<hash> {k, ag, dom, by, at}: her mother agency (1.2.133)
   const PRE = new Map();      // hash -> vpre doc {k, gty, amt, per, avf, avd, by, at}: guarantee + availability typed on a vote card before Booking (1.2.129)
   let ready = 0;
+  let GALNOW = {};            // vpub/gal .c: {hash: {ps, sm}} the photos of the models with a booking card in Processing (1.2.176)
   let PUBNOW = {};            // vpub/board .c: {hash: {ph, m}} what the phone vote page shows for each card (1.2.129)
   let DBX = null;
   function db(){ if(DBX) return DBX; try{ if(typeof DB !== 'undefined') DBX = DB; }catch(e){} return DBX; }
@@ -102,7 +103,7 @@
     d.collection('fav').onSnapshot(s => { FAV.clear(); for(const x of s.docs){ const v = x.data() || {}; const m = new Map(); for(const k in (v.e || {})) m.set(k, v.e[k]); FAV.set(x.id, m); } ready |= 1; changed(); }, () => {});
     d.collection('vote').onSnapshot(s => { VT.clear(); for(const x of s.docs){ const v = x.data() || {}; VT.set(x.id, {e: Object.assign({}, v.e || {}), t: Object.assign({}, v.t || {})}); } ready |= 2; changed(); }, () => {});
     d.collection('vopen').onSnapshot(s => { OPEN.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k) OPEN.set(x.id, v); } ready |= 4; changed(); }, () => {});
-    d.collection('vpub').onSnapshot(s => { for(const x of s.docs) if(x.id === 'board'){ const v = x.data() || {}; PUBNOW = Object.assign({}, v.c || {}); } }, () => {});
+    d.collection('vpub').onSnapshot(s => { for(const x of s.docs){ if(x.id === 'board'){ const v = x.data() || {}; PUBNOW = Object.assign({}, v.c || {}); } if(x.id === 'gal'){ const v = x.data() || {}; GALNOW = Object.assign({}, v.c || {}); } } }, () => {});
     d.collection('mother').onSnapshot(s => { MOM.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k && v.ag) MOM.set(x.id, v); } changed(); }, () => {});
     d.collection('avail').onSnapshot(s => { AV.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k && v.t) AV.set(x.id, v); } changed(); }, () => {});
     d.collection('vpre').onSnapshot(s => { PRE.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k) PRE.set(x.id, v); } changed(); }, () => {});
@@ -935,7 +936,7 @@
     let ex = '';
     if(!c){ const p = preOf(k) || {}; const bits = [p.age ? L('Age ', '나이 ') + p.age : '', p.entry ? L('Entry ', '입국 ') + p.entry : ''].filter(Boolean);
       if(bits.length || p.anote) ex = '<div class="pnkvx">' + (bits.length ? '<span>' + H(bits.join(' · ')) + '</span>' : '') + (p.anote ? '<p>' + H(p.anote) + '</p>' : '') + '</div>'; }
-    return '<section class="pns gs">' + pnSecH(L('Availability & guarantee', '가능 기간 · 개런티'), '<span class="gssync" title="' + H(c ? L('The same boxes as her booking card contract', '부킹 카드 계약서와 같은 칸') : L('Goes into her contract when she has a booking card', '부킹 카드가 생기면 계약서로 들어갑니다')) + '">' + LNI + (c ? L('Same as contract', '계약서와 동일') : L('Goes into her contract', '계약서로 연결')) + '</span>') +
+    return '<section class="pns gs">' + pnSecH(L('Availability & Guarantee', '가능 기간 · 개런티'), '<span class="gssync" title="' + H(c ? L('The same boxes as her booking card contract', '부킹 카드 계약서와 같은 칸') : L('Goes into her contract when she has a booking card', '부킹 카드가 생기면 계약서로 들어갑니다')) + '">' + LNI + (c ? L('Same as contract', '계약서와 동일') : L('Goes into her contract', '계약서로 연결')) + '</span>') +
       '<div class="gsbox">' + rows + '</div>' +
       '<div class="gssub">' + LNI + H(L('Guarantee type', '개런티 유형')) + '</div>' +
       '<div class="gsseg" role="group" aria-label="' + H(L('Guarantee type', '개런티 유형')) + '">' + [['net', L('Net', '넷')], ['cond', L('Condition', '컨디션')], ['no', L('No guarantee', '노 개런티')]].map(([v, t]) => '<button type="button" data-ggty="' + v + '" aria-pressed="' + (g.gty === v) + '"' + dis + '>' + t + '</button>').join('') + '</div>' +
@@ -1110,24 +1111,59 @@
   function closeNotePop(){ if(NTPOP){ NTPOP.remove(); NTPOP = null; } }
   function openNotePop(btn){
     closeNotePop();
-    const k = btn.dataset.ivnt; let ns = []; try{ ns = notesOf(k).filter(n => String(n.t || '').trim()).sort((a, b) => String(b.at).localeCompare(String(a.at))); }catch(e){}
-    let nm = ''; try{ nm = (btn.closest('.vmk') || {}).dataset ? btn.closest('.vmk').dataset.nm || '' : ''; if(!nm) nm = info(k).nm || ''; }catch(e){}
+    const k = btn.dataset.ivnt;
+    let nm = ''; try{ const v = btn.closest('.vmk'); nm = (v && v.dataset.nm) || info(k).nm || ''; }catch(e){}
     const d = document.createElement('div'); d.id = 'ivntpop'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', L('Notes', '메모'));
-    d.innerHTML = '<div class="ivnth"><b>' + H(L('Notes', '메모')) + (nm ? ' · ' + H(nm) : '') + '</b><button type="button" data-ivntx aria-label="' + H(L('Close', '닫기')) + '">×</button></div>' +
-      ns.map(n => '<div class="ivntn"><div class="ivntm"><b>' + H(pname(n.p)) + '</b> <span>' + H(when(n.at)) + '</span></div><p>' + H(n.t) + '</p>' + (n.ed ? '<span class="ivnte">' + H(L('edited by ' + pname(n.ed.by), pname(n.ed.by) + ' 수정')) + '</span>' : '') + '</div>').join('');
-    document.body.appendChild(d); NTPOP = d;
-    const r = btn.getBoundingClientRect(), w = Math.min(340, innerWidth - 24);
+    document.body.appendChild(d); NTPOP = d; d.__k = k; d.__nm = nm; d.__r = btn.getBoundingClientRect(); d.__ed = '';
+    paintNotePop();
+  }
+  /* 1.2.176 (user: "allow editing of the notes here"): each note can be edited (and its writer or the admin can remove it) in the box */
+  function paintNotePop(){
+    const d = NTPOP; if(!d) return;
+    const k = d.__k, can = (() => { try{ return !!SIGNED(); }catch(e){ return false; } })();
+    let ns = []; try{ ns = notesOf(k).filter(n => String(n.t || '').trim()).sort((a, b) => String(b.at).localeCompare(String(a.at))); }catch(e){}
+    if(!ns.length){ closeNotePop(); return; }
+    d.innerHTML = '<div class="ivnth"><b>' + H(L('Notes', '메모')) + (d.__nm ? ' · ' + H(d.__nm) : '') + '</b><button type="button" data-ivntx aria-label="' + H(L('Close', '닫기')) + '">×</button></div>' +
+      ns.map(n => { const id = n.p + '|' + n.at, ed = d.__ed === id;
+        return '<div class="ivntn"><div class="ivntm"><b>' + H(pname(n.p)) + '</b> <span>' + H(when(n.at)) + '</span>' +
+          (can && !ed ? '<span class="ivntb"><button type="button" data-ivpe="' + H(id) + '">' + H(L('Edit', '수정')) + '</button>' + (canDrop(n.p) ? '<button type="button" data-ivpd="' + H(id) + '">' + H(L('Delete', '삭제')) + '</button>' : '') + '</span>' : '') + '</div>' +
+          (ed ? '<textarea data-ivpin rows="4">' + H(n.t) + '</textarea><div class="ivntsv"><button type="button" class="pri" data-ivps="' + H(id) + '">' + H(L('Save', '저장')) + '</button><button type="button" data-ivpc>' + H(L('Cancel', '취소')) + '</button></div>'
+              : '<p>' + H(n.t) + '</p>' + (n.ed ? '<span class="ivnte">' + H(L('edited by ' + pname(n.ed.by), pname(n.ed.by) + ' 수정')) + '</span>' : '')) + '</div>'; }).join('');
+    const r = d.__r, w = Math.min(360, innerWidth - 24);
     d.style.width = w + 'px';
     d.style.left = Math.max(12, Math.min(innerWidth - w - 12, r.left - 8)) + 'px';
     const h = d.offsetHeight; d.style.top = (r.bottom + 8 + h > innerHeight - 8 ? Math.max(8, r.top - h - 8) : r.bottom + 8) + 'px';
+    const ta = d.querySelector('textarea[data-ivpin]'); if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
   }
+  document.addEventListener('click', e => {
+    if(!NTPOP || !NTPOP.contains(e.target)) return;
+    const t = e.target.closest('[data-ivpe],[data-ivps],[data-ivpc],[data-ivpd]'); if(!t) return;
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    const k = NTPOP.__k, dd = t.dataset;
+    if(dd.ivpe){ if(!signedIn()) return; NTPOP.__ed = dd.ivpe; paintNotePop(); return; }
+    if(dd.ivpc != null){ NTPOP.__ed = ''; paintNotePop(); return; }
+    if(dd.ivps){ const n = noteFind(k, dd.ivps), ta = NTPOP.querySelector('textarea[data-ivpin]'); if(n && ta && editNote(k, n.p, n.at, ta.value)){ NTPOP.__ed = ''; changed(); paintNotePop(); } return; }
+    if(dd.ivpd){ if(t.dataset.armed !== '1'){ t.dataset.armed = '1'; t.textContent = L('Delete? Press again', '삭제? 한 번 더'); return; } const n = noteFind(k, dd.ivpd); if(n){ dropAny(k, n.p, n.at); changed(); paintNotePop(); } return; }
+  }, true);
+  document.addEventListener('keydown', e => {
+    const ta = e.target; if(!NTPOP || !ta || !ta.matches || !ta.matches('#ivntpop textarea[data-ivpin]')) return;
+    if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); NTPOP.__ed = ''; paintNotePop(); }
+    else if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); const b = NTPOP.querySelector('[data-ivps]'); if(b) b.click(); }
+  }, true);
   document.addEventListener('click', e => {
     const b = e.target.closest && e.target.closest('[data-ivnt]');
     if(b){ e.preventDefault(); e.stopPropagation(); if(NTPOP && NTPOP.__k === b.dataset.ivnt){ closeNotePop(); return; } openNotePop(b); if(NTPOP) NTPOP.__k = b.dataset.ivnt; return; }
-    if(NTPOP && (e.target.closest('[data-ivntx]') || !e.target.closest('#ivntpop'))) closeNotePop();
+    if(NTPOP && e.target.isConnected && (e.target.closest('[data-ivntx]') || !e.target.closest('#ivntpop'))) closeNotePop();
   }, true);
   document.addEventListener('keydown', e => { if(e.key === 'Escape' && NTPOP){ e.stopPropagation(); closeNotePop(); } }, true);
-  addEventListener('scroll', closeNotePop, true);
+  addEventListener('scroll', e => {
+    if(!NTPOP || (e.target && e.target.nodeType === 1 && NTPOP.contains(e.target))) return;
+    /* the page moved: the box follows its note button (or closes when the button is gone) */
+    const a = [...document.querySelectorAll('[data-ivnt]')].find(x => x.dataset.ivnt === NTPOP.__k && x.getClientRects().length);
+    if(!a){ closeNotePop(); return; }
+    NTPOP.__r = a.getBoundingClientRect(); const r = NTPOP.__r, h = NTPOP.offsetHeight;
+    NTPOP.style.top = (r.bottom + 8 + h > innerHeight - 8 ? Math.max(8, r.top - h - 8) : r.bottom + 8) + 'px';
+  }, true);
   window.__illuVoteLamps = foot;
   window.__illuVoteMine = k => { const s = stateOf(k); return s ? s.mine || '' : ''; };
   /* repaint every footer of one model in place */
@@ -1233,6 +1269,7 @@
      in vpub/board. A program that can't see a photo keeps the one another program already put there. */
   let pubT = 0;
   function pubSoon(){ if(pubT) return; pubT = setTimeout(() => { pubT = 0; try{ publishBoard(); }catch(e){} }, 4000); }
+  setInterval(pubSoon, 10 * 60 * 1000);
   /* 1.2.171 (user: "the photo isn't appearing from the shared link to vote. allow me look through all the photos
      available on the slideshow from the link"): each open card's photos for the vote page - her BOOK (then SNAPS)
      from her booking folder, saved once as the program's own copies (1400 px) because only this computer can open
@@ -1295,9 +1332,30 @@
       c[h] = {ph, m}; if(ps.length) c[h].ps = ps; if(Object.keys(sm).length) c[h].sm = sm;
       if(!gal || (!gal.busy && Date.now() - gal.at > 6 * 3600 * 1000)){ GAL.set(h, {ps: (gal && gal.ps) || old.ps || [], sm: Object.assign({}, old.sm || {}), at: Date.now(), busy: true, done: !!gal}); const k0 = st.k, o0 = old; GALQ = GALQ.then(() => gather(k0, h, o0)).catch(() => {}); }
     }
+    try{ publishGal(); }catch(e){}
     if(JSON.stringify(c) === JSON.stringify(PUBNOW)) return;
     PUBNOW = c; save('vpub/board', {c, at: nowIso(), by: me()});
   }
+  /* 1.2.176 (user: "allow the USER to view the slideshow photos via mobile as well"): a phone cannot open the booking
+     folders on this computer, so the program also keeps her BOOK photos (stored copies) and her agency photos for every
+     model with a booking card in Processing, in vpub/gal - the phone's photo viewer shows them. Gathered by the program
+     on a computer only (one card at a time, again after 6 h), the same way as for the vote link. */
+  function publishGal(){
+    if(window.illu && window.illu.web) return;
+    if(typeof BOOK === 'undefined') return;
+    const c = {};
+    for(const b of BOOK.values()){
+      if(!b || (b.st && b.st !== 'proc')) continue;
+      const k = b.k || ('bid:' + b.id), h = hash(k), old = GALNOW[h] || PUBNOW[h] || {};
+      const gal = GAL.get(h), ps = gal && gal.done ? gal.ps : (old.ps || []), sm = Object.assign({}, old.sm || {}, (gal && gal.sm) || {});
+      if(ps.length || Object.keys(sm).length){ c[h] = {}; if(ps.length) c[h].ps = ps; if(Object.keys(sm).length) c[h].sm = sm; }
+      if(!gal || (!gal.busy && Date.now() - gal.at > 6 * 3600 * 1000)){ GAL.set(h, {ps: (gal && gal.ps) || old.ps || [], sm: Object.assign({}, old.sm || {}), at: Date.now(), busy: true, done: !!gal}); GALQ = GALQ.then(() => gather(k, h, old)).catch(() => {}); }
+    }
+    if(JSON.stringify(c) === JSON.stringify(GALNOW)) return;
+    GALNOW = c; save('vpub/gal', {c, at: nowIso(), by: me()});
+  }
+  /* the published photos of a model (vote card first, then booking card) */
+  window.__illuPubGal = k => { if(!k) return null; const h = hash(k); const a = PUBNOW[h], b = GALNOW[h]; return (a && a.ps && a.ps.length) ? a : (b && b.ps && b.ps.length) ? b : null; };
 
   /* ---------- messages ---------- */
   const T = document.createElement('div'); T.id = 'ivtoast'; T.hidden = true; T.setAttribute('role', 'status');
@@ -2042,6 +2100,11 @@ p.pnag{cursor:default}
 #ivntpop .ivntm{font-size:11.5px;color:#7A6A2A}#ivntpop .ivntm b{color:#3B2F00}
 #ivntpop p{margin:2px 0 0;white-space:pre-wrap;word-break:break-word}
 #ivntpop .ivnte{font-size:11px;color:#9A8A4A}
+#ivntpop .ivntm{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}#ivntpop .ivntb{margin-left:auto;display:inline-flex;gap:4px}
+#ivntpop .ivntb button,#ivntpop .ivntsv button{border:1px solid #E8D27A;background:#FFF6CC;color:#6E5300;border-radius:999px;font:600 11px var(--sans,system-ui);padding:2px 9px;cursor:pointer}
+#ivntpop .ivntb button:hover{background:#FFEC99}#ivntpop .ivntb [data-ivpd][data-armed="1"]{background:#A3283F;border-color:#A3283F;color:#fff}
+#ivntpop textarea{width:100%;box-sizing:border-box;margin-top:4px;border:1px solid #E8D27A;border-radius:8px;padding:6px 8px;font:13px/1.5 var(--sans,system-ui);background:#fff;color:#3B2F00;resize:vertical}
+#ivntpop .ivntsv{display:flex;gap:6px;margin-top:6px}#ivntpop .ivntsv .pri{background:#7A5C00;border-color:#7A5C00;color:#fff}
 .vmk .ivh{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;flex:none;border:0;background:none;color:var(--faint,#8a8090);cursor:pointer;padding:0;transition:transform .15s,color .15s}
 .vmk .ivh svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8}
 .vmk .ivh:hover{color:#D5536B;transform:scale(1.1)}

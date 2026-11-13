@@ -341,9 +341,25 @@
     /* 1.2.133 (user, 10 Nov 2026): the folders saved in her booking folder (Book / Snaps / Videos) as tabs, as on the
        booking card, beside the agency's own photos. Her Book opens first when there is one. */
     S.src = {agency: S.photos.slice(), book: [], snaps: [], videos: []}; S.araw = S.raw.slice(); S.tab = 'agency';
+    /* 1.2.176 (user: "allow the USER to view the slideshow photos via mobile as well"): when her folder can't be read here
+       (a phone, or no Dropbox), the photos the program published for her (her BOOK as stored copies, her agency photos) */
+    const pubFill = () => {
+      if(my !== seq || !S) return;
+      const g = window.__illuPubGal ? window.__illuPubGal(S.key || (S.bid ? 'bid:' + S.bid : '')) || (S.bid ? window.__illuPubGal('bid:' + S.bid) : null) : null; if(!g) return;
+      const files = (g.ps || []).filter(u => /^\/_blob\/(?!bk\.)/.test(u)), web = (g.ps || []).filter(u => /^https:/i.test(u) && !(window.__illuPhotoHidden && S.ref && window.__illuPhotoHidden(S.ref, u)));
+      let ch = false;
+      if(files.length && !S.src.book.length && !S.src.snaps.length){ S.src.book = files.slice(); ch = true; }
+      if(web.length && S.src.agency.length < 2){ const have = new Set(S.araw); const add = web.filter(u => !have.has(u)); if(add.length){ S.src.agency = S.src.agency.concat(add.map(u => src(u, S.ref))); S.araw = S.araw.concat(add); ch = true; } }
+      if(!ch) return;
+      if(S.tab === 'agency' && S.src.book.length && S.photos.length < 2) tabTo('book');
+      else if(S.tab === 'agency'){ const keep = S.photos[S.i]; S.photos = S.src.agency.slice(); S.raw = S.araw.slice(); S.i = Math.max(0, S.photos.indexOf(keep)); strip.dataset.sig = ''; draw(); }
+      else draw();
+    };
+    setTimeout(pubFill, 0);
     if(S.key && window.__illuMatPhotos){
       window.__illuMatPhotos(S.key, true).then(mat => {
-        if(my !== seq || !S || !mat || !mat.length) return;
+        if(my !== seq || !S) return;
+        if(!mat || !mat.length){ pubFill(); return; }
         for(const m of mat) if(S.src[m.t]) S.src[m.t].push(m.u);
         S.vid = new Set(S.src.videos);
         const t = S.src.book.length ? 'book' : S.src.snaps.length ? 'snaps' : S.src.videos.length ? 'videos' : 'agency';
@@ -363,7 +379,8 @@
           if(S.tab === 'agency'){ const keep = S.photos[S.i]; S.photos = S.src.agency.slice(); S.raw = S.araw.slice(); S.i = Math.max(0, S.photos.indexOf(keep)); }
           draw();
         }
-      }).catch(() => { if(my === seq) box.querySelector('.fvmsg').textContent = ''; });
+        else pubFill();
+      }).catch(() => { if(my === seq){ box.querySelector('.fvmsg').textContent = ''; pubFill(); } });
     }
   }
   function tabTo(t){
