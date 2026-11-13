@@ -530,6 +530,7 @@ function agApply(){
 }
 async function agSetDeleted(dom, del){
   if(!SIGNED()){ nudgeSignIn(); return false; }
+  if(!isAdmin()) return false;   /* 1.2.177: only the Admin hides / shows agencies */
   if(!DB) return false;
   const a = AGALL.find(x => x.domain === dom);
   if(!a) return false;
@@ -584,23 +585,23 @@ function illumDialog(o){
 }
 async function agAskDelete(dom){
   if(!SIGNED()){ nudgeSignIn(); return; }
+  if(!isAdmin()) return;
   const a = AGALL.find(x => x.domain === dom);
   if(!a) return;
   let n = 0;
   for(const b of a.boards) n += b.m.length;
   const ok = await illumDialog({
-    danger: true,
-    title: 'Delete ' + esc(a.name) + '?',
-    body: '<p>Are you sure you want to delete <b>' + esc(a.name) + '</b>' +
+    title: 'Hide ' + esc(a.name) + '?',
+    body: '<p>Hide <b>' + esc(a.name) + '</b>' +
       (a.city || a.country ? ' (' + esc([a.city, a.country].filter(Boolean).join(', ')) + ')' : '') +
-      ' from the directory?</p><p>Its ' + a.boards.length + (a.boards.length === 1 ? ' board' : ' boards') +
-      ' and ' + n.toLocaleString() + ' models leave the directory and the morning scan stops checking them. ' +
-      'Lamps, notes and bookings already made are kept.</p>' +
-      '<p class="idlgnote">You can revive it at any time from the <b>Backlog</b>.</p>',
-    ok: 'Delete agency', cancel: 'Keep it'
+      ' for everyone?</p><p>Its ' + a.boards.length + (a.boards.length === 1 ? ' board' : ' boards') +
+      ' and ' + n.toLocaleString() + ' models stop showing in the Directory, boards and search, and the morning scan stops checking them. ' +
+      'Nothing is deleted - lamps, notes and bookings are kept.</p>' +
+      '<p class="idlgnote">Show it again at any time from <b>Hidden Agencies</b>.</p>',
+    ok: 'Hide agency', cancel: 'Cancel'
   });
   if(!ok) return;
-  if(await agSetDeleted(dom, true)) siteToast(a.name + ' deleted · revive it from the Backlog');
+  if(await agSetDeleted(dom, true)) siteToast(a.name + ' hidden · show it again from Hidden Agencies');
 }
 function siteToast(t){
   let el = document.getElementById('agtoast');
@@ -620,7 +621,7 @@ document.addEventListener('click', e => {
   if(!b) return;
   e.preventDefault(); e.stopPropagation();
   const dom = b.dataset.agrev, a = AGALL.find(x => x.domain === dom);
-  agSetDeleted(dom, false).then(ok => { if(ok && a) siteToast(a.name + ' is back in the directory'); });
+  agSetDeleted(dom, false).then(ok => { if(ok && a) siteToast(a.name + ' is showing again'); });
 }, true);
 
 /* ---- the Backlog's list of deleted agencies ---- */
@@ -628,12 +629,12 @@ function agDelSection(){
   const dels = [...AGDEL.values()].filter(r => r.st === 'del').sort((x, y) => String(y.at).localeCompare(String(x.at)));
   if(!dels.length) return '';
   const when = t => { const d = new Date(t); return isNaN(d) ? '' : localDay(d) + ' ' + hhmm(d); };
-  return '<section class="agdelsec"><h3>Deleted agencies <s>' + dels.length + '</s></h3>' +
-    '<p class="agdelp">Deleted from the directory. Revive puts an agency back with all its boards.</p>' +
+  return '<section class="agdelsec"><h3>Hidden agencies <s>' + dels.length + '</s></h3>' +
+    '<p class="agdelp">Hidden from the Directory for everyone. Show again puts an agency back with all its boards.</p>' +
     dels.map(r => '<div class="agdelrow"><div class="agdelw"><b>' + esc(r.nm || r.d) + '</b><span>' +
       esc([r.city, r.country].filter(Boolean).join(', ')) + (r.d ? ' · ' + esc(r.d) : '') + '</span>' +
       '<em>Deleted ' + esc(when(r.at)) + (r.by && PEOPLE.has(r.by) ? ' by ' + idDisc(r.by) + esc(PEOPLE.get(r.by).n) : '') +
-      '</em></div>' + (SIGNED() ? '<button type="button" class="agrevb" data-agrev="' + esc(r.d) + '">Revive</button>' : '') +
+      '</em></div>' + (isAdmin() ? '<button type="button" class="agrevb" data-agrev="' + esc(r.d) + '">Show again</button>' : '') +
       '</div>').join('') + '</section>';
 }
 
@@ -665,7 +666,7 @@ async function siteNotify(){
         '<span class="agstat agstat--' + r.s + '">' + SITESTXT[r.s] + '</span>' +
         '<em>' + esc(r.d) + (r.since ? ' · since ' + esc(when(r.since)) : '') + (r.note ? ' · ' + esc(r.note) : '') + '</em></div>' +
         '<span class="sitebtns"><a href="https://' + esc(r.d) + '" target="_blank" rel="noopener noreferrer">Open site</a>' +
-        (SIGNED() && a ? '<button type="button" data-sitedel="' + esc(r.d) + '">Delete listing</button>' : '') + '</span></div>';
+        (isAdmin() && a ? '<button type="button" data-sitedel="' + esc(r.d) + '">Hide agency</button>' : '') + '</span></div>';
     }).join('') + '</div><p class="idlgnote">The morning scan checks these again each day and clears the notice when a site is back.</p>',
     ok: 'Got it', cancel: false,
     onClick: (e, close) => {
@@ -703,6 +704,7 @@ async function loadMDel(){
 }
 async function mdelSet(k, info, del){
   if(!SIGNED()){ nudgeSignIn(); return false; }
+  if(!isAdmin()) return false;   /* 1.2.177: only the Admin hides / shows a model */
   if(!DB) return false;
   const id = mdelId(k);
   let cur = null;
@@ -722,6 +724,7 @@ async function mdelSet(k, info, del){
 }
 function goneAcked(){ try{ return new Set(JSON.parse(localStorage.getItem('illum.goneack') || '[]')); }catch(e){ return new Set(); } }
 async function mdelAsk(k, nm, ag, href){
+  try{ if(!isAdmin()) return; }catch(e){ return; }   /* 1.2.177: only the Admin hides a model */
   const g = GONE.get(k) || {};
   const name = nm || g.nm || 'This model';
   const agency = ag || g.ag || 'the agency';
@@ -731,15 +734,15 @@ async function mdelAsk(k, nm, ag, href){
     title: 'No longer on the board',
     body: '<p><b>' + esc(name) + '</b> is no longer on <b>' + esc(agency) + '</b>’s board' +
       (when ? ' (noticed ' + esc(when) + ')' : '') + '. The agency has taken the profile down.</p>' +
-      '<p>Do you want to remove this model’s card from the directory listing?</p>' +
-      '<p class="idlgnote">Lamps, notes and bookings are kept. You can revive the card at any time from the <b>Backlog</b>.</p>',
-    ok: 'Remove card', cancel: 'Keep card',
+      '<p>Do you want to hide this model’s card for everyone?</p>' +
+      '<p class="idlgnote">Nothing is deleted - lamps, notes and bookings are kept. Show her again at any time from <b>Hidden Models</b>.</p>',
+    ok: 'Hide card', cancel: 'Keep card',
     onClick: (e, close) => { const a = e.target.closest('[data-goneopen]'); if(a){ close(false); } }
   });
   if(ok){
     if(!SIGNED()){ nudgeSignIn(); return; }
     if(await mdelSet(k, {nm: name, ag: agency, co: g.co || '', href: href, why: 'gone'}, true))
-      siteToast(name + ' removed · revive the card from the Backlog');
+      siteToast(name + ' hidden · show her again from Hidden Models');
     return;
   }
   /* kept: this browser does not ask about the same model again */
@@ -772,12 +775,12 @@ function mdelSection(){
   const dels = [...MDEL.values()].filter(r => r.st === 'del').sort((x, y) => String(y.at).localeCompare(String(x.at)));
   if(!dels.length) return '';
   const when = t => { const d = new Date(t); return isNaN(d) ? '' : localDay(d) + ' ' + hhmm(d); };
-  return '<section class="agdelsec"><h3>Removed model cards <s>' + dels.length + '</s></h3>' +
-    '<p class="agdelp">Taken out of the directory after leaving their board. Revive puts a card back.</p>' +
+  return '<section class="agdelsec"><h3>Hidden models <s>' + dels.length + '</s></h3>' +
+    '<p class="agdelp">Hidden from the Directory for everyone. Show again puts a card back.</p>' +
     dels.map(r => '<div class="agdelrow"><div class="agdelw"><b>' + esc(r.nm || r.k) + '</b><span>' +
       esc([r.ag, r.co].filter(Boolean).join(' · ')) + '</span>' +
       '<em>Removed ' + esc(when(r.at)) + (r.by && PEOPLE.has(r.by) ? ' by ' + idDisc(r.by) + esc(PEOPLE.get(r.by).n) : '') +
-      '</em></div>' + (SIGNED() ? '<button type="button" class="agrevb" data-mrev="' + esc(r.k) + '">Revive</button>' : '') +
+      '</em></div>' + (isAdmin() ? '<button type="button" class="agrevb" data-mrev="' + esc(r.k) + '">Show again</button>' : '') +
       '</div>').join('') + '</section>';
 }
 /* ---- country flags: built in, because Windows shows no flag emoji and the page may not load
@@ -3518,8 +3521,8 @@ function dirAgRow(r){
       '<span class="agcount"><b>' + dirN(r.n) + '</b></span>' +
       '<span class="agtiers">' + r.ts.map(t => '<span class="tierchip" data-t="' + esc(t) + '">' + esc(TIER[t] || t) + '</span>').join('') + '</span>' +
       '<span class="agct">' + ctsChip(a.domain) + '</span>' +
-      (SIGNED() ? '<button type="button" class="agdelb" data-agdel="' + esc(a.domain) + '" ' +
-        'title="Delete this agency from the directory" aria-label="Delete ' + esc(a.name) + '">' +
+      (isAdmin() ? '<button type="button" class="agdelb" data-agdel="' + esc(a.domain) + '" ' +
+        'title="Hide this agency" aria-label="Hide ' + esc(a.name) + '">' +
         TRASHSVG + '</button>' : '<span></span>') + '</div>' +
       '<div class="agbody"></div></div>');
 }
@@ -7063,6 +7066,15 @@ Object.assign(KO, {"Drag to change the order \u00b7 double-click to open": "드�
   "Under construction": "사이트 공사 중",
   "No longer available": "사이트 없음",
   "Deleted agencies": "삭제된 에이전시",
+  "Hidden agencies": "숨긴 에이전시",
+  "Hidden models": "숨긴 모델",
+  "Show again": "다시 보이기",
+  "Hide agency": "에이전시 숨기기",
+  "Hide card": "카드 숨기기",
+  "Hide this agency": "이 에이전시 숨기기",
+  "Hidden from the Directory for everyone. Show again puts an agency back with all its boards.": "모두에게 디렉터리에서 숨긴 에이전시입니다. 다시 보이기를 누르면 모든 보드와 함께 돌아옵니다.",
+  "Hidden from the Directory for everyone. Show again puts a card back.": "모두에게 디렉터리에서 숨긴 모델입니다. 다시 보이기를 누르면 카드가 돌아옵니다.",
+  "Do you want to hide this model’s card for everyone?": "이 모델의 카드를 모두에게서 숨기시겠습니까?",
   "Revive": "복구",
   "Delete agency": "에이전시 삭제",
   "Keep it": "유지",

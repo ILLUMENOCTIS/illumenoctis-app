@@ -461,7 +461,36 @@
       (chosen.length > 1 ? '<button type="button" class="d2bclr" data-d2tab="all">Clear</button>' : '');
     return h;
   }
+  /* 1.2.177 (user, 13 Nov 2026: "a Hidden Agencies Sub-Board and a Sub-sub-Board ... Hidden Models"): the Admin's
+     Hidden section at the end of the agency list. Hidden Agencies = the agencies taken off the list (agdel), shown in the
+     list with Show again; Hidden Models = model cards taken off (mdel, st 'del'), shown on the right. */
+  function hidModList(){ try{ return [...MDEL.entries()].filter(([k, v]) => v && v.st === 'del').map(([k, v]) => Object.assign({k}, v)).sort((p, q) => String(q.at || '').localeCompare(String(p.at || ''))); }catch(e){ return []; } }
+  function hiddenNav(){
+    const nA = new Set([...REMOVED.keys()]).size, nM = hidModList().length;
+    return '<div class="d2hidsec">' +
+      '<div class="d2hidbar"><svg class="d2hidi" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg><b>HIDDEN</b><s>Admin only</s></div>' +
+      '<button type="button" class="d2ag d2hidrow' + (D2.showRemoved ? ' on' : '') + '" data-d2hidag aria-pressed="' + !!D2.showRemoved + '"><span class="d2agt"><b>Hidden Agencies</b><s>with all their boards</s></span><span class="d2agn"><b>' + nA + '</b></span></button>' +
+      '<button type="button" class="d2ag d2hidrow d2hidsub' + (D2.hidMod ? ' on' : '') + '" data-d2hidmod aria-pressed="' + !!D2.hidMod + '"><span class="d2agt"><b><i aria-hidden="true">↳</i> Hidden Models</b><s>one by one, from any agency</s></span><span class="d2agn"><b>' + nM + '</b></span></button>' +
+      ((D2.showRemoved || D2.hidMod) ? '<button type="button" class="d2showrm" data-d2hidback>← Back to the list</button>' : '') +
+      '</div>';
+  }
+  function hidModPanel(){
+    const L0 = hidModList();
+    const when = t => { try{ return t ? new Date(t).toLocaleDateString(undefined, {day: 'numeric', month: 'short', year: 'numeric'}) : ''; }catch(e){ return ''; } };
+    const who = id => { try{ return (PEOPLE.get(id) || {}).n || ''; }catch(e){ return ''; } };
+    return '<div class="d2ph"><div class="d2ph1"><span class="d2hidt">Hidden</span><span class="d2pm">Not shown in the Directory, boards or search for anyone else · nothing is deleted</span></div>' +
+      '<div class="d2ph2"><button type="button" class="d2pill" data-d2hidag>Hidden Agencies <s>' + REMOVED.size + '</s></button><span class="d2hidgt" aria-hidden="true">›</span><button type="button" class="d2pill on" data-d2hidmod aria-pressed="true">Hidden Models <s>' + L0.length + '</s></button></div></div>' +
+      '<div class="d2body">' + (!L0.length ? '<div class="d2empty"><p>No hidden models. Hide a model from the Admin section at the bottom of her card.</p></div>' :
+      '<div class="d2grid d2hidgrid">' + L0.map(m => {
+        let pc = ''; try{ const f = litFacts({key: m.k, nm: m.nm, href: m.href}); pc = picCell(m.k, m.nm, f && f.photo); }catch(e){}
+        return '<article class="uc d2hidcard"><div class="ucimg"><div class="ucph">' + pc + '</div><span class="d2hidtag">Hidden</span></div>' +
+          '<div class="d2hidft"><b>' + esc(m.nm || m.k) + '</b><s>' + esc([m.ag, m.co].filter(Boolean).join(' · ')) + '</s>' +
+          '<s>' + esc((m.why === 'gone' ? 'Left the board · ' : '') + 'hidden ' + when(m.at) + (who(m.by) ? ' by ' + who(m.by) : '')) + '</s>' +
+          '<button type="button" class="d2hidshow" data-d2mshow="' + esc(m.k) + '">Show again</button></div></article>';
+      }).join('') + '</div>') + '</div>';
+  }
   function panel(r, byMeas){
+    if(D2.hidMod && canRemove()) return hidModPanel();
     if(!r) return '<div class="d2blank" aria-label="No agency chosen"><p>Choose an agency on the left to see its models.</p>' +
       /* user, 2026-11-04: a way back to the start screen and its layouts A-F */
       '<div class="d2home"><button type="button" class="d2homeb" data-d2home title="Back to the start screen">\u2190 Start screen</button>' + styleSwitch() + '</div></div>';
@@ -493,6 +522,7 @@
           (a.domain ? '<button type="button" class="d2locedit" data-d2loc="' + esc(a.domain) + '" title="Change the country or city">' : '<span>') + esc(a.offices && a.offices.length > 1 ? a.allCities.join(' · ') + ' · ' + a.offices.length + ' offices' : [a.city, a.country].filter(Boolean).join(', ')) + (a.domain ? '</button>' : '</span>')) + ' · ' + dirN(r.n) + ' models</span>' +
       '<span class="d2sp"></span><span class="agct">' + ctsChip(a.domain) + '</span>' +
       '<button type="button" class="d2hb' + (isFav ? ' on' : '') + '" data-d2heart aria-pressed="' + !!isFav + '">' + (isFav ? '♥' : '♡') + ' Favorite</button>' +
+      (canRemove() && !D2.showRemoved ? '<button type="button" class="d2hb d2hideb" data-d2hideag="' + esc(r.id) + '" title="Hide this agency for everyone (Admin)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg><span>Hide agency</span></button>' : '') +
       '</div>' +
       '<div class="d2ph2">' + boardMenu(tabs, all, byMeas) + '</div>' +
       '<div class="d2ph3"><span class="d2shown">' + (byMeas ? dirN(ms.length) + ' fit' : dirN(ms.length) + ' ' + (ms.length === 1 ? 'model' : 'models')) +
@@ -529,7 +559,7 @@
   }
   addEventListener('resize', () => { if(VIEW === 'dir') fitWrap(); });
   async function removeAg(n, id){
-    if(!n) return;
+    if(!n || !canRemove()) return;   /* 1.2.177: only the Admin hides (user, 13 Nov 2026) */
     D2.confirm = null;
     const mem = n.members.filter(a => a.id != null && !isRemoved(a));
     const at = new Date().toISOString();
@@ -537,17 +567,17 @@
     if(D2.sel && String(D2.sel).split('|')[0] === String(n.i)) D2.sel = -1;
     refresh();
     try{ for(const a of mem) await DB.doc('agdel/' + a.id).set(REMOVED.get(String(a.id))); }
-    catch(e){ for(const a of mem) REMOVED.delete(String(a.id)); refresh(); toast('Could not remove ' + esc(n.name) + ' - try again.'); return; }
+    catch(e){ for(const a of mem) REMOVED.delete(String(a.id)); refresh(); toast('Could not hide ' + esc(n.name) + ' - try again.'); return; }
     D2.lastRemoved = {n, mem};
-    toast('<b>' + esc(n.name) + '</b>' + (mem.length > 1 ? ' (' + mem.length + ' offices)' : '') + ' removed from the Directory.', true);
+    toast('<b>' + esc(n.name) + '</b>' + (mem.length > 1 ? ' (' + mem.length + ' offices)' : '') + ' is hidden. It is under Hidden Agencies at the end of the list.', true);
   }
   async function restoreAg(n, mem){
-    if(!n) return;
+    if(!n || !canRemove()) return;
     mem = mem || n.members.filter(a => a.id != null && isRemoved(a));
     for(const a of mem) REMOVED.delete(String(a.id));
     refresh();
     for(const a of mem){ try{ await DB.doc('agdel/' + a.id).delete(); }catch(e){} }
-    toast('<b>' + esc(n.name) + '</b> is back on the list.');
+    toast('<b>' + esc(n.name) + '</b> is showing again.');
   }
   let toastT = 0;
   function toast(html, undo){
@@ -960,7 +990,7 @@
         (D2.listOff ? '<span class="d2togi">›</span><span class="d2togl">Agencies</span>' : '<span class="d2togi">‹</span>') + '</button>' +
       '<div class="d2wrap' + (D2.listOff ? ' listoff' : '') + '">' +
       '<nav class="d2list' + (eu && eu.on ? ' subon' : '') + '" aria-label="Agencies"><div class="d2lh" role="status" aria-live="polite"><b>' + nN.toLocaleString() + '</b><span>' + (nN === 1 ? 'agency' : 'agencies') +
-        (D2.showRemoved ? ' removed' : '') + '</span><em>' + (function(){ const ms = list.filter((x, k) => list.findIndex(y => y.net === x.net) === k).reduce((t, x) => t + x.n, 0);
+        (D2.showRemoved ? ' hidden' : '') + '</span><em>' + (function(){ const ms = list.filter((x, k) => list.findIndex(y => y.net === x.net) === k).reduce((t, x) => t + x.n, 0);
           const nOff = list.filter((x, k) => list.findIndex(y => y.net === x.net) === k).reduce((t, x) => t + x.a.offices.length, 0);
           return (nOff > nN ? nOff.toLocaleString() + ' offices · ' : '') + ms.toLocaleString() + ' models'; })() + '</em>' +
         (eu && eu.all ? '<div class="d2sub" role="tablist" aria-label="Europe subregions">' +
@@ -986,18 +1016,18 @@
           }
           return h +
           (D2.confirm === x.id
-            ? '<div class="d2agw d2conf"><span>Remove <b>' + esc(x.a.name) + '</b> from the Directory?</span><button type="button" class="d2cy" data-d2rmyes="' + esc(x.id) + '">Remove</button><button type="button" class="d2cn" data-d2rmno>Cancel</button></div>'
+            ? '<div class="d2agw d2conf"><span>Hide <b>' + esc(x.a.name) + '</b>? Its ' + dirN(x.n) + ' models stop showing for everyone. Nothing is deleted.</span><button type="button" class="d2cy" data-d2rmyes="' + esc(x.id) + '">Hide</button><button type="button" class="d2cn" data-d2rmno>Cancel</button></div>'
             : '<div class="d2agw' + (D2.showRemoved ? ' rmd' : '') + '"><button type="button" class="d2ag' + (x === r ? ' on' : '') + '" data-d2ag="' + esc(x.id) + '">' +
           '<span class="d2agt"><b>' + esc(x.a.name) + '</b><s>' + esc(([x.a.city, x.a.country].filter(Boolean).join(', ') || 'Location not stated') + (x.a.offices.length > 1 ? ' · ' + x.a.offices.length + ' offices' : '')) + '</s></span>' +
           '<span class="d2agn">' + (byMeas ? '<b>' + dirN(x.fit) + '</b><s>of ' + dirN(x.n) + '</s>' : '<b>' + dirN(x.n) + '</b>') + '</span></button>' +
           (!x.a.country && x.a.domain && !D2.showRemoved ? '<button type="button" class="d2locb" data-d2loc="' + esc(x.a.domain) + '" title="Set this agency’s country">+ Set country</button>' : '') +
-          (canRemove() ? (D2.showRemoved ? '<button type="button" class="d2rs" data-d2restore="' + esc(x.id) + '">Put back</button>'
-            : '<button type="button" class="d2rm" data-d2rm="' + esc(x.id) + '" title="Remove from the Directory" aria-label="Remove ' + esc(x.a.name) + ' from the Directory"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg></button>') : '') + '</div>');
+          (canRemove() ? (D2.showRemoved ? '<button type="button" class="d2rs" data-d2restore="' + esc(x.id) + '">Show again</button>'
+            : '<button type="button" class="d2rm" data-d2rm="' + esc(x.id) + '" title="Hide this agency" aria-label="Hide ' + esc(x.a.name) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button>') : '') + '</div>');
         }).join('') +
         (place && !(eu && eu.on) ? (function(){ const last = shown[shown.length - 1]; const j0 = last ? heads.indexOf(rgOf(last)) : -1; let h = ''; if(vis.length <= shown.length) for(let q = j0 + 1; q < heads.length; q++) h += regionBar(heads[q], rgN.get(heads[q]).size, true); return h; })() : '') +
         (vis.length > shown.length ? '<button type="button" class="d2more" data-d2more>Show ' + Math.min(200, vis.length - shown.length) + ' more</button>' : '') +
-        (!list.length ? '<p class="d2pe">' + (D2.showRemoved ? 'No removed agency matches these filters.' : 'No agency matches these filters.') + '</p>' : '') +
-        (canRemove() && (REMOVED.size || D2.showRemoved) ? '<button type="button" class="d2showrm" data-d2showrm>' + (D2.showRemoved ? '← Back to the list' : REMOVED.size + ' removed · Show') + '</button>' : '') +
+        (!list.length ? '<p class="d2pe">' + (D2.showRemoved ? 'No hidden agency matches these filters.' : 'No agency matches these filters.') + '</p>' : '') +
+        (canRemove() ? hiddenNav() : '') +
       '</nav>' +
       '<section class="d2panel" aria-label="' + (r ? esc(r.a.name) : 'Agency') + '">' + panel(r, byMeas) + '</section></div></div>';
     fitWrap(); if(D2.fav) fitFav(false);
@@ -1465,7 +1495,19 @@
     const rs = e.target.closest('[data-d2restore]');
     if(rs){ const x = D2.entries && D2.entries.get(rs.dataset.d2restore); if(x) restoreAg(x.net); return; }
     if(e.target.closest('[data-d2undo]')){ const u = D2.lastRemoved; hideToast(); if(u) restoreAg(u.n, u.mem); return; }
-    if(e.target.closest('[data-d2showrm]')){ D2.showRemoved = !D2.showRemoved; D2.sel = -1; D2.listTop = 0; D2.keepTop = true; refresh(); return; }
+    if(e.target.closest('[data-d2showrm]')){ D2.showRemoved = !D2.showRemoved; D2.hidMod = false; D2.sel = -1; D2.listTop = 0; D2.keepTop = true; refresh(); return; }
+    /* 1.2.177: Hidden Agencies › Hidden Models at the end of the agency list (Admin) */
+    if(e.target.closest('[data-d2hidag]')){ D2.showRemoved = true; D2.hidMod = false; D2.sel = -1; D2.listTop = 0; D2.keepTop = true; refresh(); return; }
+    if(e.target.closest('[data-d2hidmod]')){ D2.hidMod = true; D2.showRemoved = false; D2.sel = -1; D2.keepTop = true; refresh(); return; }
+    if(e.target.closest('[data-d2hidback]')){ D2.hidMod = false; D2.showRemoved = false; D2.sel = -1; D2.listTop = 0; D2.keepTop = true; refresh(); return; }
+    const ms0 = e.target.closest('[data-d2mshow]');
+    if(ms0){ const k = ms0.dataset.d2mshow, rec = (typeof MDEL !== 'undefined' && MDEL.get(k)) || {}; ms0.disabled = true;
+      mdelSet(k, {nm: rec.nm || '', ag: rec.ag || '', co: rec.co || '', href: rec.href || k}, false).then(ok => { if(ok) toast('<b>' + esc(rec.nm || 'She') + '</b> is showing again.'); else ms0.disabled = false; refresh(); }); return; }
+    const hb0 = e.target.closest('[data-d2hideag]');
+    if(hb0){ const x = D2.entries && D2.entries.get(hb0.dataset.d2hideag); if(!x) return;
+      illumDialog({title: 'Hide ' + x.a.name + '?', ok: 'Hide agency', cancel: 'Cancel',
+        body: '<p>Its ' + dirN(x.n) + ' models stop showing in the Directory, on the boards and in search for everyone.</p><p class="idlgnote">Nothing is deleted - lamps, notes and bookings are kept. Show it again from Hidden Agencies at the end of the agency list.</p>'})
+        .then(ok => { if(ok) removeAg(x.net, x.id); }); return; }
     const sb = e.target.closest('[data-d2sub]');
     if(sb){ D2.sub = sb.dataset.d2sub || ''; try{ localStorage.setItem('illu.d2sub', D2.sub); }catch(err){} D2.sel = -1; D2.listTop = 0; D2.keepTop = true; refresh(); return; }
     const fd = e.target.closest('[data-d2fold]');
@@ -2303,13 +2345,29 @@ body.d2max .d2tog{left:-17px;width:17px}
 .d2on span{padding:3px 9px;border-radius:999px;background:var(--surf2)}
 .d2agw .d2rm{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:8px;border:0;background:var(--surf);color:var(--mut);cursor:pointer;opacity:0;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .d2agw .d2rm svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.d2agw:hover .d2rm,.d2agw .d2rm:focus-visible{opacity:1}.d2agw .d2rm:hover{color:#b23a55}
+.d2agw:hover .d2rm,.d2agw .d2rm:focus-visible{opacity:1}.d2agw .d2rm:hover{color:var(--acc,#6b2a63)}
 .d2agw:hover .d2agn{visibility:hidden}
 .d2agw.rmd .d2ag{opacity:.55}
 .d2agw .d2rs{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:1px solid var(--line);background:var(--surf);border-radius:999px;font:inherit;font-size:11.5px;padding:4px 10px;cursor:pointer;color:var(--acc)}
-.d2conf{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px;border-radius:9px;background:#fbeef1;font-size:12.5px}
+.d2hidsec{margin:12px -8px 0;display:flex;flex-direction:column}
+.d2hidbar{display:flex;align-items:center;gap:8px;padding:12px 16px;background:#2A2027;color:#fff;box-shadow:inset 0 -3px 0 #8A8592}
+.d2hidbar b{font-size:15px;font-weight:700;letter-spacing:.12em;flex-grow:1}.d2hidbar s{text-decoration:none;font-size:11.5px;opacity:.75}
+.d2hidbar .d2hidi{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.d2list .d2hidrow{border-bottom:1px solid var(--line,#e6dfe3);border-radius:0;padding:11px 14px 11px 16px}
+.d2list .d2hidrow.d2hidsub{padding-left:30px}.d2hidrow .d2agt b i{font-style:normal;opacity:.6;margin-right:4px}
+.d2list .d2hidrow.on{background:var(--acc,#6b2a63);color:#fff}.d2list .d2hidrow.on .d2agt b,.d2list .d2hidrow.on .d2agt s{color:#fff}
+.d2list .d2hidrow.on .d2agn b{background:#fff;color:var(--acc,#6b2a63)}
+.d2hb.d2hideb{display:inline-flex;align-items:center;gap:6px}.d2hb.d2hideb svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.d2hb.d2hideb:hover{background:color-mix(in srgb,var(--acc,#6b2a63) 8%,var(--surf,#fff));border-color:color-mix(in srgb,var(--acc,#6b2a63) 30%,transparent)}
+.d2hidt{font-size:18px;font-weight:700}.d2hidgt{color:var(--mut);margin:0 2px}
+.d2hidcard .ucimg{position:relative}.d2hidcard .ucph img{filter:grayscale(.6);opacity:.8}
+.d2hidtag{position:absolute;left:8px;top:8px;font-size:11px;font-weight:700;color:#fff;background:rgba(42,32,39,.82);padding:3px 8px;border-radius:999px}
+.d2hidft{display:flex;flex-direction:column;gap:3px;padding:8px 10px 10px}.d2hidft b{font-size:13.5px}.d2hidft s{text-decoration:none;font-size:12px;color:var(--mut)}
+.d2hidshow{margin-top:6px;min-height:34px;border:1px solid var(--line);background:var(--surf,#fff);border-radius:999px;font:inherit;font-size:12px;font-weight:600;color:var(--acc,#6b2a63);cursor:pointer}
+.d2hidshow:hover{background:var(--acc,#6b2a63);color:#fff;border-color:var(--acc,#6b2a63)}
+.d2conf{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px;border-radius:9px;background:color-mix(in srgb,var(--acc,#6b2a63) 9%,var(--surf,#fff));font-size:12.5px}
 .d2conf span{flex-basis:100%}
-.d2conf .d2cy{border:0;background:#b23a55;color:#fff;border-radius:999px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer}
+.d2conf .d2cy{border:0;background:var(--acc,#6b2a63);color:#fff;border-radius:999px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer}
 .d2conf .d2cn{border:1px solid var(--line);background:var(--surf);border-radius:999px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer;color:inherit}
 .d2showrm{margin:10px 8px 4px;border:0;background:transparent;color:var(--mut);font:inherit;font-size:12px;text-decoration:underline;cursor:pointer;text-align:left}
 #d2toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);z-index:120;display:flex;gap:14px;align-items:center;padding:10px 16px;border-radius:12px;background:#2a2027;color:#fff;font-size:13px;box-shadow:0 12px 30px rgba(0,0,0,.25)}

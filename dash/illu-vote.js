@@ -168,6 +168,15 @@
     const hist = [];
     let r = o.base || 1;
     for(let guard = 0; guard < 50; guard++){
+      /* 1.2.181 (user, 13 Nov 2026: "I want USERS to be able to end the Vote even though all the votes haven't been casted ...
+         the conclusion will be based on the majority of the votes that are in ... When it's a tie ... Tie-Breaker"): a round
+         someone ended counts only the votes that were in at that moment (kept in o.ends[round].v) */
+      const end = o.ends && o.ends[String(r)];
+      if(end && end.v && Object.keys(end.v).length){
+        const eg = Object.keys(end.v).filter(p => end.v[p] === 'g'), ex = Object.keys(end.v).filter(p => end.v[p] === 'r');
+        if(eg.length === ex.length){ hist.push({round: r, g: eg, x: ex, at: end.at, ended: end.by}); r++; continue; }
+        return {o, k, h: hash(k), voters: vs, round: r, n: eg.length + ex.length, of: vs.length, g: eg.length, r: ex.length, mine: voteOf(me(), k, r), open: false, res: eg.length > ex.length ? 'appr' : 'cxl', gp: eg, xp: ex, at: end.at, hist, ended: end};
+      }
       const g = vs.filter(p => voteOf(p, k, r) === 'g'), x = vs.filter(p => voteOf(p, k, r) === 'r');
       const n = g.length + x.length;
       if(!vs.length || n < vs.length) return {o, k, h: hash(k), voters: vs, round: r, n, of: vs.length, g: g.length, r: x.length, mine: voteOf(me(), k, r), open: true, hist, at: hist.length ? hist[hist.length - 1].at : o.at};
@@ -191,7 +200,12 @@
   function onVote(k){ const o = OPEN.get(hash(k)) || legacyO(k); return o && !o.off ? o : null; }
   function legacyKeys(){ const s = new Set(); for(const m of FAV.values()) for(const k of m.keys()) if(!OPEN.has(hash(k)) && legacyO(k)) s.add(k); return [...s]; }
   const needMe = st => !!st && st.open && !st.mine && st.voters.includes(me());
-  function allStates(){ const out = []; for(const o of OPEN.values()){ const s = stateOf(o.k); if(s) out.push(s); } for(const k of legacyKeys()){ const s = stateOf(k); if(s) out.push(s); } return out; }
+  /* 1.2.178 (user, 13 Nov 2026: "When hiding a model, I want the card to be sent the Hidden destination and off the board ... having
+     them in the mix won't help"): a hidden model (Admin's Hide, docs mdel) is left out of every board here - votes, favorites,
+     on hold. She stays in Directory › Hidden Models, and her booking card is not touched. */
+  const hidK = k => { try{ let raw = k; if(/^bid:/.test(k)){ const c = BOOK.get(k.slice(4)); raw = (c && c.k) || ''; } return !!raw && /^https?:/i.test(raw) && mdelIs(normKey(raw)); }catch(e){ return false; } };
+  window.__illuHidK = hidK;
+  function allStates(){ const out = []; for(const o of OPEN.values()){ if(hidK(o.k)) continue; const s = stateOf(o.k); if(s) out.push(s); } for(const k of legacyKeys()){ if(hidK(k)) continue; const s = stateOf(k); if(s) out.push(s); } return out; }
   /* the old "lamp" questions now ask where the vote stands: Approved g, voting y, Cancelled r */
   window.__illuVoteLamp = k => { if(!k) return ''; const o = onVote(k); if(!o) return ''; const s = stateOf(k); return !s ? '' : s.open ? 'y' : s.res === 'appr' ? 'g' : 'r'; };
   window.__illuVoteMarkVals = () => allStates().map(s => s.open ? 'y' : s.res === 'appr' ? 'g' : 'r');
@@ -274,13 +288,16 @@
       return h(u) === h(v) && u.pathname.replace(/\/+$/, '') !== v.pathname.replace(/\/+$/, ''); }catch(e){ return false; }
   }
   window.__illuSameNm = sameNm;
-  function workOf(k, nm, ag){
+  function workOf(k, nm, ag, mineToo){
     const m = info(k); nm = nm || m.nm; ag = ag || m.ag;
-    const c = bookersOf(k, nm, ag).find(x => x.by !== me()); if(!c) return null;
+    const bs = bookersOf(k, nm, ag);
+    const c = bs.find(x => x.by !== me()) || (mineToo ? bs.find(x => x.by) : null); if(!c) return null;
     let them = ''; try{ const l = (c.em && c.em.list) || []; const e = l.slice().sort((p, q) => String(q.dt).localeCompare(String(p.dt)))[0]; if(e) them = e.dir === 'in' ? (e.name || e.addr || '') : ''; }catch(e){}
     return {c, by: c.by, who: pname(c.by), what: c.st === 'done' ? 'booked' : 'booking', since: (() => { const d = new Date(c.at || ''); return isNaN(d) ? '' : d.toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short'}); })(), them};
   }
-  window.__illuWorkOf = workOf;
+  /* 1.2.181 (user, 13 Nov 2026: "I want the name of the USER-Booking to be visible for all ... even if it's their own"):
+     the "● NAME · booking" label on a card shows for everyone, also on the cards I am booking myself */
+  window.__illuWorkOf = (k, nm, ag) => workOf(k, nm, ag, true);
   /* 1.2.170: liked by someone on the team AND her booking card is in progress -> the purple ring on her card */
   window.__illuBkRing = (k, nm, ag) => {
     if(!k) return null;
@@ -343,10 +360,44 @@
       OPEN.set(h, back); save('vopen/' + h, back); changed();
     });
   }
-  let ASK = '';
+  let ASK = '', ENDASK = '';
+  function endVote(k){
+    if(!signedIn()) return;
+    const st = stateOf(k); if(!st || !st.open) return;
+    const v = {}; for(const p of st.voters){ const x = voteOf(p, k, st.round); if(x) v[p] = x; }
+    if(!Object.keys(v).length) return;
+    const h = hash(k), before = OPEN.get(h) || null;
+    const o = Object.assign({}, st.o); delete o.legacy; if(!o.voters) o.voters = st.voters;
+    o.ends = Object.assign({}, o.ends || {}, {[String(st.round)]: {by: me(), at: nowIso(), v, of: st.voters.length}});
+    OPEN.set(h, o); save('vopen/' + h, o); ENDASK = ''; changed(); rerender();
+    const now = stateOf(k);
+    const where = !now ? '' : now.open ? L(' It is a tie — she goes to the Tie-breaker.', ' 동점 — 타이브레이커로 갑니다.') : now.res === 'appr' ? L(' Approved ' + now.g + '–' + now.r + '.', ' 승인 ' + now.g + '–' + now.r + '.') : L(' Cancelled ' + now.g + '–' + now.r + '.', ' 취소 ' + now.g + '–' + now.r + '.');
+    say(L('Vote ended for ' + (o.nm || 'her') + ' with ' + Object.keys(v).length + ' of ' + st.voters.length + ' votes in.', (o.nm || '') + ' 투표 종료 — ' + st.voters.length + '명 중 ' + Object.keys(v).length + '명 투표.') + where, () => {
+      const back = before ? Object.assign({}, before) : Object.assign({}, st.o); delete back.legacy; if(!back.voters) back.voters = st.voters;
+      if(back.ends){ back.ends = Object.assign({}, back.ends); delete back.ends[String(st.round)]; }
+      OPEN.set(h, back); save('vopen/' + h, back); changed(); rerender();
+    });
+  }
+  function endBox(k, st){
+    try{ if(!SIGNED()) return ''; }catch(e){ return ''; }
+    if(!st || !st.open || !st.n || st.n >= st.of) return '';
+    if(ENDASK !== k) return '<button type="button" class="ivoff ivend" data-ivend="' + H(k) + '" title="' + H(L('Decide now with the votes that are in', '지금까지의 투표로 결정합니다')) + '">' + L('End vote now', '투표 지금 종료') + ' · ' + st.n + '/' + st.of + '</button>';
+    return '<div class="ivask"><span>' + H(L('End the vote now with ' + st.n + ' of ' + st.of + ' votes in? The majority of those votes decides: Approved or Cancelled. A tie goes to the Tie-breaker.', st.n + '/' + st.of + '명 투표 상태로 지금 종료할까요? 들어온 표의 다수로 승인 또는 취소가 정해지고, 동점이면 타이브레이커로 갑니다.')) + '</span>' +
+      '<div><button type="button" class="ivbtn pri" data-ivendyes="' + H(k) + '">' + L('End vote', '종료') + '</button><button type="button" class="ivbtn" data-ivendno>' + L('Keep voting', '계속 투표') + '</button></div></div>';
+  }
+  document.addEventListener('click', e => {
+    const t = e.target.closest && e.target.closest('[data-ivend],[data-ivendyes],[data-ivendno]'); if(!t) return;
+    e.preventDefault(); e.stopPropagation();
+    if(t.dataset.ivend != null){ ENDASK = t.dataset.ivend; changed(); rerender(); }
+    else if(t.dataset.ivendyes != null) endVote(t.dataset.ivendyes);
+    else { ENDASK = ''; changed(); rerender(); }
+  }, true);
   function offBox(k, st){
-    st = st || stateOf(k); if(!canTakeOff(st)) return '';
-    if(ASK !== k) return '<button type="button" class="ivoff" data-ivoff="' + H(k) + '">' + L('Take off Team Vote', '팀 투표에서 빼기') + '</button>';
+    st = st || stateOf(k);
+    const eb = endBox(k, st);
+    if(!canTakeOff(st)) return eb;
+    if(ENDASK === k) return eb;
+    if(ASK !== k) return eb + '<button type="button" class="ivoff" data-ivoff="' + H(k) + '">' + L('Take off Team Vote', '팀 투표에서 빼기') + '</button>';
     const others = st.voters.filter(p => p !== me() && voteOf(p, k, st.round)).map(pname);
     return '<div class="ivask"><span>' + H(others.length ? L(others.join(', ') + (others.length > 1 ? ' have' : ' has') + ' voted already. Take her off and clear the votes?', others.join(', ') + ' 님이 이미 투표했습니다. 빼고 투표를 지울까요?') : L('Take her off the Team Vote?', '팀 투표에서 뺄까요?')) + ' ' + H(L('She stays in My Favorites.', '내 즐겨찾기에는 남습니다.')) + '</span>' +
       '<div><button type="button" class="ivbtn red" data-ivoffyes="' + H(k) + '">' + L('Take off', '빼기') + '</button><button type="button" class="ivbtn" data-ivoffno>' + L('Keep it', '그대로 두기') + '</button></div></div>';
@@ -359,6 +410,7 @@
     else { ASK = ''; changed(); rerender(); }
   }, true);
   function rerender(){ for(const p of PAGES.values()){ p.el.__h = ''; p.render(); } try{ window.__illuTodayRender && window.__illuTodayRender(); }catch(e){} }
+  window.__illuVoteRerender = () => { try{ rerender(); }catch(e){} };
   function toggleFav(k, about){
     if(!signedIn()) return;
     const m = new Map(myFav());
@@ -451,7 +503,8 @@
   function noteBody(k, n){
     const id = n.p + '|' + n.at;
     if(NTED === k + '#' + id) return '<div class="mxedit"><textarea data-ntin="' + H(id) + '" data-ntk="' + H(k) + '" rows="3">' + H(n.t) + '</textarea><div><button type="button" class="mxb pri" data-ntsave="' + H(id) + '" data-ntk="' + H(k) + '">' + L('Save', '저장') + '</button><button type="button" class="mxb" data-ntcancel>' + L('Cancel', '취소') + '</button></div></div>';
-    return '<p>' + H(n.t) + '</p>' + (n.ed ? '<span class="mxed">' + H(L('edited by ' + pname(n.ed.by) + ' · ' + when(n.ed.at), pname(n.ed.by) + ' 수정 · ' + when(n.ed.at))) + '</span>' : '');
+    let tr = ''; try{ tr = window.__illuTr ? window.__illuTr('v' + hash(k), id, n.t) : ''; }catch(e){}     // 1.2.180: its Korean
+    return '<p>' + H(n.t) + '</p>' + tr + (n.ed ? '<span class="mxed">' + H(L('edited by ' + pname(n.ed.by) + ' · ' + when(n.ed.at), pname(n.ed.by) + ' 수정 · ' + when(n.ed.at))) + '</span>' : '');
   }
   function noteFind(k, id){ const i = id.indexOf('|'); return notesAll(k).find(x => x.p === id.slice(0, i) && x.at === id.slice(i + 1)); }
   document.addEventListener('click', e => {
@@ -687,7 +740,7 @@
     const p = preOf(k) || {}, g = p.gty || '';
     const dis = can ? '' : ' disabled';
     const amtLab = g === 'cond' ? L('Full guarantee per month (₩)', '월 개런티 전액 (₩)') : L('Guarantee amount (₩)', '개런티 금액 (₩)');
-    return '<section class="mxs mxpre"><h3>' + L('Guarantee & availability', '개런티 · 가능 기간') + '</h3>' +
+    return '<section class="mxs mxpre"><h3>' + L('Availability', '가능 기간') + '</h3>' +
       '<div class="mxpt" role="radiogroup" aria-label="' + H(L('Guarantee Type', '개런티 유형')) + '">' + PGTY.map(([v, en, ko]) => '<button type="button" role="radio" aria-checked="' + (g === v) + '" class="mxpo' + (g === v ? ' on' : '') + '" data-prety="' + v + '"' + dis + '>' + H(L(en, ko)) + '</button>').join('') + '</div>' +
       (g === 'net' || g === 'cond' ? '<label class="mxpf"><span>' + H(amtLab) + '</span><input data-mxin="pre-amt" inputmode="numeric" placeholder="0" value="' + H(p.amt || '') + '"' + dis + '></label>' +
         (g === 'net' ? '<div class="mxpt sm" role="radiogroup">' + [['term', L('Whole term', '전체 기간')], ['month', L('Per month', '월')]].map(([v, t]) => '<button type="button" role="radio" aria-checked="' + ((p.per === 'month') === (v === 'month')) + '" class="mxpo' + ((p.per === 'month') === (v === 'month') ? ' on' : '') + '" data-preper="' + v + '"' + dis + '>' + t + '</button>').join('') + '</div>' : '') : '') +
@@ -905,13 +958,16 @@
       const fld = GFIELD[f], old = c[fld];
       c[fld] = v;
       try{ saveBook(c.id, true); }catch(e){ console.error(e); }
-      try{ window.__illuUndo && window.__illuUndo.push(nm + L(' · guarantee & availability', ' · 개런티 · 가능 기간'), () => { const cc = bkForKey(k); if(!cc) return; cc[fld] = old; saveBook(cc.id, true); changed(); try{ renderBook(); }catch(e){} }); }catch(e){}
+      if(f === 'gty') try{ window.__illuContractRedraw && window.__illuContractRedraw(c.id); }catch(e){}
+      /* a type cleared on the card must not come back from what was typed on her vote card before Booking */
+      if(f === 'gty' && !v) try{ const mk = c.k || k, p0 = preOf(mk); if(p0 && p0.gty) savePre(mk, {gty: ''}); }catch(e){}
+      try{ window.__illuUndo && window.__illuUndo.push(nm + L(' · availability', ' · 가능 기간'), () => { const cc = bkForKey(k); if(!cc) return; cc[fld] = old; saveBook(cc.id, true); changed(); try{ renderBook(); }catch(e){} }); }catch(e){}
       try{ renderBook(); }catch(e){}
     }else{
       const p0 = Object.assign({}, preOf(k) || {});
       const patch = f === 'gty' ? {gty: v} : f === 'amt' ? {amt: v} : f === 'cgm' ? {amt: v} : f === 'mode' ? {per: v} : f === 'jobs' ? {jobs: v} : f === 'days' ? {avd: v} : {avf: v};
       savePre(k, patch);
-      try{ window.__illuUndo && window.__illuUndo.push(nm + L(' · guarantee & availability', ' · 개런티 · 가능 기간'), () => { const h = hash(k); PRE.set(h, p0); save('vpre/' + h, p0); changed(); }); }catch(e){}
+      try{ window.__illuUndo && window.__illuUndo.push(nm + L(' · availability', ' · 가능 기간'), () => { const h = hash(k); PRE.set(h, p0); save('vpre/' + h, p0); changed(); }); }catch(e){}
       return;
     }
     changed();
@@ -936,10 +992,10 @@
     let ex = '';
     if(!c){ const p = preOf(k) || {}; const bits = [p.age ? L('Age ', '나이 ') + p.age : '', p.entry ? L('Entry ', '입국 ') + p.entry : ''].filter(Boolean);
       if(bits.length || p.anote) ex = '<div class="pnkvx">' + (bits.length ? '<span>' + H(bits.join(' · ')) + '</span>' : '') + (p.anote ? '<p>' + H(p.anote) + '</p>' : '') + '</div>'; }
-    return '<section class="pns gs">' + pnSecH(L('Availability & Guarantee', '가능 기간 · 개런티'), '<span class="gssync" title="' + H(c ? L('The same boxes as her booking card contract', '부킹 카드 계약서와 같은 칸') : L('Goes into her contract when she has a booking card', '부킹 카드가 생기면 계약서로 들어갑니다')) + '">' + LNI + (c ? L('Same as contract', '계약서와 동일') : L('Goes into her contract', '계약서로 연결')) + '</span>') +
+    return '<section class="pns gs">' + pnSecH(L('Availability', '가능 기간'), '<span class="gssync" title="' + H(c ? L('The same boxes as her booking card contract', '부킹 카드 계약서와 같은 칸') : L('Goes into her contract when she has a booking card', '부킹 카드가 생기면 계약서로 들어갑니다')) + '">' + LNI + (c ? L('Same as contract', '계약서와 동일') : L('Goes into her contract', '계약서로 연결')) + '</span>') +
       '<div class="gsbox">' + rows + '</div>' +
       '<div class="gssub">' + LNI + H(L('Guarantee type', '개런티 유형')) + '</div>' +
-      '<div class="gsseg" role="group" aria-label="' + H(L('Guarantee type', '개런티 유형')) + '">' + [['net', L('Net', '넷')], ['cond', L('Condition', '컨디션')], ['no', L('No guarantee', '노 개런티')]].map(([v, t]) => '<button type="button" data-ggty="' + v + '" aria-pressed="' + (g.gty === v) + '"' + dis + '>' + t + '</button>').join('') + '</div>' +
+      '<div class="gsseg" role="group" aria-label="' + H(L('Guarantee type', '개런티 유형')) + '">' + [['net', L('Net', '넷')], ['cond', L('Condition', '컨디션')], ['no', L('No guarantee', '노 개런티')]].map(([v, t]) => '<button type="button" data-ggty="' + v + '" aria-pressed="' + (g.gty === v) + '"' + (g.gty === v ? ' title="' + H(L('Press again to clear', '다시 누르면 선택 해제')) + '"' : '') + dis + '>' + t + '</button>').join('') + '</div>' +
       (grows ? '<div class="gsbox">' + grows + '</div>' : '') + ex + '</section>';
   }
   /* typing: saved when the box is left (or Enter), so the panel never redraws under the cursor */
@@ -970,10 +1026,13 @@
     e.preventDefault(); e.stopPropagation();
     const k = gKey(b); if(!k) return;
     const a = document.activeElement; if(a && a.dataset && a.dataset.gin && a.closest('.mx') === b.closest('.mx')){ gSet(k, a.dataset.gin, gClean(a.dataset.gin, a.value)); }
-    if(b.dataset.ggty) gSet(k, 'gty', b.dataset.ggty);
+    /* 1.2.177 (user, 13 Nov 2026: "allow me to deselect the Guarantee Type to make it neutral"): pressing the chosen
+       type again clears it - on the vote card, the side panel and her booking card contract alike (same field) */
+    if(b.dataset.ggty){ const cur = (window.__illuGuar.get(k) || {}).gty || ''; gSet(k, 'gty', cur === b.dataset.ggty ? '' : b.dataset.ggty); }
     else if(b.dataset.gmode) gSet(k, 'mode', b.dataset.gmode === 'month' ? 'month' : 'term');
     else gSet(k, 'days', b.dataset.gdays);
   }, true);
+  window.__illuPreClearGty = mk => { try{ const p0 = preOf(mk); if(p0 && p0.gty) savePre(mk, {gty: ''}); }catch(e){} };
   window.__illuGuar = {get: (k) => { let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){} return gOf(k, c); }, set: gSet};
   function pnAgency(k, a){
     const pills = [];
@@ -982,7 +1041,16 @@
     const mo = momOf(k);
     if(mo && mo.dom && lc(mo.ag) !== lc(a.ag)){ let mc = ''; try{ mc = typeof ctsChip === 'function' ? ctsChip('https://' + mo.dom, mo.ag) : ''; }catch(e){} if(mc){ pills.push('<span class="pnct pnmomct" title="' + H(L('Write to her mother agency', '마더 에이전시에 메일')) + '"><em>' + L('Mother', '마더') + '</em>' + mc + '</span>'); chip = ''; } }
     if(chip) pills.push('<span class="pnct">' + chip + '</span>');
-    if(a.ig) pills.push('<a class="pnpill" href="https://www.instagram.com/' + H(String(a.ig).replace(/^@/, '')) + '/" target="_blank" rel="noopener">@' + H(String(a.ig).replace(/^@/, '')) + ' ↗</a>');
+    /* 1.2.178 (user, 13 Nov 2026: "what happened the model instagram link/link input?"): her Instagram is always here -
+       the handle as a link with ✎ to change it, or "add ig" to type one in (the same handle the cards use) */
+    let igh = '';
+    try{
+      const c0 = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : null, mk = mkeyOf(k, c0);
+      if(typeof igChip === 'function' && mk) igh = igChip(mk, a.nm || '');
+      if(igh && a.ig && /igc none/.test(igh) && typeof MIG !== 'undefined' && !MIG.get(mk)) igh = '';
+    }catch(e){ igh = ''; }
+    if(igh) pills.push('<span class="pnig">' + igh + '</span>');
+    else if(a.ig) pills.push('<a class="pnpill" href="https://www.instagram.com/' + H(String(a.ig).replace(/^@/, '')) + '/" target="_blank" rel="noopener">@' + H(String(a.ig).replace(/^@/, '')) + ' ↗</a>');
     if(!pills.length) return '';
     return '<section class="pns">' + pnSecH(L('Agency', '에이전시')) + '<div class="pnpills">' + pills.join('') + '</div></section>';
   }
@@ -995,6 +1063,39 @@
     const inner = (t === 'notes' ? notesSec(k, nm, can) : linksSec(k, c, can)).replace(/^<section class="mxs"><h3>.*?<\/h3>/, '<div class="mxs">').replace(/<\/section>$/, '</div>');
     return '<section class="pns"><div class="pntabs" role="tablist">' + tab('notes', L('Notes', '메모'), ns) + tab('links', L('Links', '링크'), ls) + '</div>' + gfa + inner + '</section>';
   }
+  /* 1.2.177 (user, 13 Nov 2026: "instead of deleting, let's hide it" - only the Admin): a small ADMIN section at the very
+     bottom of her side panel. Hide = her card stops showing in the Directory, boards and search for everyone (docs mdel,
+     nothing deleted); she is listed under Hidden Agencies › Hidden Models at the end of the Directory's agency list. */
+  let HIDEASK = '';
+  const adminOk = () => { try{ return isAdmin(); }catch(e){ return false; } };
+  const mkeyOf = (k, c) => { const raw = /^bid:/.test(k) ? (c && c.k) || '' : k; try{ return raw ? normKey(raw) : ''; }catch(e){ return raw; } };
+  const hiddenRec = mk => { try{ const r = MDEL.get(mk); return r && r.st === 'del' ? r : null; }catch(e){ return null; } };
+  function pnAdmin(k, a, c){
+    if(!adminOk()) return '';
+    const mk = mkeyOf(k, c); if(!mk || !/^https?:/i.test(mk)) return '';
+    const hid = hiddenRec(mk), nm = a.nm || info(k).nm || '';
+    let body;
+    if(hid) body = '<div class="pnadhid" role="status"><svg class="pnadi" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg><span><b>' + L('Hidden', '숨김') + '</b> — ' + L('off every board, kept in Directory › Hidden Models.', '모든 보드에서 빠지고 디렉터리 › 숨긴 모델에 보관됩니다.') + '</span><button type="button" class="pnadb" data-pnunhide>' + L('Show again', '다시 보이기') + '</button></div>';
+    else if(HIDEASK === k) body = '<div class="pnadask"><p>' + H(L('Hide ' + nm + '? Her card leaves every board for everyone and goes to Directory › Hidden Models. Lamps, notes and her booking card are kept.', nm + ' — 숨길까요? 모든 보드에서 빠지고 디렉터리 › 숨긴 모델로 갑니다. 램프·메모·부킹 카드는 그대로 남습니다.')) + '</p><div><button type="button" class="pnadb pri" data-pnhideyes>' + L('Hide', '숨기기') + '</button><button type="button" class="pnadb" data-pnhideno>' + L('Cancel', '취소') + '</button></div></div>';
+    else body = '<button type="button" class="pnadb" data-pnhide><svg class="pnadi" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>' + L('Hide this model', '이 모델 숨기기') + '</button>';
+    return '<section class="pns pnadmin"><div class="pnadk">' + L('ADMIN', '관리자') + '</div>' + body + '</section>';
+  }
+  document.addEventListener('click', e => {
+    const t = e.target.closest && e.target.closest('.mx [data-pnhide],.mx [data-pnhideyes],.mx [data-pnhideno],.mx [data-pnunhide]'); if(!t) return;
+    e.preventDefault(); e.stopPropagation();
+    if(!adminOk()) return;
+    const box = t.closest('.mx'), k = box.dataset.mxk, d = t.dataset;
+    let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(err){}
+    if(d.pnhide != null){ HIDEASK = k; changed(); return; }
+    if(d.pnhideno != null){ HIDEASK = ''; changed(); return; }
+    const mk = mkeyOf(k, c); if(!mk) return;
+    const ab = (() => { try{ return JSON.parse(box.dataset.mxab || 'null') || {}; }catch(err){ return {}; } })();
+    const i0 = (() => { try{ return info(k) || {}; }catch(err){ return {}; } })();
+    const rec = {nm: ab.nm || i0.nm || (c && c.nm) || '', ag: ab.ag || i0.ag || (c && c.ag) || '', co: ab.country || '', href: i0.href || mk, why: 'hidden'};
+    t.disabled = true;
+    mdelSet(mk, rec, d.pnhideyes != null).then(ok => { HIDEASK = ''; changed(); if(!ok) t.disabled = false; });
+  }, true);
+  document.addEventListener('focusout', e => { if(e.target && e.target.classList && e.target.classList.contains('igin') && e.target.closest('.mx')) setTimeout(() => { try{ changed(); }catch(err){} }, 400); }, true);
   function modelPanel(k, about){
     if(!k) return '';
     const can = signedIn(), a = about || {}, nm = a.nm || info(k).nm || L('her', '모델');
@@ -1002,7 +1103,7 @@
     const st = stateOf(k), fav = myFav().has(k);
     const facts = factsOf(k), aa = Object.assign({facts}, a);
     return '<div class="mx pn pn2" data-mxk="' + H(k) + '" data-mxab="' + H(JSON.stringify({nm: a.nm || '', ag: a.ag || '', city: a.city || '', country: a.country || ''})) + '">' +
-      pnHead(k, aa, c, fav) + pnMeas(k, aa, c) + pnStatus(k, aa, c, st, can, nm) + pnGuar(k, c, can) + pnAgency(k, aa) + availSec(k, aa, can) + pnTabs(k, c, nm, can) + '</div>';
+      pnHead(k, aa, c, fav) + pnMeas(k, aa, c) + pnStatus(k, aa, c, st, can, nm) + pnGuar(k, c, can) + pnAgency(k, aa) + availSec(k, aa, can) + pnTabs(k, c, nm, can) + pnAdmin(k, aa, c) + '</div>';
   }
   document.addEventListener('click', e => {
     const t = e.target.closest && e.target.closest('.mx [data-ptab],.mx [data-pedit]'); if(!t) return;
@@ -1512,17 +1613,17 @@
   /* Lumen: my own favourites */
   add('fav', ['My Favorites', '내 즐겨찾기'], () => {
     const fw = gWho() && gWho() !== me() ? gWho() : '', favSrc = fw ? (FAV.get(fw) || new Map()) : myFav();
-    const list = fresh('lsort', [...favSrc].map(([k, v]) => ({k, at: v.at})).sort((a, b) => String(a.at).localeCompare(String(b.at))));
+    const list = fresh('lsort', [...favSrc].filter(([k]) => !hidK(k)).map(([k, v]) => ({k, at: v.at})).sort((a, b) => String(a.at).localeCompare(String(b.at))));
     const head = '<div class="ivhead"><span class="ivbig">' + list.length + '</span><span class="ivkick">' + (fw ? H(L(pname(fw) + '’s favorites', pname(fw) + '의 즐겨찾기')) : L('Your favorites', '내 즐겨찾기')) + '</span><span class="ivdot"></span><span class="ivkick">' + L('Only you see this board', '나만 보는 보드') + '</span><span class="ivsp"></span>' +
       seg('lsort', [['new', L('Newest first', '최신 순')], ['old', L('Oldest first', '오래된 순')]]) + '<button type="button" class="ivlink" data-ivgo="team">' + L('Team Vote →', '팀 투표 →') + '</button></div>';
     if(!list.length) return head + empty(L('My Favorites is empty', '내 즐겨찾기가 비어 있습니다'), L('Tap the ♡ on any card — in Suggestiones, the Directory or Compare boards — and the model lands here. Press Send to Team Vote on her card when you want the team to vote.', '추천, 디렉터리, 보드 비교의 아무 카드에서 ♡를 누르면 여기에 들어옵니다. 팀 투표를 받으려면 카드의 팀 투표로 보내기를 누르세요.'));
     return head + '<div class="ivgrid ivtv">' + list.map(x => '<div class="ivcw">' + mcard(x.k) + '<div class="ivcap">♥ ' + H(when(x.at)) + '</div>' + stPill(x.k) + offBox(x.k) + '</div>').join('') + '</div>';
-  }, () => myFav().size || '', ['Favorites', '즐겨찾기']);
+  }, () => [...myFav().keys()].filter(k => !hidK(k)).length || '', ['Favorites', '즐겨찾기']);
   /* 1.2.146 (user, 12 Nov 2026): Member Favorites - every member's favourites on one board. A model two or more
      members liked is marked (a plum ring and "♥ N members" on her photo); under each card, who liked her and when. */
   function memberFavs(){
     const by = new Map();
-    for(const [p, m] of FAV){ if(!m || !m.size) continue; for(const [k, v] of m){ let e = by.get(k); if(!e){ e = {k, who: [], at: ''}; by.set(k, e); } e.who.push({p, at: (v && v.at) || ''}); if(String((v && v.at) || '') > e.at) e.at = (v && v.at) || ''; } }
+    for(const [p, m] of FAV){ if(!m || !m.size) continue; for(const [k, v] of m){ if(hidK(k)) continue; let e = by.get(k); if(!e){ e = {k, who: [], at: ''}; by.set(k, e); } e.who.push({p, at: (v && v.at) || ''}); if(String((v && v.at) || '') > e.at) e.at = (v && v.at) || ''; } }
     for(const e of by.values()) e.who.sort((a, b) => String(a.at).localeCompare(String(b.at)));
     return [...by.values()];
   }
@@ -1847,7 +1948,7 @@
   /* Cancelled */
   /* 1.2.157 (approved demo): one board, sorted inside by the reason */
   add('unav', ['Unavailable / On hold', '불가 / 보류'], () => {
-    const all = [...AV.values()].filter(v => v.t && AVT[v.t]);
+    const all = [...AV.values()].filter(v => v.t && AVT[v.t] && !hidK(v.k));
     const cat = ['all', 'no', 'nokr', 'later'].includes(VS.avc) ? VS.avc : 'all';
     const list = all.filter(v => cat === 'all' || v.t === cat).sort((p, q) => String(q.at).localeCompare(String(p.at)));
     const chipA = (k2, en, ko) => { const n = all.filter(v => k2 === 'all' || v.t === k2).length; return '<button type="button" class="' + (cat === k2 ? 'on' : '') + '" data-ivset="avc=' + k2 + '">' + L(en, ko) + ' · ' + n + '</button>'; };
@@ -2078,7 +2179,7 @@ p.pnag{cursor:default}
 .ivsub b{font-family:var(--mono);font-size:11px;font-weight:500;opacity:.85;margin-left:2px}
 .vmk .ivsend{margin-left:auto;border:1px solid var(--acc,#5A2C57);color:var(--acc,#5A2C57);background:none;border-radius:999px;padding:5px 10px;font:inherit;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap;min-height:30px}
 .vmk .ivsend:hover{background:var(--wash,#EDE3EE)}
-.ivoff{border:1px dashed var(--line,#e6e0ea);background:none;border-radius:8px;padding:6px;font:inherit;font-size:12px;cursor:pointer;color:var(--ink2,#494154);width:100%}
+.ivoff{border:1px dashed var(--line,#e6e0ea);background:none;border-radius:8px;padding:6px;font:inherit;font-size:12px;cursor:pointer;color:var(--ink2,#494154);width:100%}.ivoff.ivend{color:#6b2a5e;border-color:#cfb3cb;margin-bottom:6px;font-weight:600}
 .ivoff:hover{border-color:#A8323C;color:#A8323C}
 .ivask{border:1px solid #A8323C;background:color-mix(in srgb,#A8323C 9%,var(--surf,#fff));border-radius:8px;padding:8px;font-size:12px;display:flex;flex-direction:column;gap:6px}
 .ivask div{display:flex;gap:6px;flex-wrap:wrap}
@@ -2419,6 +2520,17 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .pnpills{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .pn2 .pnpill{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--ink);text-decoration:none;background:var(--surf,#fff)}
 .pn2 a.pnpill{color:var(--acc)}
+.pnadmin{border-top:1px dashed var(--line,#d9d3e2);margin-top:6px;padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.pnadk{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mut,#6c6875)}
+.pnadb{align-self:flex-start;display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line,#e5e3e9);background:var(--surf,#fff);color:inherit;font:inherit;font-size:12.5px;cursor:pointer}
+.pnadb:hover{background:color-mix(in srgb,var(--acc,#6b2a63) 8%,var(--surf,#fff));color:var(--acc,#6b2a63)}
+.pnadb.pri{background:var(--acc,#6b2a63);border-color:var(--acc,#6b2a63);color:#fff;font-weight:600}
+.pnadi{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.pnadask{padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--acc,#6b2a63) 9%,var(--surf,#fff));font-size:12.5px;line-height:1.45}
+.pnadask p{margin:0 0 8px}.pnadask div{display:flex;gap:6px}
+.pnadhid{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--acc,#6b2a63) 9%,var(--surf,#fff));font-size:12.5px}
+.pnadhid span{flex-grow:1}
+@media (max-width:700px){.pnadb{min-height:44px;font-size:14px}}
 .pn2 .pntabs{display:flex;gap:4px;background:var(--surf2,#F4F1F6);border:1px solid var(--line);border-radius:10px;padding:3px}
 .pn2 .pntabs button{flex:1;border:0;background:none;border-radius:8px;padding:6px;font:inherit;font-size:12.5px;font-weight:600;color:var(--mut);cursor:pointer;min-height:32px}
 .pn2 .pntabs button[aria-selected="true"]{background:var(--surf,#fff);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.1)}
