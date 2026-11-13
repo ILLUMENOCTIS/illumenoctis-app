@@ -1892,6 +1892,7 @@
      photo being looked at. ← → do the same while the mouse is over a card. Photos are read once per model
      (window.illu.modelPhotos, the same as the card's slideshow) and the card remembers where it was while it is redrawn. */
   const TS = new Map();   /* key -> {list:[url], i, state} */
+  document.addEventListener('illu-phide', () => TS.clear());   /* 1.2.174: a photo hidden as "not her" leaves the card slideshows too */
   window.__illuTileIdx = k => { const t = TS.get(k); return t && t.list && t.i > 0 ? t.list[t.i] : ''; };
   const ucTileOf = el => el && el.closest && el.closest('.uc');
   const ucTileKey = u => u.dataset.uck || u.dataset.ivk || ((u.querySelector('[data-d2k]') || {}).dataset || {}).d2k || '';

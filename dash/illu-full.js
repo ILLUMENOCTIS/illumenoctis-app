@@ -25,7 +25,7 @@
   box.id = 'illufv'; box.hidden = true; box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
   box.innerHTML = '<div class="fvstage"><img class="fvimg" alt=""></div>' +
     '<button type="button" class="fvnav fvp" data-fv="-1" aria-label="Previous">‹</button><button type="button" class="fvnav fvn" data-fv="1" aria-label="Next">›</button>' +
-    '<div class="fvtop"><b class="fvnm"></b><span class="fvct"></span><span class="fvmsg"></span><span class="fvmainw"></span><span class="fvrotw"></span><span class="fvtabs" role="group"></span></div>' +
+    '<div class="fvtop"><b class="fvnm"></b><span class="fvct"></span><span class="fvmsg"></span><span class="fvmainw"></span><span class="fvdelw"></span><span class="fvrotw"></span><span class="fvtabs" role="group"></span></div>' +
     '<div class="fvstrip" aria-label="All photos"></div>' +
     '<aside class="fvside"></aside>' +
     '<button type="button" class="fvsidet" aria-label="Details"><span class="fvsti">›</span><span class="fvstl"></span></button>' +
@@ -79,6 +79,16 @@
     } else
     mw.innerHTML = !(PH && PH.setMain && S.key && !S.bid) ? '' : S.i > 0 && S.raw && S.raw[S.i] ? '<button type="button" class="fvmain" data-fvmain title="' + esc(L('Show this photo on the model’s card, for everyone (the photo is not saved — only which one to show)', '이 사진을 모델 카드에 표시합니다 (사진은 저장되지 않고, 어떤 사진을 보일지만 기록)')) + '">★ ' + esc(L('Use as card photo', '카드 사진으로 사용')) + '</button>'
       : S.i === 0 && PH.PMAIN.has(S.key) ? '<button type="button" class="fvmain back" data-fvunmain>↺ ' + esc(L('Back to the original photo', '원래 사진으로')) + '</button>' : '';
+    /* 1.2.174 (user: wrong photos in the slideshow): a photo from her agency page can be hidden; a file from her own
+       folder (Dropbox / this computer / Z:) can be deleted from there */
+    const dw = box.querySelector('.fvdelw');
+    if(dw){ const raw = S.raw && S.raw[S.i], tab = S.tab || 'agency';
+      const isFile = /^\/_blob\/bk\./.test(String(raw || '')) && window.illu && window.illu.bookingTrash;
+      const isAg = !isFile && tab === 'agency' && /^https?:/i.test(String(raw || '')) && S.ref && window.__illuHidePhoto;
+      const sig = (isFile ? 'f' : isAg ? 'a' : '') + '|' + raw + '|' + (S.arm === raw ? 1 : 0);
+      if(dw.dataset.sig !== sig){ dw.dataset.sig = sig;
+        dw.innerHTML = isFile ? '<button type="button" class="fvmain fvdel' + (S.arm === raw ? ' on' : '') + '" data-fvdel title="' + esc(L('Not her - delete this ' + (isV(cur) ? 'video' : 'photo') + ' from her folder', '이 모델이 아님 - 폴더에서 삭제')) + '">🗑 ' + esc(S.arm === raw ? (S.armTxt || L('Delete? Press again', '삭제할까요? 한 번 더')) : L('Delete', '삭제')) + '</button>'
+          : isAg ? '<button type="button" class="fvmain fvdel" data-fvhide title="' + esc(L('Not her - hide this photo from the slideshows (the agency site is not changed)', '이 모델이 아님 - 슬라이드쇼에서 숨기기 (에이전시 사이트는 그대로)')) + '">⊘ ' + esc(L('Not her · Hide', '이 모델 아님 · 숨기기')) + '</button>' : ''; } }
     /* 1.2.148: rotate the photo shown (for everyone) */
     const rw = box.querySelector('.fvrotw'); if(rw){ const want = n && !isV(cur) && window.__illuRotBtns ? 1 : 0; if(rw.dataset.on !== String(want)){ rw.dataset.on = want; rw.innerHTML = want ? window.__illuRotBtns('fvrot') : ''; } }
     try{ if(window.__illuRot){ delete img.dataset.rotsig; window.__illuRot.apply(img); } }catch(e){}
@@ -291,6 +301,35 @@
   }, true);
   strip.addEventListener('click', e => { const t = e.target.closest('[data-fvt]'); if(!t || !S) return; e.stopPropagation(); S.i = +t.dataset.fvt; draw(); });
 
+  function dropAt(i){
+    if(!S) return; const raw = S.raw[i], shown = S.photos[i];
+    S.photos.splice(i, 1); S.raw.splice(i, 1);
+    if(S.src && S.src[S.tab]){ const j = S.src[S.tab].indexOf(shown); if(j >= 0) S.src[S.tab].splice(j, 1); }
+    if(S.tab === 'agency' && S.araw){ const j = S.araw.indexOf(raw); if(j >= 0) S.araw.splice(j, 1); }
+    if(S.vid) S.vid.delete(shown);
+    S.i = Math.max(0, Math.min(S.i, S.photos.length - 1)); strip.dataset.sig = ''; draw();
+  }
+  box.addEventListener('click', async e => {
+    const b = e.target.closest && e.target.closest('[data-fvhide], [data-fvdel]'); if(!b || !S) return;
+    e.preventDefault(); e.stopPropagation();
+    const i = S.i, raw = S.raw[i], msg = box.querySelector('.fvmsg');
+    if(b.hasAttribute('data-fvhide')){
+      if(typeof SIGNED === 'function' && !SIGNED()){ try{ nudgeSignIn(); }catch(er){} return; }
+      await window.__illuHidePhoto(S.ref, raw); dropAt(i);
+      msg.textContent = L('Hidden from the slideshows - Undo is in the bar', '슬라이드쇼에서 숨겼습니다 - 되돌리기 가능'); return;
+    }
+    if(S.arm !== raw){
+      let w = null; try{ w = await window.illu.bookingWhere(raw); }catch(er){}
+      const where = w && w.ok ? (w.place === 'dbx' ? 'Dropbox' : w.place === 'z' ? L('the Z: drive', 'Z: 드라이브') : L('this computer', '이 컴퓨터')) : L('her folder', '폴더');
+      S.arm = raw; S.armTxt = L('Delete from ' + where + '? Press again', where + '에서 삭제할까요? 한 번 더'); clearTimeout(S.armT);
+      S.armT = setTimeout(() => { if(S && S.arm === raw){ S.arm = null; draw(); } }, 5000); draw(); return;
+    }
+    S.arm = null; clearTimeout(S.armT);
+    const r = await window.illu.bookingTrash(raw).catch(er => ({ok: false, why: String(er && er.message || er)}));
+    if(r && r.ok){ dropAt(i); try{ window.__illuMatForget && window.__illuMatForget(S.key); }catch(er){}
+      msg.textContent = L('Deleted ' + (r.name || '') + (r.place === 'dbx' ? ' (Dropbox keeps it in Deleted files for 30 days)' : ' (in the Recycle Bin)'), (r.name || '') + ' 삭제됨' + (r.place === 'dbx' ? ' (Dropbox 삭제된 파일에 30일 보관)' : ' (휴지통)')); }
+    else { draw(); msg.textContent = L('Could not delete: ', '삭제하지 못했습니다: ') + ((r && r.why) || ''); }
+  }, true);
   function open(first, name, href, key, bid){
     const my = ++seq; narrowOn = false;
     S = {photos: first ? [first] : [], raw: first ? [first] : [], i: 0, name, ref: href || '', bid: bid || '', key: key || (href && typeof normKey === 'function' ? normKey(href) : '')};
@@ -484,7 +523,8 @@
 
 #illufv .fvmain{border:0;border-radius:999px;height:28px;padding:0 13px;background:rgba(255,255,255,.14);color:#fff;font:600 12px var(--sans);cursor:pointer;white-space:nowrap;align-self:center}
 #illufv .fvmain:hover{background:var(--acc,#5A2C57)}#illufv .fvmain.back{background:rgba(255,255,255,.85);color:#3a2c3f}
-#illufv .fvmainw:empty{display:none}
+#illufv .fvmainw:empty{display:none}#illufv .fvdelw:empty{display:none}#illufv .fvdelw{display:flex;align-self:center}
+#illufv .fvdel{background:rgba(255,255,255,.14)}#illufv .fvdel:hover{background:#A3283F}#illufv .fvdel.on{background:#A3283F;color:#fff}
 `;
   document.head.appendChild(css);
 })();

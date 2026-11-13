@@ -49,6 +49,7 @@
     if(e && e.photos.length && Date.now() - e.at < TTL) return pick(e.photos);
     const ph = await read(k); M.set(k, {at: Date.now(), photos: ph}); return pick(ph);
   };
+  window.__illuMatForget = k => { M.delete(k); try{ window.__illuVoteChanged && window.__illuVoteChanged(); }catch(e){} };
   /* files added to a folder: read again */
   try{ const old = window.illu.onBookingChanged; if(old){ /* the booking window owns the listener; refresh ours on its change by expiring the cache */ } }catch(e){}
   setInterval(() => { for(const e of M.values()) if(Date.now() - e.at > TTL) e.at = 0; }, 60000);
