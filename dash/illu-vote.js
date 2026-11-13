@@ -1538,7 +1538,33 @@
     const sh = uShoe(f.eu, f.us, g);
     return '<div class="ivdet"><div class="ivdag"><b>' + H(i.ag || '') + '</b>' + (mom ? '<span class="pnmom">' + L('Mother', '마더') + '</span>' : '') + '</div>' +
       '<div class="ivdms"><span><b>' + v(f.ht, 1) + '</b><i>·</i>' + v(f.bu) + '<i>/</i>' + v(f.wa) + '<i>/</i>' + v(f.hp) + (uL() === 'in' ? '<small>in</small>' : '') + '</span><span class="ivdsh" title="' + H(L('Shoe size', '신발 사이즈')) + '">' + (sh == null ? '–' : H(sh)) + '<small>' + H(uS()) + '</small></span></div>' +
-      gSummary(k, c, true).replace('class="pnkv"', 'class="pnkv ivdkv"') + stageChip(c) + '</div>';
+      detRows(k, c) + '</div>';
+  }
+  /* 1.2.190 (user, 14 Nov 2026, chose option B of the "Card Terms Layout" demo, "instead of Email, change it to booking"):
+     the Guarantee / Available box and the Email stage chip become three label | value lines - Guarantee, Available
+     (rough date · stay) and Booking (who has her booking card · the step it is on). Same on every board, PC and phone. */
+  function detRows(k, c){
+    const short = v => { const n = +String(v || '').replace(/[^\d]/g, ''); return n >= 1e6 ? '₩' + (Math.round(n / 1e5) / 10) + 'M' : n ? '₩' + n.toLocaleString('en-US') : ''; };
+    const GT = {no: L('None', '없음'), cond: L('Condition', '컨디션'), net: L('Net', '넷')};
+    let gty = '', amt = '', av = '', stay = '';
+    if(c){ gty = c.gty || ''; if(gty === 'net' && c.ctguar) amt = short(c.ctguar) + (c.ctgmode === 'month' ? '/mo' : ''); if(gty === 'cond' && c.ctgm) amt = short(c.ctgm) + '/mo'; av = c.avf || ''; stay = firstNum(c.avd || c.ctdays); }
+    else{ const p = preOf(k) || {}; gty = p.gty || ''; if(p.amt && (gty === 'net' || gty === 'cond')) amt = short(p.amt) + (gty === 'cond' || p.per === 'month' ? '/mo' : ''); av = p.avf || ''; stay = firstNum(p.avd); }
+    const none = t => '<span class="no">' + t + '</span>';
+    const gV = gty === 'no' ? H(GT.no) : gty ? (amt ? H(amt) + ' · ' : none(L('Amount? ', '금액? ')) + ' · ') + H(GT[gty] || '') : none(L('Not set', '미정'));
+    const gT = gty === 'no' ? L('No guarantee', '노 개런티') : gty ? (amt ? amt + ' ' : '') + (GT[gty] || '') + L(' guarantee', ' 개런티') : '';
+    const aV = av || stay ? (av ? H(shortDate(av)) : none('—')) + (stay ? ' · ' + H(stay) + L(' days', '일') : '') : none(L('Not set', '미정'));
+    let bV = none('—'), bT = '';
+    if(c){
+      const who = c.by ? disc(c.by, 'xs') + '<span class="ivdwho">' + H(pname(c.by) || '') + '</span>' : '';
+      let step = '';
+      if(c.st === 'canc') step = '<span class="ivdx">' + L('Cancelled', '취소') + '</span>';
+      else{ for(const [sk, lab] of STG){ const st = (c.s && c.s[sk]) || {}; const pv = (st.p === 'g' || st.p === 'y') ? st.p : (st.d ? 'g' : ''); if(pv !== 'g'){ step = '<span class="' + (pv === 'y' ? 'ivdon' : 'ivdoff') + '" title="' + H(lab + ' · ' + (pv === 'y' ? L('in progress', '진행 중') : L('not started', '시작 전'))) + '">' + H(lab) + '</span>'; break; } }
+        if(!step) step = '<span class="ivdok">' + L('All done', '완료') + '</span>'; }
+      bV = who + (who ? '<i>·</i>' : '') + step; bT = (pname(c.by) || '') + L(' is booking her', '님이 부킹 중');
+    }
+    return '<dl class="ivdrows"><dt>' + L('Guarantee', '개런티') + '</dt><dd title="' + H(gT) + '">' + gV + '</dd>' +
+      '<dt>' + L('Available', '가능') + '</dt><dd title="' + H(L('Rough estimate, not in the contract', '대략적인 날짜, 계약 아님')) + '">' + aV + '</dd>' +
+      '<dt>' + L('Booking', '부킹') + '</dt><dd title="' + H(bT) + '">' + bV + '</dd></dl>';
   }
   /* 1.2.132: her own BOOK photo (Dropbox / this computer) when the card has no photograph of its own */
   const matCover = (k, h) => { let u = ''; try{ if(typeof PICS !== 'undefined' && PICS.get(k)) return h; u = window.__illuMatCover ? window.__illuMatCover(k) : ''; }catch(e){} return u ? h.replace(/(<div class="d2t ucph"[^>]*>)/, '$1<img class="ivmat" src="' + H(u) + '" alt="" decoding="async" loading="lazy">') : h; };
@@ -1891,8 +1917,8 @@
   const myVoted = () => allStates().filter(s => s.mine).sort((a, b) => String(myAt(b.k)).localeCompare(String(myAt(a.k))));
   function votedCap(st){
     const v = st.mine;
-    return '<div class="ivcap ivvc"><span class="ivst ' + (v === 'g' ? 'appr' : 'cxl') + '">' + (v === 'g' ? L('You voted Go', '내 투표: 찬성') : L('You voted Pass', '내 투표: 반대')) + '</span>' +
-      (st.open ? ' ' + stPill(st.k) : '') + '</div>' + ''   /* 1.2.153: the 'Changed your mind?' hint removed (user, 12 Nov 2026) */;
+    /* 1.2.190 (user, 14 Nov 2026): "without the 'You voted Pass', 'You voted Go'" - your vote shows on the Go / Pass buttons */
+    return st.open ? '<div class="ivcap ivvc">' + stPill(st.k) + '</div>' : ''   /* 1.2.153: the 'Changed your mind?' hint removed (user, 12 Nov 2026) */;
   }
   add('team', ['Team Vote', '팀 투표'], () => {
     const ppl = people(), pick = VS.cwho && ppl.includes(VS.cwho) ? VS.cwho : '';
@@ -2430,6 +2456,14 @@ p.pnag{cursor:default}
 .ivdms>span:first-child{color:var(--mut);overflow:hidden;text-overflow:ellipsis;min-width:0}.ivdms b{color:var(--ink);font-weight:700}.ivdms i{font-style:normal;color:var(--faint);margin:0 2px}
 .ivdms small{font-size:9.5px;color:var(--faint);font-weight:600;margin-left:2px}
 .ivdsh{margin-left:auto;padding-left:7px;border-left:1px solid var(--line);font-weight:700;flex:none}
+.ivdrows{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 10px;align-items:center;font-size:12px;border-top:1px solid var(--line);padding-top:6px}
+.ivdrows dt{font-size:10.5px;font-weight:600;color:var(--faint);white-space:nowrap}
+.ivdrows dd{margin:0;display:flex;justify-content:flex-end;align-items:center;gap:4px;min-width:0;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ivdrows dd>*{flex:none}.ivdrows dd .ivdwho{flex:0 1 auto;overflow:hidden;text-overflow:ellipsis}
+.ivdrows .no,.ivdrows .ivdoff{color:var(--faint);font-weight:500}.ivdrows i{font-style:normal;color:var(--faint);font-weight:400}
+.ivdrows .ivdon{color:var(--hold,#A86A10)}.ivdrows .ivdok{color:var(--ok,#2E6845)}.ivdrows .ivdx{color:var(--no,#A8323C)}
+.ivdrows .ivdisc{width:16px;height:16px;font-size:8.5px}
+@media (max-width:620px){.ivdrows{font-size:11px;gap:2px 6px}.ivdrows dt{font-size:9.5px}}
 .ivdkv{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .ivdkv>div{padding:5px 8px;min-width:0}.ivdkv>div+div{border-left:1px solid var(--line)}
 .ivdkv small{display:block;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
