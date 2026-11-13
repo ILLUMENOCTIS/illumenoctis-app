@@ -169,10 +169,13 @@
       '<table class="cltab gftab"><tr><th>' + T('From', '원본') + '</th><th>' + T('Files', '파일') + '</th><th>' + T('Goes to', '저장 위치') + '</th></tr>' +
       P.groups.map((g, i) => '<tr><td>' + E(g.name) + '</td><td>' + (g.files[0] && g.files[0].how === 'zip' ? T('all, as one zip', '전체 (zip)') : g.count) + '</td><td><select data-gfg="' + i + '">' + opts(g.tab) + '</select>' + (!g.tab ? ' <span class="gfq">' + T('choose', '선택') + '</span>' : '') + '</td></tr>').join('') + '</table>' +
       '<p class="clsub">' + T('Videos always go to 3. VIDEOS. Subfolders are kept. A file already there is skipped; nothing is replaced or deleted.', '영상은 항상 3. VIDEOS로 갑니다. 하위 폴더는 유지됩니다. 이미 있는 파일은 건너뛰며, 어떤 것도 덮어쓰거나 지우지 않습니다.') + '</p>' +
-      '<div class="gfwhere"><b>' + E(bvFolderName(c)) + '</b> · <label><input type="checkbox" data-gfw="pc" checked> ' + T('This computer (Desktop › ILLUMENOCTIS › BOOKING)', '이 컴퓨터 (바탕화면 › ILLUMENOCTIS › BOOKING)') + '</label> <label><input type="checkbox" data-gfw="dbx" checked> Dropbox</label></div>' +
+      '<div class="gfwhere"><b>' + E(bvFolderName(c)) + '</b> · <label><input type="checkbox" data-gfw="pc" checked> ' + T('This computer (Desktop › ILLUMENOCTIS › BOOKING)', '이 컴퓨터 (바탕화면 › ILLUMENOCTIS › BOOKING)') + '</label> <label><input type="checkbox" data-gfw="dbx" checked> Dropbox</label> <label class="gfz" hidden><input type="checkbox" data-gfw="z" checked> ' + T('Z: drive (ILLUMENOCTIS › Booking)', 'Z: 드라이브 (ILLUMENOCTIS › Booking)') + '</label></div>' +
       '<div class="gfprog" hidden><div class="gfbar"><i></i></div><span class="gfnow"></span></div>' +
       '<div class="clbtns"><button type="button" class="bvbtn" data-clx>' + T('Cancel', '취소') + '</button><button type="button" class="bvbtn clokb" data-gfgo>' + T('Get files', '파일 받기') + '</button></div>';
     m.__plan = P; m.__card = c.id;
+    /* 1.2.173: the office Z: drive, when this computer can reach it (otherwise the box is not shown and not used) */
+    const zl = m.querySelector('.gfz');
+    if(zl){ const zi = zl.querySelector('input'); zi.checked = false; Promise.resolve(window.illu && illu.zbookStatus ? illu.zbookStatus() : null).then(st => { if(st && st.there && zl.isConnected){ zl.hidden = false; zi.checked = true; } }).catch(() => {}); }
   }
   /* 1.2.129: the photo viewer's Links use the same Get files, for the model's booking card */
   window.__illuGetFiles = (link, cid) => getFiles(link, cid);
@@ -193,7 +196,7 @@
     JOB = null;
     if(m.isConnected){
       const w = r.where || {};
-      const line = k => w[k] ? (k === 'pc' ? T('This computer', '이 컴퓨터') : 'Dropbox') + ': ' + w[k].saved + T(' saved', '개 저장') + (w[k].same ? ', ' + w[k].same + T(' already there', '개 이미 있음') : '') + (w[k].failed ? ', ' + w[k].failed + T(' not saved', '개 저장 못 함') + (w[k].why ? ' (' + E(w[k].why) + ')' : '') : '') : '';
+      const line = k => w[k] ? (k === 'pc' ? T('This computer', '이 컴퓨터') : k === 'z' ? T('Z: drive', 'Z: 드라이브') : 'Dropbox') + ': ' + w[k].saved + T(' saved', '개 저장') + (w[k].same ? ', ' + w[k].same + T(' already there', '개 이미 있음') : '') + (w[k].failed ? ', ' + w[k].failed + T(' not saved', '개 저장 못 함') + (w[k].why ? ' (' + E(w[k].why) + ')' : '') : '') : '';
       m.querySelector('.clbox').innerHTML = '<h3>' + (r.stopped ? T('Stopped', '중지됨') : T('Done', '완료')) + '</h3><p class="clsub">' + where.map(line).filter(Boolean).join('<br>') + '</p>' +
         ((r.failed || []).length ? '<p class="clsub gfbad">' + T('Could not get: ', '받지 못함: ') + E(r.failed.slice(0, 8).join(' · ')) + (r.failed.length > 8 ? ' …' : '') + '</p>' : '') +
         '<div class="clbtns"><button type="button" class="bvbtn clokb" data-clx>' + T('Close', '닫기') + '</button></div>';
