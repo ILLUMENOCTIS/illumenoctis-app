@@ -2939,8 +2939,10 @@ body.d2max #d2bar{margin-top:0}
 .rc2grid .uc .ucimg::after,.d2grid .uc .ucimg::after{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 35%);opacity:0;transition:opacity .3s}
 .rc2grid .uc .ucph img,.d2grid .uc .ucph img{transition:transform .6s cubic-bezier(.2,.8,.2,1)}
 @media (hover:hover) and (pointer:fine){
-  .rc2grid .uc:hover,.d2grid .uc:hover{transform:translateY(-4px);box-shadow:0 2px 4px rgba(20,10,30,.08),0 16px 34px rgba(90,40,110,.25)}
-  .rc2grid .uc:hover::after,.d2grid .uc:hover::after{opacity:1;animation:ucrim 3s linear infinite}
+  /* 1.2.195 (user, 14 Nov 2026, hover demo: "let's go with C"): a soft lilac glow instead of the pearl rim (D) */
+  .rc2grid .uc:hover,.d2grid .uc:hover{transform:translateY(-4px);box-shadow:0 0 0 1px rgba(107,46,106,.25),0 0 22px 4px rgba(190,120,200,.45),0 14px 30px rgba(20,10,30,.18)}
+  [data-theme="dark"] .rc2grid .uc:hover,[data-theme="dark"] .d2grid .uc:hover,[data-theme="dim"] .rc2grid .uc:hover,[data-theme="dim"] .d2grid .uc:hover{box-shadow:0 0 0 1px rgba(215,166,210,.35),0 0 24px 5px rgba(200,140,210,.38),0 14px 30px rgba(0,0,0,.4)}
+  .rc2grid .uc:hover::after,.d2grid .uc:hover::after{opacity:0;animation:none}
   .rc2grid .uc:hover .ucimg::after,.d2grid .uc:hover .ucimg::after{opacity:1}
   .rc2grid .uc:hover .ucph img,.d2grid .uc:hover .ucph img{transform:scale(1.04)}
 }
