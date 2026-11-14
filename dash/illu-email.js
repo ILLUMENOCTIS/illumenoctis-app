@@ -201,6 +201,10 @@
     if(r && r.need === 'signin'){ HWMSG = E(T('Hiworks needs you to sign in once in the program.', 'Hiworks 로그인이 한 번 필요합니다.')) + ' <button type="button" class="bvbtn" data-emsignin>' + T('Sign in to Hiworks', 'Hiworks 로그인') + '</button> ' + E(T('Then press Collect again.', '그다음 다시 가져오기를 누르세요.')); redraw(); return r; }
     if(!r || !r.ok){ HWMSG = E(T('Could not read Hiworks: ', 'Hiworks를 읽지 못했습니다: ') + ((r && r.why) || '')); redraw(); return r; }
     const t = takeIn(c, r);
+    /* 1.2.198 (user: "Once an email is sent through Hiworks, I want you to automatically change the status"): an email I sent about her
+       is now on her card and her Email stage was not started -> In process (on my card, or a card nobody has taken) */
+    try{ const mineOut = emOf(c).list.some(e => e.dir === 'out' && !excluded(c, e)), s0 = (c.s && c.s.email) || {};
+      if(mineOut && !(s0.p === 'g' || s0.p === 'y' || s0.d) && (!c.by || c.by === hwMe()) && window.__illuSetStage) window.__illuSetStage(c.id, 'email', 'y'); }catch(e){}
     HWMSG = E(t.kept || r.unread ? T(t.kept + ' of her emails · ' + t.n + ' new on the card' + (t.skipped ? ' · ' + t.skipped + ' about other models left out' : '') + ((c.em.unr || []).length ? ' · ' + c.em.unr.length + ' unread (not opened)' : ''), t.kept + '통 · 새로 ' + t.n + '통' + (t.skipped ? ' · 다른 모델 ' + t.skipped + '통 제외' : '') + ((c.em.unr || []).length ? ' · 안 읽음 ' + c.em.unr.length + '통(열지 않음)' : ''))
       : T('No emails found for ' + (c.nm || '') + ' with ' + (c.ag || 'her agency') + (t.skipped ? ' (' + t.skipped + ' about other models left out)' : ''), (c.nm || '') + ' 관련 메일이 없습니다'));
     redraw(); try{ window.__illuMailRedraw && window.__illuMailRedraw(); }catch(e){}

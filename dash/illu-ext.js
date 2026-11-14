@@ -207,6 +207,8 @@ document.head.appendChild(st);
     const done = [];
     for (const k of (d && d.about) || []) {
       let c = null; try { c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : (typeof bkForKey === 'function' ? bkForKey(k) : null); } catch (e) {}
+      /* 1.2.198 (user: "automatically change the status of the model to booking"): not on the Booking board yet -> she is put there */
+      if (!c && !/^bid:/.test(k)) { try { c = window.__illuAutoBook && window.__illuAutoBook(k, {}); } catch (e) {} }
       if (!c || !c.id) continue;
       const st = (c.s && c.s.email) || {}, now = (st.p === 'g' || st.p === 'y') ? st.p : (st.d ? 'g' : '');
       if (now) continue;
@@ -215,8 +217,9 @@ document.head.appendChild(st);
     if (done.length) { try { const t = document.createElement('div'); t.className = 'illusenttoast'; t.setAttribute('role', 'status'); t.textContent = 'Email sent · ' + done.join(', ') + ' — Email stage is now In process'; document.body.appendChild(t); setTimeout(() => t.remove(), 6000); } catch (e) {} }
     return done;
   }
-  window.__illuEmailSent = emailSent;
-  try { if (window.illu && window.illu.onHiworksSent) window.illu.onHiworksSent(emailSent); } catch (e) {}
+  window.__illuEmailSentOnly = emailSent;
+  window.__illuEmailSent = d => { const r = emailSent(d); setTimeout(() => { try { window.__illuCheckMine && window.__illuCheckMine(); } catch (e) {} }, 2000); return r; };
+  try { if (window.illu && window.illu.onHiworksSent) window.illu.onHiworksSent(d => window.__illuEmailSent(d)); } catch (e) {}
 
   /* 1.2.197 (user, 15 Nov 2026: "Once an email is sent through Hiworks, I want you to automatically change the status of the model
      to booking ... I sent an email regarding the model to the agent, but I had to change the status manually"): the emails I
@@ -226,9 +229,10 @@ document.head.appendChild(st);
        - Email = In process, when the Email stage has not been started,
        - the email itself in her Email tab.
      Only emails to someone outside MDI count, and an email linking more than 8 models is left alone (a forwarded list). */
-  /* 1.2.198 (user, 15 Nov 2026: "if you check every 3 minutes, that seems like a long time"): every 30 seconds - a check is one
-     small list call to Hiworks; only a newly sent email is opened. Also straight away when the program comes back to the front. */
-  const MINE_EVERY = 30 * 1000, MINE_MAX_LINKS = 8;
+  /* 1.2.198 (user, 15 Nov 2026: "aren't you capable of retrieving the material/email history when I select 'collect from hiworks',
+     without having you check every 3 minutes"): no repeated checking. The sent emails are looked at once when the program
+     starts, right after an email is sent from the program's Hiworks window, and Collect from Hiworks brings them in for her. */
+  const MINE_MAX_LINKS = 8;
   const mineKey = () => { try { return 'illu.hwmine.' + (ME || ''); } catch (e) { return 'illu.hwmine.'; } };
   const mineState = () => { try { const v = JSON.parse(localStorage.getItem(mineKey()) || 'null'); if (v && v.since) return { since: v.since, done: Array.isArray(v.done) ? v.done : [] }; } catch (e) {} return { since: new Date(Date.now() - 3 * 864e5).toISOString(), done: [] }; };
   const mineSave = st => { try { localStorage.setItem(mineKey(), JSON.stringify({ since: st.since, done: st.done.slice(-500) })); } catch (e) {} };
@@ -293,8 +297,7 @@ document.head.appendChild(st);
   }
   window.__illuCheckMine = checkMine;
   if (window.illu && window.illu.hiworksMine && !window.illu.web) {
-    setTimeout(checkMine, 15000); setInterval(checkMine, MINE_EVERY);
-    let lastFocus = 0; window.addEventListener('focus', () => { if (Date.now() - lastFocus > 5000) { lastFocus = Date.now(); setTimeout(checkMine, 1500); } });
+    setTimeout(checkMine, 20000);
   }
 
   /* ---------- email templates (docs mailtpl/<id>: {name, subject, body, kind, by, at, o}) ---------- */
