@@ -298,6 +298,31 @@
   /* 1.2.181 (user, 13 Nov 2026: "I want the name of the USER-Booking to be visible for all ... even if it's their own"):
      the "● NAME · booking" label on a card shows for everyone, also on the cards I am booking myself */
   window.__illuWorkOf = (k, nm, ag) => workOf(k, nm, ag, true);
+  /* 1.2.194 (user, 14 Nov 2026: "some sort of marking on the agency name row to show that someone is working on a model or
+     has already worked on a model from this agency" - A + B): every model the team has worked on, one entry per model.
+     Booking cards (in progress / booked / cancelled) and Team Votes (open / approved / cancelled). live = still going. */
+  window.__illuWorkedAll = () => {
+    const by = new Map();
+    const put = e => { if(!e.k) return; const key = /^https?:/i.test(e.k) ? normKey(e.k) : e.k; const o = by.get(key);
+      if(!o || (e.live && !o.live) || (e.live === o.live && String(e.at) > String(o.at))){ e.key = key; by.set(key, e); } };
+    let all = []; try{ all = [...BOOK.values()]; }catch(e){}
+    for(const c of all){
+      if(!c || !c.k || hidK(c.k)) continue;
+      let lab, live = false;
+      if(c.st === 'done'){ const d = new Date(c.at || ''); lab = L('Booked', '부킹 완료') + (isNaN(d) ? '' : ' · ' + d.toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {month: 'short'})); }
+      else if(c.st === 'canc') lab = L('Booking · Cancelled', '부킹 · 취소');
+      else { live = true; let s = ''; try{ s = window.__illuBkStage ? window.__illuBkStage(c) : ''; }catch(e){} lab = L('Booking', '부킹') + (s ? ' · ' + s : ''); }
+      put({k: c.k, nm: c.nm || '', ag: c.ag || '', who: c.by || '', live, lab, at: c.at || ''});
+    }
+    for(const o of OPEN.values()){
+      if(!o || !o.k || o.off || hidK(o.k)) continue;
+      const s = stateOf(o.k); if(!s) continue;
+      const lab = s.open ? L('Team Vote', '팀 투표') + ' · ' + s.n + ' ' + L('of', '/') + ' ' + s.of : L('Vote', '투표') + ' · ' + (s.res === 'appr' ? L('Approved', '승인') : L('Cancelled', '취소'));
+      put({k: o.k, nm: o.nm || '', ag: o.ag || '', who: o.by || '', live: !!s.open, lab, at: s.at || o.at || ''});
+    }
+    return [...by.values()];
+  };
+  window.__illuDiscOf = pid => { try{ return idDisc(pid, 'iddisc wkav'); }catch(e){ return ''; } };
   /* 1.2.170: liked by someone on the team AND her booking card is in progress -> the purple ring on her card */
   window.__illuBkRing = (k, nm, ag) => {
     if(!k) return null;

@@ -125,6 +125,44 @@
     return NETS;
   }
   window.__illuNets = nets;
+  /* 1.2.194 (user, 14 Nov 2026, approved demo "A + B"): an agency row shows when the team is working on, or has worked on,
+     one of its models - a coloured left edge (orange in progress, green worked with), the faces of the people and the
+     status; inside the agency those models come first, newest first from the left, each with a corner tag */
+  let WKI = null, WKIV = '';
+  function wkIndex(){
+    const ns = nets();
+    if(WKIV !== NETV || !WKI){ WKIV = NETV; WKI = new Map();
+      for(const n of ns) for(const b of n.boards) for(const m of (b.m || [])){ if(!Array.isArray(m) || !m[1]) continue; let k = ''; try{ k = normKey(hrefOf(b, m)); }catch(e){} if(k && !WKI.has(k)) WKI.set(k, n); } }
+    return WKI;
+  }
+  let WKN = null, WKNT = 0;
+  function wkByNet(fresh){
+    if(!fresh && WKN && Date.now() - WKNT < 400) return WKN;
+    let all = []; try{ all = window.__illuWorkedAll ? window.__illuWorkedAll() : []; }catch(e){}
+    const idx = wkIndex(), out = new Map();
+    for(const e of all){
+      /* her address's own site first (the agency's domain), then the board she is on, then the agency name */
+      let n = null; try{ const h = new URL(e.k).hostname.replace(/^www\./, '').toLowerCase(); n = NETS.find(x => x.key === h) || null; }catch(er){}
+      if(!n) n = idx.get(e.key) || null;
+      if(!n && e.ag){ const f = fold(e.ag).trim(); if(f) n = NETS.find(x => fold(x.name).trim() === f || x.members.some(a => fold(a.name).trim() === f)); }
+      if(!n) continue;
+      let w = out.get(n.i); if(!w){ w = {live: 0, done: 0, items: []}; out.set(n.i, w); }
+      w.items.push(e); if(e.live) w.live++; else w.done++;
+    }
+    for(const w of out.values()) w.items.sort((p, q) => String(q.at).localeCompare(String(p.at)));
+    WKN = out; WKNT = Date.now();
+    return out;
+  }
+  window.__illuWkByNet = () => wkByNet(true);
+  const wkFaces = (items, max) => { const ps = []; for(const e of items) if(e.who && !ps.includes(e.who)) ps.push(e.who); let h = ''; try{ h = ps.slice(0, max).map(p => window.__illuDiscOf ? window.__illuDiscOf(p) : '').join(''); }catch(e){} return h ? '<span class="wkavs">' + h + '</span>' : ''; };
+  const wkWho = p => { try{ return (PEOPLE.get(p) || {}).n || ''; }catch(e){ return ''; } };
+  function wkRow(w){
+    if(!w) return {cls: '', html: '', tip: ''};
+    const live = w.live > 0;
+    const txt = live ? (w.live > 1 ? w.live + ' in progress' : 'In progress') : 'Worked with';
+    return {cls: live ? ' wkl' : ' wkd', html: wkFaces(live ? w.items.filter(e => e.live) : w.items, 3) + '<em class="wkt"><i></i>' + txt + '</em>',
+      tip: w.items.slice(0, 8).map(e => (e.nm || 'Model') + ' — ' + e.lab + (wkWho(e.who) ? ' (' + wkWho(e.who) + ')' : '')).join('\n') + (w.items.length > 8 ? '\n+' + (w.items.length - 8) + ' more' : '')};
+  }
   const netRemoved = n => n.members.every(isRemoved);
   /* the Directory and the Recommendations page draw the same grid and card: look inside the one on screen */
   /* Compare boards is one of the shell's own pages (VIEW keeps the page that was open before it) */
@@ -534,6 +572,12 @@
     if(byMeas) ms = fitN;
     /* 1.2.151 (user, 12 Nov 2026: "I thought the names/cards would be in alphabetical order?"): an agency's models A–Z by name */
     ms = ms.slice().sort((p, q) => COLL(String(p.nm || '').trim(), String(q.nm || '').trim()));
+    /* 1.2.194: the models the team has worked on come first, the most recent first from the left */
+    const wkm = new Map(); for(const e of ((wkByNet(true).get(r.net.i) || {}).items || [])) if(!wkm.has(e.key)) wkm.set(e.key, e);
+    const wkOf = m => wkm.get(m.key) || (m.keys || []).map(k => wkm.get(k)).find(Boolean) || null;
+    let wkTop = [];
+    if(wkm.size){ wkTop = ms.filter(wkOf).sort((p, q) => String(wkOf(q).at).localeCompare(String(wkOf(p).at))); if(wkTop.length) ms = wkTop.concat(ms.filter(m => !wkOf(m))); }
+    const wkTile = m => ucard(m, {wk: wkOf(m)});
     const isFav = window.ATLFAV && ATLFAV.has(a.domain);
     const head = '<div class="d2ph"><div class="d2ph1"><h2>' + esc(a.name) + '</h2>' + illuAtChips(a) +
       '<span class="d2pm">' + (a.domain ? '<a class="agsite" href="https://' + esc(a.domain) + '" target="_blank" rel="noopener noreferrer">' + esc(a.domain) + ' ↗</a> · ' : '') +
@@ -558,7 +602,8 @@
     const body = !ms.length
       ? '<div class="d2empty"><p>' + (mq ? 'No model at ' + esc(a.name) + ' has a name with “' + esc(D2.mq.trim()) + '”.' : byMeas ? 'No model on this board fits the measurements.' : (a.boards.length ? 'No models on this board.' : 'Its boards have not been read yet.')) + '</p></div>'
       : D2.names ? '<div class="mlist d2names">' + ms.map(m => nameRow(m, a)).join('') + '</div>'
-      : '<div class="d2grid">' + ms.map(tile).join('') + '</div>';
+      : '<div class="d2grid">' + (wkTop.length && wkTop.length < ms.length ? '<div class="d2wkh"><i></i>Worked on by the team · newest first</div>' + wkTop.map(wkTile).join('') + '<div class="d2wkh rest">Everyone else</div>' + ms.slice(wkTop.length).map(wkTile).join('')
+        : wkTop.length ? '<div class="d2wkh"><i></i>Worked on by the team · newest first</div>' + ms.map(wkTile).join('') : ms.map(wkTile).join('')) + '</div>';
     let pop = '';
     if(D2.open){
       const m = all.find(x => x.key === D2.open);
@@ -1006,6 +1051,7 @@
     const searching = !!(((($('#q') || {}).value) || '').trim());   /* 1.2.185: a folded region does not hide what was searched for */
     const vis = place && !(eu && eu.on) && !searching ? list.filter(x => !D2.fold.has(rgOf(x))) : list;
     const shown = vis.slice(0, D2.shown);
+    const WKR = wkByNet(true); let wr = null;
     let heads = [];
     if(place){
       /* folded regions still show their bar, in order */
@@ -1045,8 +1091,8 @@
           return h +
           (D2.confirm === x.id
             ? '<div class="d2agw d2conf"><span>Hide <b>' + esc(x.a.name) + '</b>? Its ' + dirN(x.n) + ' models stop showing for everyone. Nothing is deleted.</span><button type="button" class="d2cy" data-d2rmyes="' + esc(x.id) + '">Hide</button><button type="button" class="d2cn" data-d2rmno>Cancel</button></div>'
-            : '<div class="d2agw' + (D2.showRemoved ? ' rmd' : '') + '"><button type="button" class="d2ag' + (x === r ? ' on' : '') + '" data-d2ag="' + esc(x.id) + '">' +
-          '<span class="d2agt"><b>' + esc(x.a.name) + '</b><s>' + esc(([x.a.city, x.a.country].filter(Boolean).join(', ') || 'Location not stated') + (x.a.offices.length > 1 ? ' · ' + x.a.offices.length + ' offices' : '')) + '</s></span>' +
+            : (wr = wkRow(D2.showRemoved ? null : WKR.get(x.net.i)), '') + '<div class="d2agw' + (D2.showRemoved ? ' rmd' : '') + '"><button type="button" class="d2ag' + (x === r ? ' on' : '') + wr.cls + '" data-d2ag="' + esc(x.id) + '"' + (wr.tip ? ' title="' + esc(wr.tip) + '"' : '') + '>' +
+          '<span class="d2agt"><b>' + esc(x.a.name) + '</b><s>' + wr.html + (wr.html ? '<u class="wksep">·</u>' : '') + esc(([x.a.city, x.a.country].filter(Boolean).join(', ') || 'Location not stated') + (x.a.offices.length > 1 ? ' · ' + x.a.offices.length + ' offices' : '')) + '</s></span>' +
           '<span class="d2agn">' + (byMeas ? '<b>' + dirN(x.fit) + '</b><s>of ' + dirN(x.n) + '</s>' : '<b>' + dirN(x.n) + '</b>') + '</span></button>' +
           (!x.a.country && x.a.domain && !D2.showRemoved ? '<button type="button" class="d2locb" data-d2loc="' + esc(x.a.domain) + '" title="Set this agency’s country">+ Set country</button>' : '') +
           (canRemove() ? (D2.showRemoved ? '<button type="button" class="d2rs" data-d2restore="' + esc(x.id) + '">Show again</button>'
@@ -1952,7 +1998,10 @@
     /* 1.2.172 (user: "let's get rid of the frame/border around the card when booking, it's too messy. let's revert
        back to the previous style"): the purple In-booking ring (1.2.170) is off; the cards look as before */
     const bk = null;
-    return '<article class="uc' + (bk ? ' ucbk' : '') + '" data-uck="' + esc(m.key) + '">' +
+    /* 1.2.194: the corner tag on a model the team has worked on (Directory roster) */
+    const wk = o.wk || null;
+    const wkTag = wk ? '<span class="ucwkt ' + (wk.live ? 'l' : 'd') + '" title="' + esc(wk.lab + (wkWho(wk.who) ? ' · ' + wkWho(wk.who) : '')) + '">' + wkFaces([wk], 1) + '<i></i><span>' + esc(wk.lab) + '</span></span>' : '';
+    return '<article class="uc' + (bk ? ' ucbk' : '') + (wk ? ' ucw-' + (wk.live ? 'l' : 'd') : '') + '" data-uck="' + esc(m.key) + '">' + wkTag +
       (bk ? '<span class="ucbkt" title="' + esc((isKo() ? '부킹 진행 중 · ' : 'In booking · ') + bk.who + (bk.st ? ' · ' + bk.st : '')) + '">' + (isKo() ? '부킹 중 · ' : 'In booking · ') + esc(bk.who) + '</span>' : '') +
       '<div class="ucimg"><div class="d2t ucph" data-d2k="' + esc(m.key) + '" title="' + esc(m.nm) + '">' + pc + '</div>' +
       (minor || !/^https?:/i.test(m.href || '') ? '' : '<button type="button" class="ucarr l" data-ucarr="-1" aria-label="Previous photo">‹</button><button type="button" class="ucarr r" data-ucarr="1" aria-label="Next photo">›</button><span class="uccnt" aria-live="polite"></span>') +
@@ -2928,6 +2977,32 @@ body.d2max #d2bar{margin-top:0}
 @container (max-width:176px){.uc .ucft em{display:none}.uc .ucft{justify-content:center;padding:0 6px}}
 @container (max-width:150px){.uc .ucft .mk i[data-v]{width:28px!important;height:28px!important}.uc .ucov{padding:34px 9px 8px}.uc .ucmx{font-size:11px;padding:3px 7px}}
 .d2grid:has(.uc){grid-template-columns:repeat(auto-fill,minmax(calc(186px * var(--pz,1)),1fr))!important;gap:16px!important}
+/* 1.2.194 worked-on marking (A + B): agency rows and the roster */
+.d2ag{position:relative}
+.d2ag.wkl::before,.d2ag.wkd::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--wkc)}
+.d2ag.wkl{--wkc:#E07B1A;--wkt:#C2620C}.d2ag.wkd{--wkc:#2E8A57;--wkt:#2E8A57}
+[data-theme="dark"] .d2ag.wkl,[data-theme="dim"] .d2ag.wkl{--wkt:#F0A960}[data-theme="dark"] .d2ag.wkd,[data-theme="dim"] .d2ag.wkd{--wkt:#7CD06A}
+.d2ag.wkl .d2agt s,.d2ag.wkd .d2agt s{opacity:1;color:var(--mut,#6d6577)}
+.d2ag.wkl .d2agt s,.d2ag.wkd .d2agt s{line-height:20px}
+.d2agt s .wkavs{display:inline-flex;vertical-align:middle;margin:-2px 5px 0 0}
+.wkavs .iddisc{width:17px;height:17px;font-size:8px;border-width:1.5px;margin-left:-5px;flex:none}
+.wkavs .iddisc:first-child{margin-left:0}
+.d2agt s .wkt{font-style:normal;font-weight:700;color:var(--wkt)}
+.d2agt s .wkt i,.ucwkt>i{display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:4px;vertical-align:1px}
+.d2agt s .wksep{text-decoration:none;margin:0 4px}
+.d2list .d2ag.on.wkl .d2agt s,.d2list .d2ag.on.wkd .d2agt s{color:#fff}.d2list .d2ag.on .d2agt s .wkt{color:#fff}
+.d2wkh{grid-column:1/-1;display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--acc,#6B2E6A);margin:2px 0 -4px}
+.d2wkh i{width:7px;height:7px;border-radius:50%;background:#E07B1A}
+.d2wkh.rest{color:var(--mut,#6d6577);margin-top:10px}
+.uc .ucwkt{position:absolute;top:8px;left:8px;z-index:7;max-width:calc(100% - 16px);display:inline-flex;align-items:center;gap:4px;padding:3px 9px 3px 3px;border-radius:999px;background:rgba(255,255,255,.94);box-shadow:0 1px 4px rgba(20,10,30,.18);font:700 10.5px var(--sans,Inter,system-ui,sans-serif);white-space:nowrap;pointer-events:auto}
+.uc .ucwkt.l{color:#C2620C}.uc .ucwkt.d{color:#2E8A57}
+.uc .ucwkt>span:last-child{color:#2b2230;overflow:hidden;text-overflow:ellipsis}
+.uc .ucwkt>i{margin-right:0}
+.uc .ucwkt .wkavs .iddisc{width:18px;height:18px}
+.uc .ucwkt:not(:has(.wkavs)){padding-left:8px}
+.uc.ucw-l .ucbadge,.uc.ucw-d .ucbadge{top:38px}
+.uc.ucw-l .uccnt,.uc.ucw-d .uccnt{top:38px}
+@container (max-width:150px){.uc .ucwkt{font-size:9.5px;padding-right:7px}}
 
 /* 1.2.112: "Use as card photo" on a slide */
 .d2sl .d2slmain{position:absolute;left:50%;transform:translateX(-50%);bottom:44px;z-index:4;height:30px;border:0;border-radius:999px;padding:0 14px;background:rgba(20,14,24,.78);color:#fff;font:600 12px var(--sans,Inter,system-ui,sans-serif);cursor:pointer;white-space:nowrap;backdrop-filter:blur(6px);box-shadow:0 4px 14px rgba(0,0,0,.25)}
