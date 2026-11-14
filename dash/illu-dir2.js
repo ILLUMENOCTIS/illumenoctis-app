@@ -1220,6 +1220,8 @@
   };
   const IC_FULL = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg>';
   const IC_EXIT = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5V6H2.5M13.5 6H10V2.5M10 13.5V10h3.5M2.5 10H6v3.5"/></svg>';
+  /* 1.2.196: Undo of a hidden photo (its button, Ctrl + Z, or a hide by someone else) reads her slideshow again, staying on the same slide */
+  document.addEventListener('illu-phide', () => { try{ const m = D2.openM; if(SL.self){ SL.self = false; return; } if(!D2.open || !m || SL.key !== m.key) return; if(SL.undo && window.__illuPhotoHidden && window.__illuPhotoHidden(SL.undo.page, SL.undo.url)) return; SL.undo = null; const i = SL.i; slLoad(m.key, m.href); SL.keepI = i; }catch(e){} });
   function slLoad(key, href){
     SL.key = key; SL.i = 0; SL.photos = null; SL.state = 'loading'; SL.why = '';
     if(!(window.illu && window.illu.modelPhotos)){ SL.state = 'none'; SL.why = 'off'; return; }
@@ -1232,6 +1234,7 @@
       SL.photos = ph; SL.state = ph.length ? 'ok' : 'none';
       /* 1.2.149: opened from a card that was on another photo - start on that photo */
       try{ const want = window.__illuTileIdx ? window.__illuTileIdx(key) : ''; if(want){ const j = ph.findIndex(x => fileKey(x.url) === fileKey(want)); if(j >= 0) SL.i = j + 1; } }catch(e){}
+      if(SL.keepI != null){ SL.i = Math.min(SL.keepI, ph.length); SL.keepI = null; }
       SL.why = ph.length ? '' : ((r && r.why) && SLWHY[r.why] ? r.why : (r && r.photos && r.photos.length ? 'one' : 'none'));
       if(C) slideApply(C);
     }).catch(() => { if(SL.key === key){ SL.state = 'none'; SL.why = 'none'; const C = $('.d2card'); if(C) slideApply(C); } });
@@ -1285,6 +1288,11 @@
     const PH = window.__illuPhoto, picked = PH && PH.PMAIN && PH.PMAIN.get(m.key);
     if(cur && PH && PH.setMain) h += '<button type="button" class="d2slmain" data-d2slmain title="Show this photo on the model’s card, for everyone (the photo is not saved — only which one to show)">★ Use as card photo</button>';
     else if(!cur && picked && PH.clearMain) h += '<button type="button" class="d2slmain back" data-d2slunmain title="Go back to the photo the program found">↺ Back to the original photo</button>';
+    /* 1.2.196 (user, 15 Nov 2026: "what happened to the hide photo function?"): since cards open straight in this full view
+       (1.2.192) the "Not her - Hide" of the other photo viewer (1.2.174) was out of reach - it is here too now, for a photo
+       from her agency page (slide 2 on; slide 1 is her card photo). Hidden for the whole team; the agency site is not changed. */
+    if(SL.undo && Date.now() - SL.undo.at < 6000) h += '<button type="button" class="d2slhide und" data-d2slundo title="Put the photo back in her slideshow (Ctrl + Z works too)">✓ Photo hidden · <u>Undo</u></button>';
+    else if(cur && window.__illuHidePhoto && /^https?:/i.test(m.href || '')) h += '<button type="button" class="d2slhide" data-d2slhide title="Not her - hide this photo from the slideshows, for everyone (the agency site is not changed)">⊘ Not her · Hide</button>';
     /* 1.2.148: turn the photo shown (for everyone) */
     if((cur || pic.querySelector(':scope > img')) && window.__illuRotBtns) h += window.__illuRotBtns('d2rot');
     if(n > 1){
@@ -1347,6 +1355,15 @@
         /* the slideshow is read again: the new card photo is slide 1, the old one goes back among the others */
         const C = $('.d2card'); slLoad(m.key, m.href); SL.i = 0; if(C) slideApply(C);
       }); return; }
+    if(e.target.closest('[data-d2slundo]')){ e.preventDefault(); e.stopPropagation(); const u = SL.undo; SL.undo = null; if(u && window.__illuUnhidePhoto) window.__illuUnhidePhoto(u.page, u.url); else { const C = $('.d2card'); if(C) slideApply(C); } return; }
+    if(e.target.closest('[data-d2slhide]')){ e.preventDefault(); e.stopPropagation(); const m = D2.openM; if(!m || !window.__illuHidePhoto) return;
+      try{ if(typeof SIGNED === 'function' && !SIGNED()){ if(typeof nudgeSignIn === 'function') nudgeSignIn(); return; } }catch(err){}
+      const j = SL.i - 1, cur = j >= 0 && SL.photos ? SL.photos[j] : null; if(!cur) return;
+      SL.self = true;
+      window.__illuHidePhoto(m.href, cur.url);
+      SL.photos.splice(j, 1); SL.i = Math.min(SL.i, slN() - 1); SL.undo = {page: m.href, url: cur.url, at: Date.now()};
+      setTimeout(() => { const C2 = $('.d2card'); if(C2 && SL.undo && Date.now() - SL.undo.at >= 5900){ SL.undo = null; slideApply(C2); } }, 6100);
+      const C = $('.d2card'); if(C) slideApply(C); return; }
     if(e.target.closest('[data-d2slside]')){ e.preventDefault(); e.stopPropagation(); SL.side = !SL.side; try{ localStorage.setItem('illu.d2fullside', SL.side ? '1' : '0'); }catch(err){} const C = $('.d2card'); if(C) slideApply(C); return; }
   }, true);
   /* the Directory card's photo takes a dropped or pasted photo like the Lumen cards do (it was never wired here) */
@@ -3009,6 +3026,11 @@ body.d2max #d2bar{margin-top:0}
 /* 1.2.112: "Use as card photo" on a slide */
 .d2sl .d2slmain{position:absolute;left:50%;transform:translateX(-50%);bottom:44px;z-index:4;height:30px;border:0;border-radius:999px;padding:0 14px;background:rgba(20,14,24,.78);color:#fff;font:600 12px var(--sans,Inter,system-ui,sans-serif);cursor:pointer;white-space:nowrap;backdrop-filter:blur(6px);box-shadow:0 4px 14px rgba(0,0,0,.25)}
 .d2sl .d2slmain:hover{background:var(--acc,#5A2C57)}
+.d2sl .d2slhide{position:absolute;left:12px;bottom:44px;z-index:4;height:30px;border:0;border-radius:999px;padding:0 13px;background:rgba(20,14,24,.62);color:#fff;font:600 12px var(--sans,Inter,system-ui,sans-serif);cursor:pointer;backdrop-filter:blur(6px)}
+.d2sl .d2slhide:hover{background:#A3283F}
+.d2card.d2full .d2sl .d2slhide{bottom:20px;left:16px}
+@media (max-width:560px){.d2sl .d2slhide{bottom:82px}.d2card.d2full .d2sl .d2slhide{bottom:58px;left:12px}}
+.d2sl .d2slhide.und{background:#2b2230}.d2sl .d2slhide.und:hover{background:var(--acc,#5A2C57)}.d2sl .d2slhide.und u{text-underline-offset:2px}
 .d2sl .d2slmain.back{background:rgba(255,255,255,.88);color:#3a2c3f}
 .d2card.d2full .d2sl .d2slmain{bottom:20px}
 `;
