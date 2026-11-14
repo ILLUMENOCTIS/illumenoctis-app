@@ -778,7 +778,7 @@
   /* 1.2.129: the shared panel's agency name opens that agency in the Directory, from any page */
   window.__illuDirGoAg = ref => {
     try{ const fv = document.getElementById('illufv'); if(fv && !fv.hidden){ const x = fv.querySelector('.fvx'); if(x) x.click(); } }catch(e){}
-    try{ if(D2.open){ D2.open = ''; SL.full = false; document.body.classList.remove('d2fullcard'); } }catch(e){}
+    try{ if(D2.open){ D2.open = ''; SL.full = false; SL.auto = ''; document.body.classList.remove('d2fullcard'); } }catch(e){}
     if(typeof VIEW === 'undefined' || VIEW !== 'dir'){ try{ window.__illuGo ? window.__illuGo('dir') : setView('dir'); }catch(e){} }
     setTimeout(() => goAgency(ref, ''), 350);
   };
@@ -852,7 +852,7 @@
   { const sv1 = setView;
     setView = function(v){
       if(v !== 'dir' && v !== 'arr' && (D2.open || document.body.classList.contains('d2carding'))){
-        if(SL.full){ SL.full = false; document.body.classList.remove('d2fullcard'); }
+        if(SL.full){ SL.full = false; SL.auto = ''; document.body.classList.remove('d2fullcard'); }
         D2.open = ''; D2.closing = false; D2.cardPos = null; D2.shownKey = ''; D2.solo = null;
         document.body.classList.remove('d2carding', 'd2closing', 'd2opening');
         document.querySelectorAll('.d2solo, .d2card, .d2veil').forEach(x => x.remove());
@@ -1199,7 +1199,9 @@
   { const st = document.createElement('style'); st.textContent = '@media (max-width:760px), (pointer:coarse) and (max-width:1024px){.d2card.d2full .d2slf{display:none!important}}'; document.head.appendChild(st); }
   function PHONE(){ return matchMedia('(max-width:760px), (pointer:coarse) and (max-width:1024px)').matches; }
   function slFull(on){
-    if(!on && SL.full && PHONE() && D2.open){ closeCard(); return; }
+    /* 1.2.192 (user, 14 Nov 2026): "I want the cards to stop hovering and centering in the middle. I want the card to just
+       go to Full Screen Mode" - a card opens in the full view, and leaving the full view closes it (no floating card) */
+    if(!on && SL.full && D2.open){ closeCard(); return; }
     /* the details panel on the right always opens with the full view (user, 6 Nov 2026); its button
        still hides it for the moment, but that is no longer remembered */
     if(on && !SL.full) SL.side = true;
@@ -1209,7 +1211,8 @@
   }
   function slideApply(C){
     const m = D2.openM; if(!m || m.key !== D2.open) return;
-    if(SL.key !== m.key){ SL.full = false; document.body.classList.remove('d2fullcard'); slLoad(m.key, m.href); }
+    if(SL.key !== m.key) slLoad(m.key, m.href);
+    if(SL.auto !== m.key){ SL.auto = m.key; SL.full = true; SL.side = true; document.body.classList.add('d2fullcard'); }
     C.classList.toggle('d2full', SL.full);
     C.classList.toggle('d2noside', SL.full && !SL.side);
     /* full view: a button to close and open the details panel, like the Booking window's side panel */
@@ -1395,7 +1398,8 @@
   setTimeout(sweep, 0);
   function closeCard(){
     if(!D2.open || D2.closing) return;
-    if(SL.full){ SL.full = false; document.body.classList.remove('d2fullcard'); const F = $('.d2card.d2full'); if(F) F.classList.remove('d2full'); }
+    const wasFull = SL.full; SL.auto = '';
+    if(SL.full){ SL.full = false; SL.auto = ''; document.body.classList.remove('d2fullcard'); const F = $('.d2card.d2full'); if(F) F.classList.remove('d2full'); }
     const k = D2.open, C = $('.d2card');
     const done = () => {
       D2.closing = false; document.body.classList.remove('d2closing');
@@ -1405,7 +1409,7 @@
       refresh();
       const t = tileOf(k), b = t && t.querySelector('.d2plus'); if(b) try{ b.focus({preventScroll: true}); }catch(e){}
     };
-    if(!C || CALM()){ done(); return; }
+    if(!C || CALM() || wasFull){ done(); return; }
     D2.closing = true; document.body.classList.add('d2closing');
     const to = 'translateX(-50%) translateY(10px) scale(.94)';   // shrinks away in place
     const veil = $('.d2veil'); if(veil) veil.style.pointerEvents = 'none';
@@ -1556,7 +1560,7 @@
     if(!m || !m.key) return;
     const host = document.getElementById('pane-cmpb'); if(!host) return;
     host.querySelectorAll('.d2solo').forEach(x => x.remove());
-    if(SL.full){ SL.full = false; document.body.classList.remove('d2fullcard'); }
+    if(SL.full){ SL.full = false; SL.auto = ''; document.body.classList.remove('d2fullcard'); }
     D2.solo = m; D2.open = m.key; D2.openM = m; D2.cardPos = null;
     const box = document.createElement('div'); box.className = 'd2body d2solo';
     box.innerHTML = '<div class="d2veil" data-d2close aria-hidden="true"></div>' +
@@ -1570,7 +1574,7 @@
   };
   window.__illuCardClose = () => closeCard();
   /* leaving Compare boards with a card open: put it away at once */
-  window.__illuCardReset = () => { if(SL.full){ SL.full = false; document.body.classList.remove('d2fullcard'); }
+  window.__illuCardReset = () => { if(SL.full){ SL.full = false; SL.auto = ''; document.body.classList.remove('d2fullcard'); }
     D2.open = ''; D2.closing = false; D2.cardPos = null; D2.shownKey = ''; D2.solo = null;
     document.body.classList.remove('d2carding', 'd2closing', 'd2opening'); document.querySelectorAll('#pane-cmpb .d2solo').forEach(x => x.remove()); };
   document.addEventListener('click', e => { if(!CMPB() || !D2.open || !e.target.closest) return;
@@ -2874,6 +2878,24 @@ body.d2max #d2bar{margin-top:0}
 .uc .ucimg{position:relative;aspect-ratio:3/4;background:#1a141d}
 .uc .ucph.d2t{position:absolute;inset:0;aspect-ratio:auto;border-radius:0!important;box-shadow:none!important;transform:none!important;background:#1a141d}
 .uc .ucph img{width:100%;height:100%;object-fit:cover;object-position:center 20%}
+/* 1.2.192 (user, 14 Nov 2026, picked D of "Card Hover Styles"): on Suggestiones and the Directory a card under the mouse
+   lifts a little, a soft pearl light runs slowly around its edge, the top of the photo gets a gloss and the photo zooms
+   gently. Mouse only; nothing moves for "reduce motion". */
+@property --ucrim{syntax:'<angle>';inherits:false;initial-value:0deg}
+@keyframes ucrim{to{--ucrim:360deg}}
+.rc2grid .uc,.d2grid .uc{transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s ease}
+.rc2grid .uc::after,.d2grid .uc::after{content:"";position:absolute;inset:0;z-index:6;border-radius:inherit;padding:2.5px;pointer-events:none;opacity:0;transition:opacity .3s;
+  background:conic-gradient(from var(--ucrim),#E9C6DE,#fff,#C9B2F0,#fff,#F3D9B0,#fff,#E9C6DE);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+.rc2grid .uc .ucimg::after,.d2grid .uc .ucimg::after{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 35%);opacity:0;transition:opacity .3s}
+.rc2grid .uc .ucph img,.d2grid .uc .ucph img{transition:transform .6s cubic-bezier(.2,.8,.2,1)}
+@media (hover:hover) and (pointer:fine){
+  .rc2grid .uc:hover,.d2grid .uc:hover{transform:translateY(-4px);box-shadow:0 2px 4px rgba(20,10,30,.08),0 16px 34px rgba(90,40,110,.25)}
+  .rc2grid .uc:hover::after,.d2grid .uc:hover::after{opacity:1;animation:ucrim 3s linear infinite}
+  .rc2grid .uc:hover .ucimg::after,.d2grid .uc:hover .ucimg::after{opacity:1}
+  .rc2grid .uc:hover .ucph img,.d2grid .uc:hover .ucph img{transform:scale(1.04)}
+}
+@media (prefers-reduced-motion:reduce){.rc2grid .uc:hover,.d2grid .uc:hover{transform:none}.rc2grid .uc:hover::after,.d2grid .uc:hover::after{animation:none}.rc2grid .uc:hover .ucph img,.d2grid .uc:hover .ucph img{transform:none}}
 .uc .ucov{position:absolute;left:0;right:0;bottom:0;padding:44px 12px 10px;background:linear-gradient(rgba(10,6,14,0),rgba(10,6,14,.55) 45%,rgba(10,6,14,.82));color:#fff;pointer-events:none;display:flex;flex-direction:column;gap:1px;font-family:var(--sans,Inter,system-ui,sans-serif)}
 .uc .ucov b{font-size:14.5px;font-weight:600;letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .uc .ucag{font-size:12px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
