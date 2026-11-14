@@ -226,7 +226,9 @@ document.head.appendChild(st);
        - Email = In process, when the Email stage has not been started,
        - the email itself in her Email tab.
      Only emails to someone outside MDI count, and an email linking more than 8 models is left alone (a forwarded list). */
-  const MINE_EVERY = 3 * 60 * 1000, MINE_MAX_LINKS = 8;
+  /* 1.2.198 (user, 15 Nov 2026: "if you check every 3 minutes, that seems like a long time"): every 30 seconds - a check is one
+     small list call to Hiworks; only a newly sent email is opened. Also straight away when the program comes back to the front. */
+  const MINE_EVERY = 30 * 1000, MINE_MAX_LINKS = 8;
   const mineKey = () => { try { return 'illu.hwmine.' + (ME || ''); } catch (e) { return 'illu.hwmine.'; } };
   const mineState = () => { try { const v = JSON.parse(localStorage.getItem(mineKey()) || 'null'); if (v && v.since) return { since: v.since, done: Array.isArray(v.done) ? v.done : [] }; } catch (e) {} return { since: new Date(Date.now() - 3 * 864e5).toISOString(), done: [] }; };
   const mineSave = st => { try { localStorage.setItem(mineKey(), JSON.stringify({ since: st.since, done: st.done.slice(-500) })); } catch (e) {} };
@@ -290,7 +292,10 @@ document.head.appendChild(st);
     return res;
   }
   window.__illuCheckMine = checkMine;
-  if (window.illu && window.illu.hiworksMine && !window.illu.web) { setTimeout(checkMine, 25000); setInterval(checkMine, MINE_EVERY); }
+  if (window.illu && window.illu.hiworksMine && !window.illu.web) {
+    setTimeout(checkMine, 15000); setInterval(checkMine, MINE_EVERY);
+    let lastFocus = 0; window.addEventListener('focus', () => { if (Date.now() - lastFocus > 5000) { lastFocus = Date.now(); setTimeout(checkMine, 1500); } });
+  }
 
   /* ---------- email templates (docs mailtpl/<id>: {name, subject, body, kind, by, at, o}) ---------- */
   const TPL = new Map();
