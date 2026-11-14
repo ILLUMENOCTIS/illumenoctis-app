@@ -218,6 +218,80 @@ document.head.appendChild(st);
   window.__illuEmailSent = emailSent;
   try { if (window.illu && window.illu.onHiworksSent) window.illu.onHiworksSent(emailSent); } catch (e) {}
 
+  /* 1.2.197 (user, 15 Nov 2026: "Once an email is sent through Hiworks, I want you to automatically change the status of the model
+     to booking ... I sent an email regarding the model to the agent, but I had to change the status manually"): the emails I
+     sent are checked in Hiworks every few minutes (read only, also the ones written in Hiworks itself, not only through the
+     program). Each model whose page link is in the email - above any quoted earlier email - gets:
+       - her card on the Booking board (Send to Booking, no questions; a card already there is used as it is),
+       - Email = In process, when the Email stage has not been started,
+       - the email itself in her Email tab.
+     Only emails to someone outside MDI count, and an email linking more than 8 models is left alone (a forwarded list). */
+  const MINE_EVERY = 3 * 60 * 1000, MINE_MAX_LINKS = 8;
+  const mineKey = () => { try { return 'illu.hwmine.' + (ME || ''); } catch (e) { return 'illu.hwmine.'; } };
+  const mineState = () => { try { const v = JSON.parse(localStorage.getItem(mineKey()) || 'null'); if (v && v.since) return { since: v.since, done: Array.isArray(v.done) ? v.done : [] }; } catch (e) {} return { since: new Date(Date.now() - 3 * 864e5).toISOString(), done: [] }; };
+  const mineSave = st => { try { localStorage.setItem(mineKey(), JSON.stringify({ since: st.since, done: st.done.slice(-500) })); } catch (e) {} };
+  /* the text I wrote, without the earlier email quoted under it */
+  function ownPart(body) {
+    const t = '\n' + String(body || '');
+    const m = t.search(/\n\s*(-{2,}\s*Original Message\s*-{2,}|-{2,}\s*원본 메일\s*-{2,}|On .{4,120}wrote:|From:\s.+\n|보낸 사람\s*:|>\s)/i);
+    return m >= 0 ? t.slice(0, m) : t;
+  }
+  function modelsIn(e) {
+    const urls = [...new Set((ownPart(e.body).match(/https?:\/\/[^\s<>"')\]]+/g) || []).map(u => u.replace(/[.,;:!?]+$/, '')))];
+    const out = [], seen = new Set();
+    for (const u of urls) {
+      let k = ''; try { k = normKey(u); } catch (er) {}
+      if (!k || seen.has(k)) continue;
+      const hit = index().get(k);
+      let c = null; try { c = typeof bkForKey === 'function' ? bkForKey(k) : null; } catch (er) {}
+      if (!hit && !c) continue;
+      try { if (window.__illuHidK && window.__illuHidK(k)) continue; } catch (er) {}
+      seen.add(k); out.push({ k, nm: (hit && hit.nm) || (c && c.nm) || '', ag: (hit && hit.ag) || (c && c.ag) || '' });
+    }
+    return out;
+  }
+  let MINEBUSY = false;
+  async function checkMine() {
+    if (MINEBUSY || !(window.illu && window.illu.hiworksMine)) return null;
+    try { if (typeof SIGNED === 'function' && !SIGNED()) return null; if (!ME) return null; } catch (e) { return null; }
+    MINEBUSY = true;
+    const st = mineState(), res = { read: 0, booked: [], stage: [], added: 0 };
+    try {
+      const r = await window.illu.hiworksMine(ME, st.since, { skip: st.done, max: 40 });
+      if (!r || !r.ok) return Object.assign(res, { why: r && (r.need || r.why) });
+      const emails = (r.emails || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));   // oldest first
+      for (const raw of emails) {
+        res.read++;
+        st.done.push(String(raw.no));
+        const outside = [].concat(raw.to || [], raw.cc || []).some(a => /@/.test(a) && !/@mdient\.com$/i.test(a));
+        if (!outside) continue;
+        const ms = modelsIn(raw);
+        if (!ms.length || ms.length > MINE_MAX_LINKS) continue;
+        for (const m of ms) {
+          let c = null; try { c = bkForKey(m.k); } catch (e) {}
+          if (!c) { try { c = window.__illuAutoBook && window.__illuAutoBook(m.k, { nm: m.nm, ag: m.ag }); } catch (e) { console.error(e); } if (c) res.booked.push(c.nm || m.nm); }
+          if (!c || !c.id || c.st === 'canc') continue;
+          const s0 = (c.s && c.s.email) || {}, now = (s0.p === 'g' || s0.p === 'y') ? s0.p : (s0.d ? 'g' : '');
+          if (!now && (!c.by || c.by === ME)) { try { window.__illuSetStage && window.__illuSetStage(c.id, 'email', 'y'); res.stage.push(c.nm || m.nm); } catch (e) {} }
+          try { if (window.__illuEmail && window.__illuEmail.addMine && await window.__illuEmail.addMine(c, raw)) res.added++; } catch (e) { console.error(e); }
+        }
+      }
+      if (emails.length) { const last = emails[emails.length - 1].date; const m = String(last || '').match(/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/);
+        if (m) { const t = new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5]).getTime() - 60 * 60 * 1000; if (t > Date.parse(st.since)) st.since = new Date(t).toISOString(); } }
+      mineSave(st);
+      const names = [...new Set(res.booked.concat(res.stage))];
+      if (names.length) {
+        const t = document.createElement('div'); t.className = 'illusenttoast'; t.setAttribute('role', 'status');
+        t.textContent = 'Email sent · ' + names.join(', ') + ' — ' + (res.booked.length ? 'on the Booking board, ' : '') + 'Email stage In process';
+        document.body.appendChild(t); setTimeout(() => t.remove(), 7000);
+      }
+    } catch (e) { console.error('hiworks mine', e); }
+    finally { MINEBUSY = false; }
+    return res;
+  }
+  window.__illuCheckMine = checkMine;
+  if (window.illu && window.illu.hiworksMine && !window.illu.web) { setTimeout(checkMine, 25000); setInterval(checkMine, MINE_EVERY); }
+
   /* ---------- email templates (docs mailtpl/<id>: {name, subject, body, kind, by, at, o}) ---------- */
   const TPL = new Map();
   const BUILTIN = { id: 'model-inquiry', name: 'Model inquiry (Seoul)', subject: SUBJECT, kind: 'inquiry', o: 0, note: 'Lists the models you picked; says she / he / they by itself' };

@@ -196,7 +196,7 @@
     HWBUSY = true; HWMSG = ''; if(!quiet) redraw();
     const A = agAddrs(c), {first} = nameParts(c);
     let have = []; try{ const v = await bodies(c.id, true); have = emOf(c).list.filter(e => v.b[e.k] && /^hw:\d+$/.test(e.k)).map(e => e.k.slice(3)); }catch(e){}
-    let r = null; try{ r = await window.illu.hiworksCollect(String(c.nm || '').trim(), hwMe(), {addrs: A.addrs, first, have}); }catch(e){ r = {ok: false, why: String(e && e.message || e)}; }
+    let r = null; try{ r = await window.illu.hiworksCollect(String(c.nm || '').trim(), hwMe(), {addrs: A.addrs, first, have, dom: A.dom}); }catch(e){ r = {ok: false, why: String(e && e.message || e)}; }
     HWBUSY = false;
     if(r && r.need === 'signin'){ HWMSG = E(T('Hiworks needs you to sign in once in the program.', 'Hiworks 로그인이 한 번 필요합니다.')) + ' <button type="button" class="bvbtn" data-emsignin>' + T('Sign in to Hiworks', 'Hiworks 로그인') + '</button> ' + E(T('Then press Collect again.', '그다음 다시 가져오기를 누르세요.')); redraw(); return r; }
     if(!r || !r.ok){ HWMSG = E(T('Could not read Hiworks: ', 'Hiworks를 읽지 못했습니다: ') + ((r && r.why) || '')); redraw(); return r; }
@@ -217,7 +217,18 @@
     records(c);
     return {ok: true};
   }
-  window.__illuEmail = Object.assign(window.__illuEmail || {}, {fromAnswer, countNew, merge, collect, readOne, threadKey, cleanSubj, excluded, exOf, bodies, records, agAddrs, nameOk, emOf, busy: () => HWBUSY});
+  /* 1.2.197: an email the person sent about her (found by the sent-mail watcher in illu-ext.js) goes on her card at once,
+     with its whole text kept apart and its record written, like a collected one. Returns true when it was new on the card. */
+  async function addMine(c, raw){
+    const EM = fromAnswer({emails: [raw]}); if(!c || !EM || !EM.list.length) return false;
+    const isNew = countNew(c, EM) > 0;
+    await keepBodies(c.id, EM.list); for(const e of EM.list) delete e.body;
+    EM.by = 'program'; EM.unr = emOf(c).unr || []; EM.unread = EM.unr.length;
+    merge(c, EM); try{ saveBook(c.id, true); }catch(e){}
+    records(c);
+    return isNew;
+  }
+  window.__illuEmail = Object.assign(window.__illuEmail || {}, {addMine, fromAnswer, countNew, merge, collect, readOne, threadKey, cleanSubj, excluded, exOf, bodies, records, agAddrs, nameOk, emOf, busy: () => HWBUSY});
   document.addEventListener('click', e => {
     const b = e.target.closest && e.target.closest('[data-emcollect],[data-emsignin],[data-emcts]'); if(!b) return;
     e.preventDefault(); e.stopPropagation();

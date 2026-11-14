@@ -591,6 +591,24 @@
     changed();
     say(L((c.nm || '') + ' is on the Booking board — you are in charge of her card.', (c.nm || '') + ' — 부킹 보드로 보냈습니다. 이 카드는 내가 담당합니다.'), () => { try{ bvOpenFor(c.id); }catch(e){} }, null, L('Open card', '카드 열기'));
   }
+  /* 1.2.197 (user, 15 Nov 2026: "Once an email is sent through Hiworks, I want you to automatically change the status of the model
+     to booking"): Send to Booking without any question - used when an email about her has been sent. Her card already on the
+     Booking board (anyone's) is used as it is; none -> a new one in my charge, the vote she is on carries on as with the button. */
+  window.__illuAutoBook = (k, about) => {
+    if(!k || !signedIn()) return null;
+    let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){}
+    if(c) return c;
+    const i = info(k), a = about || {};
+    try{ c = bookFromModel(k, a.nm || i.nm || '', a.ag || i.ag || '', a.city || i.city || '', a.country || i.country || ''); }catch(e){ console.error(e); }
+    if(!c) return null;
+    try{ remember('book', k, c.nm || k, c.ag || '', k); }catch(e){}
+    const st = stateOf(k);
+    if(st){ const o = Object.assign({}, st.o); delete o.legacy; if(!o.voters) o.voters = st.voters;
+      if(!st.open && st.res === 'appr' && !o.conf){ o.conf = {by: me(), at: nowIso(), bid: c.id}; OPEN.set(st.h, o); save('vopen/' + st.h, o); } }
+    try{ renderBook(); }catch(e){}
+    changed();
+    return c;
+  };
   let MXASK = '', GFASK = '', MXAGE = '';
   /* her age: the booking card's date of birth or age, else what was typed on her card before she was booked */
   function ageInfo(k, c){
