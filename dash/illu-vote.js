@@ -1445,34 +1445,81 @@
     const res = await ASSETS.upload(new File([b], 'vote.jpg', {type: b.type || 'image/jpeg'}));
     return res && res.id ? '/_blob/' + res.id : '';
   }
+  /* 1.2.204 (user, 16 Nov 2026, approved demo "Vote Slideshow Panel"): the vote page's slideshow has Book, Snaps, Videos
+     and Agency. Her booking folder's files are shown through a view-only Dropbox link to each file (nothing copied into the
+     program); when Dropbox can't make links, photos fall back to the program's own small copy (1.2.171) and videos are left out. */
+  const rawOf = u => /[?&]dl=0/.test(u) ? u.replace(/([?&])dl=0/, '$1raw=1') : u + (u.includes('?') ? '&' : '?') + 'raw=1';
   async function gather(k, h, old){
-    const g = {ps: [], sm: Object.assign({}, (old && old.sm) || {}), at: Date.now(), busy: true, done: false}; GAL.set(h, g);
-    const out = [];
+    const g = {ps: [], b: [], s: [], v: [], a: [], sm: Object.assign({}, (old && old.sm) || {}), sl: Object.assign({}, (old && old.sl) || {}), at: Date.now(), busy: true, done: false}; GAL.set(h, g);
+    let bc = null; try{ bc = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : (typeof bkForKey === 'function' ? bkForKey(k) : null); }catch(e){}
+    let noShare = false;
+    const link = async rel => {
+      if(g.sl[rel]) return g.sl[rel];
+      if(noShare || !bc || typeof bvFolderName !== 'function' || !(window.illu && window.illu.bookingShareFile)) return '';
+      let r = null; try{ r = await window.illu.bookingShareFile(bvFolderName(bc), String(bc.nm || '').trim(), rel); }catch(e){}
+      if(r && r.ok && r.url){ g.sl[rel] = rawOf(r.url); return g.sl[rel]; }
+      if(r && (r.scope || r.need || r.nofolder)) noShare = true;
+      return '';
+    };
+    const photo = async x => {
+      const rel = x.r || x.u;
+      if(/^https:/i.test(x.u)) return x.u;
+      if(!/^\/_blob\/bk\./.test(x.u)) return x.u.split('?')[0];
+      if(x.r){ const l = await link(x.r); if(l) return l; }
+      let id = g.sm[rel];
+      if(!id){ try{ id = await shrinkUp(x.u.split('?')[0]); }catch(e){ id = ''; } if(id) g.sm[rel] = id; }
+      return id || '';
+    };
     try{
       if(window.__illuMatPhotos){
         const mat = (await window.__illuMatPhotos(k, true)) || [];
-        let pick = mat.filter(x => x.t === 'book'); if(!pick.length) pick = mat.filter(x => x.t === 'snaps');
-        for(const x of pick.slice(0, 15)){
-          const rel = x.r || x.u;
-          if(/^https:/i.test(x.u)){ out.push(x.u); continue; }
-          if(!/^\/_blob\/bk\./.test(x.u)){ out.push(x.u.split('?')[0]); continue; }
-          let id = g.sm[rel];
-          if(!id){ try{ id = await shrinkUp(x.u.split('?')[0]); }catch(e){ id = ''; } if(id) g.sm[rel] = id; }
-          if(id) out.push(id);
-        }
+        for(const x of mat.filter(x => x.t === 'book').slice(0, 15)){ const u = await photo(x); if(u) g.b.push(u); }
+        for(const x of mat.filter(x => x.t === 'snaps').slice(0, 12)){ const u = await photo(x); if(u) g.s.push(u); }
+        for(const x of mat.filter(x => x.t === 'videos').slice(0, 6)){ if(!x.r) continue; const u = await link(x.r); if(u) g.v.push({u, n: String(x.r).split('/').pop()}); }
       }
     }catch(e){}
     try{
-      let href = ''; try{ href = (info(k) || {}).url || ''; }catch(e){}
-      if(!href){ const o = OPEN.get(h); href = (o && o.href) || ''; }
+      let href = ''; try{ href = (info(k) || {}).href || ''; }catch(e){}
       if(!href && /^https?:/i.test(k)) href = k;
       if(href && /^https?:/i.test(href) && window.illu && window.illu.modelPhotos){
         const r = await window.illu.modelPhotos(href);
-        if(r && !r.why) for(const p of (r.photos || []).slice(0, 25)){ const u = p && p.url || p; if(/^https:\/\//i.test(u || '')) out.push(u); }
+        if(r && !r.why) for(const p of (r.photos || []).slice(0, 25)){ const u = p && p.url || p; if(/^https:\/\//i.test(u || '')) g.a.push(u); }
       }
     }catch(e){}
-    g.ps = [...new Set(out)].slice(0, 40); g.busy = false; g.done = true; g.at = Date.now();
+    g.b = [...new Set(g.b)]; g.s = [...new Set(g.s)]; g.a = [...new Set(g.a)];
+    g.ps = [...new Set((g.b.length ? g.b : g.s).concat(g.a))].slice(0, 40);     // the older vote page and the phone viewer read this one list
+    g.busy = false; g.done = true; g.at = Date.now();
     pubSoon();
+  }
+  /* 1.2.204: her details for the vote page's side panel - only what is filled in */
+  function pubDetails(k){
+    const d = {};
+    let i = {}, f = {}; try{ const x = factsOf(k); i = x.i || {}; f = x.f || {}; }catch(e){}
+    let bc = null; try{ bc = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : (typeof bkForKey === 'function' ? bkForKey(k) : null); }catch(e){}
+    const p = preOf(k) || {};
+    const put = (key, v) => { if(v != null && String(v).trim() !== '') d[key] = String(v).trim(); };
+    const ii = info(k) || {};
+    put('ag', ii.ag || i.ag); put('pl', [ii.city || i.city, ii.country || i.country].filter(Boolean).join(', '));
+    const g = f.g || (bc && bc.sex) || ''; if(g === 'F' || g === 'M') d.g = g;
+    put('tier', i.div || (f.tier && f.tier !== 'unlabelled' ? f.tier : '') || '');
+    put('pg', /^https?:/i.test(ii.href || '') ? ii.href : (/^https?:/i.test(k) ? k : ''));
+    let age = bc ? (bc.age || '') : (p.age || ''); try{ if(!age && bc && bc.dob && typeof ageFrom === 'function') age = ageFrom(bc.dob); }catch(e){}
+    put('age', age);
+    const GN = {no: 'No Guarantee', cond: 'Condition Guarantee', net: 'Net Guarantee'};
+    const short = v => { const n = +String(v || '').replace(/[^\d]/g, ''); return n >= 1e6 ? '₩' + (Math.round(n / 1e5) / 10) + 'M' : n ? '₩' + n.toLocaleString('en-US') : ''; };
+    let gty = '', amt = '', av = '', stay = '';
+    if(bc){ gty = bc.gty || ''; if(gty === 'net' && bc.ctguar) amt = short(bc.ctguar) + (bc.ctgmode === 'month' ? '/mo' : ''); if(gty === 'cond' && bc.ctgm) amt = short(bc.ctgm) + '/mo'; av = bc.avf || ''; stay = bc.avd || ''; }
+    if(!gty && p.gty){ gty = p.gty; if(p.amt && (gty === 'net' || gty === 'cond')) amt = short(p.amt) + (gty === 'cond' || p.per === 'month' ? '/mo' : ''); }
+    if(!av) av = p.avf || ''; if(!stay) stay = p.avd || '';
+    if(GN[gty]) put('gty', (amt ? amt + ' · ' : '') + GN[gty]);
+    put('av', av); if(stay) put('stay', /^\d+$/.test(String(stay).trim()) ? stay + ' days' : stay);
+    if(bc){
+      const cap = x => String(x || '').trim().replace(/(^|[\s\-\/(,])(\p{Ll})/gu, (m, a, b) => a + b.toUpperCase());
+      put('nat', cap(bc.nat)); put('hair', [cap(bc.hcol), cap(bc.htyp)].filter(Boolean).join(' · ')); put('eye', cap(bc.ecol)); put('exp', bc.exp);
+      try{ const bl = (typeof beenList === 'function' ? beenList(bc) : []) || []; put('ctry', bl.map(x => x && (x.c || x)).filter(x => typeof x === 'string' && x).join(', ')); }catch(e){}
+    }
+    try{ const ns = notesOf(k).slice(-6); if(ns.length) d.nt = ns.map(n => ({p: pname(n.p), at: n.at, t: String(n.t || '').slice(0, 600)})); }catch(e){}
+    return d;
   }
   window.__illuVoteGal = GAL;
   function publishBoard(){
@@ -1483,13 +1530,17 @@
       if(!st.open) continue;
       const h = st.h, old = PUBNOW[h] || {};
       let f = {}; try{ f = factsOf(st.k).f || {}; }catch(e){}
-      const gal = GAL.get(h), ps = gal && gal.done ? gal.ps : (old.ps || []), sm = Object.assign({}, old.sm || {}, (gal && gal.sm) || {});
+      const gal = GAL.get(h), ps = gal && gal.done ? gal.ps : (old.ps || []), sm = Object.assign({}, old.sm || {}, (gal && gal.sm) || {}), sl = Object.assign({}, old.sl || {}, (gal && gal.sl) || {});
       /* 1.2.171: a stored photo (/_blob/<id>) opens on the vote page too; one only this computer has is replaced by its stored copy */
       let ph = /^https:\/\//i.test(f.photo || '') || /^\/_blob\/(?!bk\.)[A-Za-z0-9._-]+/.test(f.photo || '') ? String(f.photo).split('?')[0] : (old.ph || '');
       if(!ph && ps.length) ph = ps[0];
       const m = {}; for(const key of ['ht', 'bu', 'wa', 'hp', 'eu', 'us']){ const v = num(f[key]); if(v != null) m[key] = v; else if(old.m && old.m[key] != null) m[key] = old.m[key]; }
-      c[h] = {ph, m}; if(ps.length) c[h].ps = ps; if(Object.keys(sm).length) c[h].sm = sm;
-      if(!gal || (!gal.busy && Date.now() - gal.at > 6 * 3600 * 1000)){ GAL.set(h, {ps: (gal && gal.ps) || old.ps || [], sm: Object.assign({}, old.sm || {}), at: Date.now(), busy: true, done: !!gal}); const k0 = st.k, o0 = old; GALQ = GALQ.then(() => gather(k0, h, o0)).catch(() => {}); }
+      c[h] = {ph, m}; if(ps.length) c[h].ps = ps; if(Object.keys(sm).length) c[h].sm = sm; if(Object.keys(sl).length) c[h].sl = sl;
+      /* 1.2.204: the slideshow's four lists and her details for the vote page */
+      const gb = gal && gal.done ? {b: gal.b || [], s: gal.s || [], v: gal.v || [], a: gal.a || []} : (old.gb || null);
+      if(gb && (gb.b.length || gb.s.length || gb.v.length || gb.a.length)) c[h].gb = gb;
+      try{ const d = pubDetails(st.k); if(Object.keys(d).length) c[h].d = d; }catch(e){}
+      if(!gal || (!gal.busy && Date.now() - gal.at > 6 * 3600 * 1000)){ GAL.set(h, Object.assign({}, gal || {}, {ps: (gal && gal.ps) || old.ps || [], sm: Object.assign({}, old.sm || {}), at: Date.now(), busy: true, done: !!gal})); const k0 = st.k, o0 = old; GALQ = GALQ.then(() => gather(k0, h, o0)).catch(() => {}); }
     }
     try{ publishGal(); }catch(e){}
     if(JSON.stringify(c) === JSON.stringify(PUBNOW)) return;

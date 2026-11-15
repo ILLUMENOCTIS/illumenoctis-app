@@ -210,6 +210,8 @@ document.head.appendChild(st);
       /* 1.2.198 (user: "automatically change the status of the model to booking"): not on the Booking board yet -> she is put there */
       if (!c && !/^bid:/.test(k)) { try { c = window.__illuAutoBook && window.__illuAutoBook(k, {}); } catch (e) {} }
       if (!c || !c.id) continue;
+      /* 1.2.204: who sent it, for the agency's "Emailed before" (Hiworks shows only booking1@) */
+      if (d.no && window.__illuEmBy) { window.__illuEmBy(c, d.no); try { saveBook(c.id, true); } catch (e) {} }
       const st = (c.s && c.s.email) || {}, now = (st.p === 'g' || st.p === 'y') ? st.p : (st.d ? 'g' : '');
       if (now) continue;
       try { window.__illuSetStage && window.__illuSetStage(c.id, 'email', 'y'); done.push(c.nm || ''); } catch (e) {}
@@ -330,12 +332,13 @@ document.head.appendChild(st);
   /* 1.2.160 (user: "allow me to also select multiple models from that agency ... to add onto the email"): the agency's
      models, ticked in the same box; the one the email was opened for is ticked already */
   function agModels(dom) {
-    const a = (typeof AG !== 'undefined' ? AG : []).find(x => x.domain === dom); if (!a) return [];
+    const D = window.__illuAgDoms ? window.__illuAgDoms(dom) : [dom];
+    const As = (typeof AG !== 'undefined' ? AG : []).filter(x => D.includes(String(x.domain || '').toLowerCase()) || x.domain === dom); if (!As.length) return [];
     const out = new Map();
-    for (const b of a.boards || []) for (const m of b.m || []) { const raw = String(m[1] || ''); const url = raw.charAt(0) === '|' ? raw.slice(1) : (b.p || '') + raw; let key = url; try { key = normKey(url); } catch (e) {} if (!out.has(key)) out.set(key, { key, nm: m[0] || '', url, g: b.g || '?', ag: a.name, bd: b.d || '' }); }
+    for (const a of As) for (const b of a.boards || []) for (const m of b.m || []) { const raw = String(m[1] || ''); const url = raw.charAt(0) === '|' ? raw.slice(1) : (b.p || '') + raw; let key = url; try { key = normKey(url); } catch (e) {} if (!out.has(key)) out.set(key, { key, nm: m[0] || '', url, g: b.g || '?', ag: a.name, bd: b.d || '' }); }
     return [...out.values()].sort((p, q) => String(p.nm).localeCompare(String(q.nm), undefined, { sensitivity: 'base', numeric: true }));
   }
-  function tplPick(anchor, addr, agName, ms, dom) { PK = { addr, agName, ms: (ms || []).slice(), dom: dom || '', edit: null, open: false, q: '', cc: [] }; let box = document.getElementById('illutpl'); if (!box) { box = document.createElement('div'); box.id = 'illutpl'; document.body.appendChild(box); } box.hidden = false; paintPick(); }
+  function tplPick(anchor, addr, agName, ms, dom) { PK = { addr, agName, ms: (ms || []).slice(), dom: dom || '', edit: null, open: true, q: '', cc: [] }; let box = document.getElementById('illutpl'); if (!box) { box = document.createElement('div'); box.id = 'illutpl'; document.body.appendChild(box); } box.hidden = false; paintPick(); }
   function paintPick() {
     const box = document.getElementById('illutpl'); if (!box || box.hidden || !PK) return;
     const me = (typeof ME !== 'undefined' && ME) || '';
@@ -357,13 +360,37 @@ document.head.appendChild(st);
       '<div class="tplrow"><button type="button" class="tpluse blank" data-tpluse=""><b>Blank email</b><small>Only the address — write it yourself</small></button></div></div>' +
       '<div class="tplacts"><button type="button" data-tplnew>+ New template</button><span></span><button type="button" data-tplx>Cancel</button></div></div>';
     /* the models in this email */
+    /* 1.2.204 (user, 16 Nov 2026, approved demo "Agency Email History"): the agency's models are open right away; the ones
+       the team already emailed about or worked on come first, each marked (when it was emailed, replied, on the Booking
+       board, on the Team Vote); anyone ruled out stays greyed out. Both web addresses of an agency are listed together. */
     const all = PK.dom ? agModels(PK.dom) : [];
     if (all.length) {
       const on = new Set(PK.ms.map(m => m.key)), q = PK.q.toLowerCase();
+      let H = null; try { H = window.__illuAgHist ? window.__illuAgHist(PK.dom) : null; } catch (e) {}
+      const day = window.__illuAgDay || (x => x);
+      const tagsOf = m => {
+        const t = [];
+        let c = null; try { c = (H && H.cardOf.get(m.key)) || (typeof bkForKey === 'function' ? bkForKey(m.key) : null); } catch (e) {}
+        let vs = ''; try { vs = window.__illuVoteState ? window.__illuVoteState(m.key) : ''; } catch (e) {}
+        if (c && c.id) t.push(['wk', c.st === 'done' ? 'Booked' : c.st === 'canc' ? 'Booking cancelled' : 'Booking']);
+        else if (vs === 'open' || vs === 'tie') t.push(['wk', 'Team Vote']);
+        else if (vs === 'appr') t.push(['wk', 'Approved']);
+        const r = H && H.byModel.get(m.key);
+        if (r) t.push(['em', 'Emailed ' + day(r.dt) + (r.rep ? ' · replied' : '')]);
+        return t;
+      };
+      const row = m => { const red = anyRed(m.key), tg = tagsOf(m);
+        return '<label class="tplm' + (red ? ' red' : '') + '"><input type="checkbox" data-tplm="' + escT(m.key) + '"' + (on.has(m.key) ? ' checked' : '') + (red ? ' disabled' : '') + '><span>' + escT(m.nm) + '</span>' +
+          (red ? '<i class="tpltag red">Ruled out</i>' : tg.length ? tg.map(([k, v]) => '<i class="tpltag ' + k + '">' + escT(v) + '</i>').join('') : '<small>' + escT(m.bd) + '</small>') + '</label>'; };
       const shown = all.filter(m => !q || String(m.nm).toLowerCase().includes(q));
-      const sec = '<div class="tplms"><div class="tplmsh"><b>Models in this email · ' + PK.ms.length + '</b><button type="button" data-tplmore>' + (PK.open ? 'Done' : '+ Add models from ' + escT(PK.agName)) + '</button></div>' +
+      const dk = m => { const r = H && H.byModel.get(m.key); return r ? r.d : ''; };
+      const worked = shown.filter(m => tagsOf(m).length).sort((a, b) => dk(b).localeCompare(dk(a))), rest = shown.filter(m => !tagsOf(m).length);
+      const sec = '<div class="tplms"><div class="tplmsh"><b>Models in this email · ' + PK.ms.length + '</b><button type="button" data-tplmore>' + (PK.open ? 'Hide the list' : '+ Add models from ' + escT(PK.agName)) + '</button></div>' +
         (PK.ms.length ? '<div class="tplchips">' + PK.ms.map(m => '<span class="tplchip">' + escT(String(m.nm).toUpperCase()) + '<button type="button" data-tploff="' + escT(m.key) + '" aria-label="Remove">✕</button></span>').join('') + '</div>' : '<p class="tplnone">No model — the email goes without a model list.</p>') +
-        (PK.open ? '<input class="tplq" data-tplq placeholder="Search ' + all.length + ' models…" value="' + escT(PK.q) + '"><div class="tplml">' + shown.slice(0, 400).map(m => { const red = anyRed(m.key); return '<label class="tplm' + (red ? ' red' : '') + '"><input type="checkbox" data-tplm="' + escT(m.key) + '"' + (on.has(m.key) ? ' checked' : '') + (red ? ' disabled' : '') + '><span>' + escT(m.nm) + '</span><small>' + escT(red ? 'voted out' : m.bd) + '</small></label>'; }).join('') + '</div>' : '') + '</div>';
+        (PK.open ? '<input class="tplq" data-tplq placeholder="Find one of their ' + all.length + ' models…" value="' + escT(PK.q) + '"><div class="tplml">' +
+          (worked.length ? '<div class="tplgrp">Already emailed or worked on</div>' + worked.map(row).join('') : '') +
+          (rest.length ? (worked.length ? '<div class="tplgrp">Everyone else</div>' : '') + rest.slice(0, 400).map(row).join('') : '') +
+          (!shown.length ? '<p class="tplnone">No model called "' + escT(PK.q) + '".</p>' : '') + '</div>' : '') + '</div>';
       const to = box.querySelector('.tplto'); if (to) to.insertAdjacentHTML('afterend', sec);
       if (PK.open && PK.focusQ) { const i = box.querySelector('[data-tplq]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
     }
@@ -527,6 +554,9 @@ document.head.appendChild(st);
     '#illutpl .tplchips{display:flex;flex-wrap:wrap;gap:5px}#illutpl .tplchip{display:inline-flex;align-items:center;gap:4px;background:var(--surf,#fff);border:1px solid var(--line);border-radius:999px;padding:3px 4px 3px 10px;font-size:12px;font-weight:600}#illutpl .tplchip button{border:0;background:none;cursor:pointer;color:var(--mut);font-size:11px}#illutpl .tplnone{margin:0;font-size:12px;color:var(--mut)}' +
     '#illutpl .tplcc{border:1px solid var(--line);border-radius:10px;padding:9px 11px;display:flex;flex-direction:column;gap:6px}#illutpl .tplccl{display:flex;flex-direction:column;max-height:180px;overflow:auto}#illutpl .tplcc .tplm small{margin-left:auto;text-align:right}' +
     '#illutpl .tplq{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px var(--sans)}#illutpl .tplml{max-height:240px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px 10px}#illutpl .tplm{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--ink);flex-direction:row;padding:3px 0;cursor:pointer}#illutpl .tplm small{color:var(--mut);font-size:10.5px;font-weight:400;margin-left:auto}#illutpl .tplm.red{opacity:.5}' +
+    '#illutpl .tplml{grid-template-columns:1fr;max-height:300px}#illutpl .tplgrp{grid-column:1/-1;font:600 9px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding:8px 2px 3px}#illutpl .tplgrp:first-child{padding-top:2px}' +
+    '#illutpl .tplm .tpltag{font-style:normal;font-size:10.5px;font-weight:600;border-radius:999px;padding:1px 8px;white-space:nowrap;margin-left:4px}#illutpl .tplm .tpltag:first-of-type{margin-left:auto}' +
+    '#illutpl .tpltag.wk{background:var(--accl,#F3ECF3);color:var(--acc)}#illutpl .tpltag.em{background:#E3F4E8;color:#23794A}#illutpl .tpltag.red{background:var(--surf2,#eee);color:var(--faint)}#illutpl .tplm.red span{opacity:.55}' +
     '#illutpl .tplhelp{margin:0;font-size:12px;color:var(--mut);line-height:1.5}#illutpl .tplhelp b{color:var(--ink)}' +
     '#illutpl .tplacts{display:flex;gap:8px;align-items:center}#illutpl .tplacts span{flex:1}#illutpl .tplacts button{border:1px solid var(--line);background:var(--surf,#fff);border-radius:20px;padding:7px 16px;cursor:pointer;color:var(--ink);font:500 13px var(--sans)}#illutpl .tplacts .tplgo{background:var(--acc);border-color:var(--acc);color:var(--on-acc,#fff)}#illutpl .tplacts .tpldel{color:#A3283F}';
   document.head.appendChild(st);

@@ -524,7 +524,7 @@
     const mdH = S.length ? '<div class="zcsec"><div class="zclab">Measurement detail</div><div class="zcmdg"><div>' + left.map(grp2).join('') + '</div><div>' + right.map(grp2).join('<div class="zcgsp"></div>') + '</div></div></div>' : '';
     const hfH = hf.length ? '<div class="zcsec"><div class="zclab">Hands &amp; feet</div><div class="zchf">' + hf.map(([i, l]) => '<figure>' + pimg(i, 'zcim') + '<figcaption>' + H(l) + '</figcaption></figure>').join('') + '</div></div>' : '';
     const ctry = F.ctry.map(x => x.c + (x.t ? ' (' + x.t + ')' : '')).join(' · ');
-    const p1 = '<section class="zcpg">' + top('Model profile<br>' + today()) +
+    const p1 = '<section class="zcpg">' + top('Model profile') +
       '<div class="zchero">' + pimg(hero, 'zcph') + '<div><h1>' + H(nm(c)) + '</h1>' + (has(c.ag) ? '<div class="zcagy">Mother agency · <b>' + H(c.ag) + '</b></div>' : '') +
       (F.mline.length ? '<div class="zcmline">' + F.mline.map(([k, v]) => '<span><i>' + k + '</i>' + H(v[0]) + '<u>' + v[1] + '</u></span>').join('') + '</div>' : '') +
       '<div class="zcfacts">' + F.F.map(([k, v]) => '<div class="zcf"><span>' + k + '</span><b>' + H(v) + '</b></div>').join('') +
