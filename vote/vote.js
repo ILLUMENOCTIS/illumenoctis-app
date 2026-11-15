@@ -235,9 +235,26 @@
   }
   const btns = (o, st) => '<div class="btns"><button type="button" class="vb g' + (st.mine === 'g' ? ' on' : '') + '" data-v="g" data-k="' + H(hash(o.k)) + '">✓ ' + H(L('Go', '찬성')) + '</button><button type="button" class="vb r' + (st.mine === 'r' ? ' on' : '') + '" data-v="r" data-k="' + H(hash(o.k)) + '">✕ ' + H(L('Pass', '반대')) + '</button></div>';
 
+  /* 1.2.203 (user, 16 Nov 2026, Vote Animation #7): a light runs once around the card's frame while a ✓ / ✕ stamp
+     lands on the photo. It plays on a copy of the card held in place, because the page redraws as soon as the vote is in. */
+  function voteFx(card, v) {
+    try {
+      const r = card.getBoundingClientRect(); if (r.width < 40 || r.bottom < 0 || r.top > innerHeight) return;
+      const im = card.querySelector('.img'), pr = im ? im.getBoundingClientRect() : r;
+      const fx = document.createElement('div'); fx.className = 'vfx'; fx.setAttribute('aria-hidden', 'true');
+      const copy = card.cloneNode(true); copy.style.cssText = 'position:absolute;inset:0;margin:0;width:100%;height:100%;pointer-events:none';
+      fx.style.cssText = 'left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px;--c:' + (v === 'r' ? '#E5484D' : '#2FBF4A') + ';--r:' + (getComputedStyle(card).borderTopLeftRadius || '14px');
+      fx.appendChild(copy);
+      fx.insertAdjacentHTML('beforeend', '<span class="vfxring"></span><span class="vfxst" style="left:' + (pr.left - r.left + pr.width / 2) + 'px;top:' + (pr.top - r.top + pr.height / 2) + 'px">' + (v === 'r' ? '✕' : '✓') + '</span>');
+      document.body.appendChild(fx);
+      requestAnimationFrame(() => fx.classList.add('play'));
+      setTimeout(() => fx.classList.add('out'), 1250); setTimeout(() => fx.remove(), 1600);
+    } catch (er) {}
+  }
   box.addEventListener('click', async e => {
     const b = e.target.closest('.vb[data-v]'); if (!b || !ME) return;
     const o = OPEN.find(x => hash(x.k) === b.dataset.k); if (!o) return;
+    { const card = box.querySelector('.vc[data-h="' + b.dataset.k + '"]'); if (card) voteFx(card, b.dataset.v); }
     box.querySelectorAll('.vb').forEach(x => { x.disabled = true; });
     try {
       /* read everything again first: someone may have voted, or the card may have left the vote */
