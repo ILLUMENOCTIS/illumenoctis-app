@@ -63,52 +63,217 @@
     if (g.length > 1) el.insertAdjacentHTML('beforeend', '<button type="button" class="gnav p" data-gp="' + H(h) + '" aria-label="' + H(L('Previous photo', '이전 사진')) + '">‹</button><button type="button" class="gnav n" data-gn="' + H(h) + '" aria-label="' + H(L('Next photo', '다음 사진')) + '">›</button><span class="gct">' + (i + 1) + ' / ' + g.length + '</span>');
   }
   const step = (h, d) => { const g = galOf(h); if (g.length < 2) return; IDX.set(h, ((IDX.get(h) || 0) + d + g.length) % g.length); paintImg(h); };
-  /* full screen */
+  /* full screen.
+     1.2.204 (user, 16 Nov 2026, approved demo "Vote Slideshow Panel"): Book · Snaps · Videos · Agency along the top
+     like the program's slideshow, and her details beside the photos - on a computer a panel on the right, on a phone
+     a sheet from below that slides to three places (down: only the photos, middle: name, measurements and the vote,
+     up: everything). Her name opens her page on the agency's site. Go / Pass can be cast from here (effect #7). */
   let VV = null;
+  const SRCS = [['b', 'Book', 'BOOK'], ['s', 'Snaps', 'SNAPS'], ['v', 'Videos', '영상'], ['a', 'Agency', '에이전시']];
+  function srcsOf(h) {
+    const p = PUB[h] || {}, gb = p.gb;
+    const ok = u => u && !BAD.has(u);
+    if (!gb) { const g = galOf(h); return g.length ? [{ k: 'p', l: L('Photos', '사진'), it: g.map(u => ({ u })) }] : []; }
+    const out = [];
+    for (const [k, en, ko] of SRCS) {
+      let it = (gb[k] || []).map(x => typeof x === 'string' ? { u: x } : x).filter(x => x && ok(x.u));
+      if (k === 'v') it = it.map(x => Object.assign({ vid: 1 }, x));
+      if (it.length) out.push({ k, l: L(en, ko), it });
+    }
+    if (!out.length && p.ph && ok(p.ph)) out.push({ k: 'p', l: L('Photos', '사진'), it: [{ u: p.ph }] });
+    return out;
+  }
+  const ICO = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg>';
+  const when = iso => { if (!iso) return ''; const d = new Date(iso); if (isNaN(d)) return ''; const t = new Date(), y = new Date(t); y.setDate(t.getDate() - 1); const hm = d.toLocaleTimeString(KO ? 'ko-KR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }); return d.toDateString() === t.toDateString() ? L('Today ', '오늘 ') + hm : d.toDateString() === y.toDateString() ? L('Yesterday ', '어제 ') + hm : d.toLocaleDateString(KO ? 'ko-KR' : 'en-GB', { day: 'numeric', month: 'short' }) + ' ' + hm; };
+  const originOf = u => { try { return new URL(u).origin + '/'; } catch (e) { return ''; } };
+  function panelHtml(h) {
+    const o = VV.o, p = PUB[h] || {}, d = p.d || {}, m = p.m || {}, st = stateOf(o) || {};
+    const pg = d.pg || o.href || '', ag = d.ag || o.ag || '', agUrl = originOf(pg);
+    const line = [d.pl, d.g === 'F' ? L('Female', '여성') : d.g === 'M' ? L('Male', '남성') : '', d.tier].filter(Boolean).join(' · ');
+    const nm = H(o.nm || '');
+    const cell = (l, v, u) => '<div><span>' + H(l) + '</span><b>' + (v == null || v === '' ? '–' : H(v) + (u ? '<small>' + H(u) + '</small>' : '')) + '</b></div>';
+    const ms = '<div class="vvms">' + cell(L('Height', '키'), m.ht != null ? fmt(m.ht) : '', 'cm') + cell(L('Bust', '가슴'), m.bu != null ? fmt(m.bu) : '', 'cm') + cell(L('Waist', '허리'), m.wa != null ? fmt(m.wa) : '', 'cm') + cell(L('Hips', '엉덩이'), m.hp != null ? fmt(m.hp) : '', 'cm') + cell(L('Shoe', '신발'), m.eu != null ? fmt(m.eu) : m.us != null ? fmt(m.us) : '', m.eu != null ? 'EU' : m.us != null ? 'US' : '') + cell(L('Age', '나이'), d.age || '', '') + '</div>';
+    const rows = list => { const r = list.filter(x => x[1]); return r.length ? '<div class="vvrows">' + r.map(([l, v]) => '<div class="vvrow"><span>' + H(l) + '</span><b>' + H(v) + '</b></div>').join('') + '</div>' : ''; };
+    const sec = (t, body) => body ? '<div class="vvsec"><h3>' + H(t) + '</h3>' + body + '</div>' : '';
+    let vote = '';
+    if (st.voters) {
+      const who = id => id === ME ? L('You', '나') : (pname(id) || '?');
+      const dn = st.voters.filter(id => voteOf(id, o.k, st.round)), wt = st.voters.filter(id => !voteOf(id, o.k, st.round));
+      vote = '<div class="vvwho">' + (pname(o.by) ? '<div>' + H(L('Sent by ', '보낸 사람: ')) + '<b>' + H(pname(o.by)) + '</b>' + (when(o.at) ? ' · ' + H(when(o.at)) : '') + '</div>' : '') +
+        (st.open ? (dn.length ? '<div class="d">✓ ' + H(L('Voted: ', '투표함: ') + dn.map(who).join(', ')) + '</div>' : '') + (wt.length ? '<div class="w">' + H(L('Waiting for: ', '대기 중: ') + wt.map(who).join(', ')) + '</div>' : '') + (st.round > (o.base || 1) ? '<div class="w">' + H(L('Tie-breaker round', '타이브레이커 라운드')) + '</div>' : '')
+          : '<div class="d">' + H(st.res === 'appr' ? L('Approved ', '승인 ') : L('Cancelled ', '취소 ')) + st.g + '–' + st.x + '</div>') + '</div>';
+    }
+    const notes = (d.nt || []).map(n => '<div class="vvnote"><b>' + H(n.p || '') + '</b> <small>· ' + H(when(n.at)) + '</small><br>' + H(n.t || '') + '</div>').join('');
+    const can = st.open && st.voters && st.voters.includes(ME);
+    const mine = VV.voted || (can ? st.mine : '');
+    return '<button type="button" class="vvgrip" data-grip aria-label="' + H(L('Drag up for her details, down for only the photos', '위로 끌면 정보, 아래로 끌면 사진만')) + '"><i></i></button>' +
+      '<div class="vvpeek">' + nm + ' <span>' + H(L('Swipe up for details', '위로 밀어 정보 보기')) + '</span></div>' +
+      '<div class="vvscroll">' +
+        '<div class="vvhd"><h2>' + (pg ? '<a class="vvnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(L('Open her page on the agency\'s site', '에이전시 사이트의 모델 페이지 열기')) + '">' + nm + ICO + '</a>' : nm) + '</h2>' +
+          (ag ? (agUrl ? '<a class="vvag" href="' + H(agUrl) + '" target="_blank" rel="noopener">' + H(ag) + ' ↗</a>' : '<div class="vvag">' + H(ag) + '</div>') : '') +
+          (line ? '<p>' + H(line) + '</p>' : '') + '</div>' + ms +
+        sec(L('The vote', '투표'), vote) +
+        sec(L('Availability & guarantee', '가능 기간 · 개런티'), rows([[L('Available', '가능 시기'), d.av], [L('Stay', '체류'), d.stay], [L('Guarantee', '개런티'), d.gty]])) +
+        sec(L('Profile', '프로필'), rows([[L('Nationality', '국적'), d.nat], [L('Hair', '머리'), d.hair], [L('Eye color', '눈 색'), d.eye], [L('Experience', '경력'), d.exp], [L('Countries worked in', '활동 국가'), d.ctry]])) +
+        sec(L('Team notes', '팀 메모'), notes) +
+      '</div>' +
+      (can || VV.voted ? '<div class="vvvote"><button type="button" class="g' + (mine === 'g' ? ' on' : '') + '" data-vvv="g"' + (VV.voted || VV.busy ? ' disabled' : '') + '>✓ ' + H(L('Go', '찬성')) + '</button><button type="button" class="r' + (mine === 'r' ? ' on' : '') + '" data-vvv="r"' + (VV.voted || VV.busy ? ' disabled' : '') + '>✕ ' + H(L('Pass', '반대')) + '</button></div>' : '');
+  }
   function vvOpen(h) {
-    const g = galOf(h); if (!g.length) return;
-    VV = { h };
+    const o = OPEN.find(x => hash(x.k) === h); if (!o) return;
+    const ss = srcsOf(h);
+    VV = { h, o, src: ss.length ? ss[0].k : '', idx: {}, pos: 'mid', voted: '' };
     let v = document.getElementById('vv');
     if (!v) { v = document.createElement('div'); v.id = 'vv'; v.setAttribute('role', 'dialog'); v.setAttribute('aria-modal', 'true'); document.body.appendChild(v); }
-    v.innerHTML = '<img alt=""><button type="button" class="vvx" data-vvx aria-label="' + H(L('Close', '닫기')) + '">×</button><button type="button" class="gnav p" data-vvp aria-label="' + H(L('Previous photo', '이전 사진')) + '">‹</button><button type="button" class="gnav n" data-vvn aria-label="' + H(L('Next photo', '다음 사진')) + '">›</button><span class="gct"></span><div class="vvs"></div>';
-    v.hidden = false; document.body.style.overflow = 'hidden'; vvShow(0);
+    v.setAttribute('aria-label', L('Slideshow', '슬라이드쇼') + ' · ' + (o.nm || ''));
+    v.innerHTML = '<div class="vvshow"><div class="vvtop"><span class="vvct"></span><div class="vvsrc" role="group" aria-label="' + H(L('Which photos', '사진 종류')) + '"></div></div>' +
+      '<button type="button" class="vvx" data-vvx aria-label="' + H(L('Close', '닫기')) + '">×</button>' +
+      '<div class="vvpic" data-vvpic><div class="vvph"><span class="vvst" aria-hidden="true"></span><span class="vvtag"></span></div>' +
+      '<button type="button" class="vvnav p" data-vvp aria-label="' + H(L('Previous photo', '이전 사진')) + '">‹</button><button type="button" class="vvnav n" data-vvn aria-label="' + H(L('Next photo', '다음 사진')) + '">›</button></div>' +
+      '<div class="vvs"></div></div><aside class="vvpnl" id="vvpnl"></aside>';
+    v.hidden = false; document.body.style.overflow = 'hidden';
+    vvPanel(); vvShow(0); vvSheet();
+    setTimeout(() => { const x = v.querySelector('.vvx'); if (x) x.focus({ preventScroll: true }); }, 30);
+  }
+  function vvPanel() {
+    const p = document.getElementById('vvpnl'); if (!p || !VV) return;
+    const sc = p.querySelector('.vvscroll'), top = sc ? sc.scrollTop : 0;
+    p.innerHTML = panelHtml(VV.h);
+    const sc2 = p.querySelector('.vvscroll'); if (sc2) sc2.scrollTop = top;
   }
   function vvShow(d) {
     const v = document.getElementById('vv'); if (!v || !VV) return;
-    const g = galOf(VV.h); if (!g.length) { vvClose(); return; }
-    const i = ((IDX.get(VV.h) || 0) + d + g.length) % g.length; IDX.set(VV.h, i);
-    setImg(v.querySelector('img'), g[i], 1600);
-    v.querySelector('.gct').textContent = (i + 1) + ' / ' + g.length;
-    v.querySelectorAll('.gnav').forEach(b => { b.hidden = g.length < 2; });
-    const s = v.querySelector('.vvs');
-    if (s.dataset.sig !== g.join('|')) { s.dataset.sig = g.join('|'); s.innerHTML = g.map((u, n) => '<button type="button" data-vvt="' + n + '"><img alt=""></button>').join(''); s.querySelectorAll('img').forEach((im, n) => setImg(im, g[n], 160)); }
-    s.querySelectorAll('[data-vvt]').forEach((b, n) => b.classList.toggle('on', n === i));
-    const on = s.querySelector('.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' });
-    paintImg(VV.h);
+    const ss = srcsOf(VV.h);
+    let s = ss.find(x => x.k === VV.src); if (!s && ss.length) { s = ss[0]; VV.src = s.k; }
+    v.querySelector('.vvsrc').innerHTML = ss.length > 1 || (ss[0] && ss[0].k !== 'p') ? ss.map(x => '<button type="button" data-vvsrc="' + x.k + '" aria-pressed="' + (x.k === VV.src) + '">' + H(x.l) + '<b>' + x.it.length + '</b></button>').join('') : '';
+    const ph = v.querySelector('.vvph');
+    const it = s ? s.it : [];
+    if (!it.length) { v.querySelector('.vvct').textContent = ''; ph.querySelectorAll('img,video,.vvnone').forEach(x => x.remove()); ph.insertAdjacentHTML('afterbegin', '<p class="vvnone">' + H(L('No photos yet', '아직 사진이 없습니다')) + '</p>'); v.querySelectorAll('.vvnav').forEach(b => { b.hidden = true; }); v.querySelector('.vvs').innerHTML = ''; return; }
+    const i = ((VV.idx[VV.src] || 0) + d + it.length) % it.length; VV.idx[VV.src] = i;
+    const cur = it[i];
+    v.querySelector('.vvct').textContent = (i + 1) + ' / ' + it.length;
+    v.querySelectorAll('.vvnav').forEach(b => { b.hidden = it.length < 2; });
+    const old = ph.querySelector('img,video,.vvnone');
+    if (!old || old.dataset.u !== cur.u) {
+      if (old) old.remove();
+      if (cur.vid) { ph.insertAdjacentHTML('afterbegin', '<video controls playsinline preload="metadata"></video>'); const vd = ph.querySelector('video'); vd.dataset.u = cur.u; vd.src = cur.u; }
+      else { ph.insertAdjacentHTML('afterbegin', '<img alt="" draggable="false">'); const im = ph.querySelector('img'); im.addEventListener('load', vvFit); setImg(im, cur.u, 1600); }
+    }
+    const strip = v.querySelector('.vvs'), sig = VV.src + '|' + it.map(x => x.u).join('|');
+    if (strip.dataset.sig !== sig) {
+      strip.dataset.sig = sig;
+      strip.innerHTML = it.length > 1 ? it.map((x, n) => '<button type="button" data-vvt="' + n + '" class="' + (x.vid ? 'v' : '') + '" aria-label="' + H((x.vid ? L('Video ', '영상 ') : L('Photo ', '사진 ')) + (n + 1)) + '">' + (x.vid ? '' : '<img alt="">') + '</button>').join('') : '';
+      strip.querySelectorAll('[data-vvt]').forEach((b, n) => { const im = b.querySelector('img'); if (im) setImg(im, it[n].u, 160); });
+    }
+    strip.querySelectorAll('[data-vvt]').forEach((b, n) => b.classList.toggle('on', n === i));
+    const on = strip.querySelector('.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' });
+    ph.classList.toggle('isvid', !!cur.vid);
+    if (cur.vid) { ph.style.width = ph.style.height = ''; } else requestAnimationFrame(vvFit);
   }
-  function vvClose() { const v = document.getElementById('vv'); if (v) v.hidden = true; document.body.style.overflow = ''; VV = null; }
-  document.addEventListener('click', e => {
+  function vvClose() {
+    const v = document.getElementById('vv'); if (v) { v.querySelectorAll('video').forEach(x => { try { x.pause(); } catch (e) {} }); v.hidden = true; v.innerHTML = ''; }
+    document.body.style.overflow = ''; const had = VV; VV = null;
+    if (had && had.flash) draw(had.flash);
+  }
+  /* the phone sheet: three resting places, follows the finger, snaps to the nearest */
+  const SNAP = { low: 0.91, mid: 0.52, high: 0.07 };
+  const isPhone = () => matchMedia('(max-width:760px)').matches;
+  function vvPlace(p, pos) { const Hh = p.parentElement.offsetHeight; p.style.setProperty('--hh', ((1 - SNAP[pos]) * Hh) + 'px'); p.classList.toggle('low', pos === 'low'); }
+  function vvSheet() {
+    const p = document.getElementById('vvpnl'); if (!p || !VV) return;
+    if (!isPhone()) { p.style.removeProperty('--hh'); p.classList.remove('low'); return; }
+    vvPlace(p, VV.pos);
+    if (p.dataset.on) return; p.dataset.on = '1';
+    let s = null;
+    p.addEventListener('pointerdown', e => {
+      if (!isPhone() || !VV) return;
+      if (!e.target.closest('[data-grip], .vvpeek') && !(VV.pos !== 'high' && e.target.closest('.vvhd') && !e.target.closest('a'))) return;
+      const Hh = p.parentElement.offsetHeight; s = { y: e.clientY, base: SNAP[VV.pos] * Hh, Hh, moved: false };
+      p.classList.add('drag'); try { p.setPointerCapture(e.pointerId); } catch (er) {}
+    });
+    p.addEventListener('pointermove', e => {
+      if (!s) return; const dy = e.clientY - s.y; if (Math.abs(dy) > 4) s.moved = true;
+      const y = Math.min(SNAP.low * s.Hh, Math.max(SNAP.high * s.Hh, s.base + dy)); p.style.setProperty('--hh', (s.Hh - y) + 'px'); p.classList.toggle('low', y > (SNAP.low - .08) * s.Hh);
+    });
+    const up = () => {
+      if (!s || !VV) { s = null; return; } p.classList.remove('drag');
+      if (!s.moved) VV.pos = VV.pos === 'high' ? 'mid' : VV.pos === 'mid' ? 'high' : 'mid';
+      else { const y = 1 - parseFloat(p.style.getPropertyValue('--hh')) / s.Hh; VV.pos = Object.keys(SNAP).sort((a, b) => Math.abs(SNAP[a] - y) - Math.abs(SNAP[b] - y))[0]; }
+      s = null; vvPlace(p, VV.pos);
+    };
+    p.addEventListener('pointerup', up); p.addEventListener('pointercancel', up);
+    p.addEventListener('keydown', e => {
+      if (!e.target.closest('[data-grip]') || !VV || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+      e.preventDefault(); e.stopPropagation(); const o = ['low', 'mid', 'high']; VV.pos = o[Math.max(0, Math.min(2, o.indexOf(VV.pos) + (e.key === 'ArrowUp' ? 1 : -1)))]; vvPlace(p, VV.pos);
+    });
+  }
+  /* the photo's frame hugs the photo, so the light and the stamp sit on her picture, not on empty space */
+  function vvFit() {
+    const v = document.getElementById('vv'); if (!v || !VV) return;
+    const pic = v.querySelector('.vvpic'), im = v.querySelector('.vvph img'); if (!pic || !im || !im.naturalWidth) return;
+    const cs = getComputedStyle(pic), aw = pic.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), ah = pic.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const k = Math.min(aw / im.naturalWidth, ah / im.naturalHeight);
+    const ph = im.parentElement;
+    if (k > 0) { const w = Math.floor(im.naturalWidth * k) + 'px', h = Math.floor(im.naturalHeight * k) + 'px'; im.style.width = ph.style.width = w; im.style.height = ph.style.height = h; }
+  }
+  addEventListener('resize', () => { if (VV) { vvSheet(); vvFit(); } });
+  /* a mouse drag on the sheet must not start dragging a photo (it would cancel the slide) */
+  document.addEventListener('dragstart', e => { if (e.target && e.target.closest && e.target.closest('#vv')) e.preventDefault(); }, true);
+  /* the vote from the slideshow: the light runs around the photo and the stamp lands on it */
+  function photoFx(v) {
+    const ph = document.querySelector('#vv .vvph'); if (!ph) return;
+    ph.style.setProperty('--c', v === 'r' ? '#E5484D' : '#2FBF4A');
+    ph.querySelector('.vvst').textContent = v === 'r' ? '✕' : '✓';
+    ph.querySelector('.vvtag').textContent = v === 'r' ? '✕ ' + L('Pass', '반대') : '✓ ' + L('Go', '찬성');
+    ph.classList.remove('play'); void ph.offsetWidth; ph.classList.add('play', 'vvdone');
+    setTimeout(() => ph.classList.remove('play'), 1400);
+  }
+  document.addEventListener('click', async e => {
     const t = e.target;
     const p = t.closest('[data-gp]'), n = t.closest('[data-gn]');
     if (p || n) { e.preventDefault(); step((p || n).dataset.gp || (p || n).dataset.gn, p ? -1 : 1); return; }
     if (t.closest('#vv')) {
-      if (t.closest('[data-vvx]')) vvClose(); else if (t.closest('[data-vvp]')) vvShow(-1); else if (t.closest('[data-vvn]')) vvShow(1);
-      else if (t.closest('[data-vvt]')) { IDX.set(VV.h, +t.closest('[data-vvt]').dataset.vvt); vvShow(0); }
-      else if (t === document.getElementById('vv')) vvClose();
+      if (!VV) return;
+      if (t.closest('[data-vvx]')) { vvClose(); return; }
+      if (t.closest('[data-vvp]')) { vvShow(-1); return; }
+      if (t.closest('[data-vvn]')) { vvShow(1); return; }
+      const sr = t.closest('[data-vvsrc]'); if (sr) { VV.src = sr.dataset.vvsrc; vvShow(0); return; }
+      const th = t.closest('[data-vvt]'); if (th) { VV.idx[VV.src] = +th.dataset.vvt; vvShow(0); return; }
+      const vb = t.closest('[data-vvv]');
+      if (vb) {
+        if (VV.busy || VV.voted) return;
+        const v = vb.dataset.vvv, h = VV.h; VV.busy = true; photoFx(v);
+        vvPanel(); const pn = document.querySelector('#vvpnl .vvvote [data-vvv="' + v + '"]'); if (pn) pn.classList.add('on');
+        const r = await castVote(h, v);
+        if (!VV || VV.h !== h) return;
+        VV.busy = false;
+        if (r.ok) { VV.voted = v; VV.flash = r.flash; draw(r.flash); }
+        else if (r.flash) { VV.voted = ''; VV.flash = r.flash; draw(r.flash); document.querySelector('#vv .vvph').classList.remove('vvdone'); }
+        else { document.querySelector('#vv .vvph').classList.remove('vvdone'); }
+        vvPanel();
+        if (!r.ok && r.err) { const sc = document.querySelector('#vvpnl .vvscroll'); if (sc) sc.insertAdjacentHTML('afterbegin', '<p class="msg err">' + H(r.err) + '</p>'); }
+        return;
+      }
+      if (t.closest('[data-vvpic]') && !t.closest('button,video,a') && !isPhone()) { vvShow(1); return; }
       return;
     }
-    const im = t.closest('.vc .img'); if (im && !t.closest('a,button')) { const vc = im.closest('.vc'); if (vc && galOf(vc.dataset.h).length) vvOpen(vc.dataset.h); }
+    const im = t.closest('.vc .img'); if (im && !t.closest('a,button')) { const vc = im.closest('.vc'); if (vc) vvOpen(vc.dataset.h); }
   });
-  addEventListener('keydown', e => { if (!VV) return; if (e.key === 'Escape') vvClose(); else if (e.key === 'ArrowLeft') vvShow(-1); else if (e.key === 'ArrowRight') vvShow(1); });
-  /* swipe on the card photo and in the full-screen view */
+  addEventListener('keydown', e => {
+    if (!VV) return;
+    if (e.key === 'Escape') { vvClose(); return; }
+    if (e.target && e.target.closest && e.target.closest('input,textarea,video,[data-grip]')) return;
+    if (e.key === 'ArrowLeft') vvShow(-1); else if (e.key === 'ArrowRight') vvShow(1);
+  });
+  /* swipe on the card photo and on the slideshow's photo */
   let SW = null;
-  document.addEventListener('touchstart', e => { const el = e.target.closest('.vc .img, #vv'); if (!el || e.touches.length > 1) { SW = null; return; } SW = { x: e.touches[0].clientX, y: e.touches[0].clientY, el }; }, { passive: true });
+  document.addEventListener('touchstart', e => { const el = e.target.closest('.vc .img, #vv .vvpic'); if (!el || e.touches.length > 1 || e.target.closest('video')) { SW = null; return; } SW = { x: e.touches[0].clientX, y: e.touches[0].clientY, el }; }, { passive: true });
   document.addEventListener('touchend', e => {
     if (!SW) return; const t = e.changedTouches[0], dx = t.clientX - SW.x, dy = t.clientY - SW.y, el = SW.el; SW = null;
     if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
-    if (el.id === 'vv') vvShow(dx < 0 ? 1 : -1); else { const vc = el.closest('.vc'); if (vc) step(vc.dataset.h, dx < 0 ? 1 : -1); }
+    if (el.closest('#vv')) vvShow(dx < 0 ? 1 : -1); else { const vc = el.closest('.vc'); if (vc) step(vc.dataset.h, dx < 0 ? 1 : -1); }
   }, { passive: true });
-  addEventListener('error', e => { const t = e.target; if (t && t.tagName === 'IMG' && (t.closest('.vc') || t.closest('#vv'))) { if (t.closest('.vvs')) { t.closest('button').remove(); return; } bad(t); } }, true);
+  addEventListener('error', e => { const t = e.target; if (t && t.tagName === 'IMG' && (t.closest('.vc') || t.closest('#vv'))) { if (t.closest('.vvs')) { const b = t.closest('button'); if (b) b.remove(); return; } bad(t); } }, true);
   const say = (t, err) => { box.innerHTML = '<p class="msg' + (err ? ' err' : '') + '">' + H(t) + '</p>'; };
 
   /* ---------- signing in ---------- */
@@ -251,22 +416,20 @@
       setTimeout(() => fx.classList.add('out'), 1250); setTimeout(() => fx.remove(), 1600);
     } catch (er) {}
   }
-  box.addEventListener('click', async e => {
-    const b = e.target.closest('.vb[data-v]'); if (!b || !ME) return;
-    const o = OPEN.find(x => hash(x.k) === b.dataset.k); if (!o) return;
-    { const card = box.querySelector('.vc[data-h="' + b.dataset.k + '"]'); if (card) voteFx(card, b.dataset.v); }
-    box.querySelectorAll('.vb').forEach(x => { x.disabled = true; });
+  /* save one vote exactly as the program does; used by the card buttons and by the slideshow (1.2.204) */
+  async function castVote(hk, v) {
+    const o = OPEN.find(x => hash(x.k) === hk); if (!o) return { ok: false };
     try {
       /* read everything again first: someone may have voted, or the card may have left the vote */
       await loadAll();
       const o2 = OPEN.find(x => x.k === o.k); const st = o2 && stateOf(o2);
-      if (!st || !st.open) { draw({ v: b.dataset.v, nm: o.nm, line: L('This vote has just closed, so your vote was not added.', '방금 투표가 끝나 반영되지 않았습니다.') }); return; }
-      if (!st.voters.includes(ME)) { draw(); return; }
+      if (!st || !st.open) return { ok: false, flash: { v, nm: o.nm, line: L('This vote has just closed, so your vote was not added.', '방금 투표가 끝나 반영되지 않았습니다.') } };
+      if (!st.voters.includes(ME)) return { ok: false, flash: null, err: L('You are not one of the voters on this card.', '이 카드의 투표자가 아닙니다.') };
       const { data: cur, error: re } = await sb.from('docs').select('data').eq('path', 'vote/' + ME).maybeSingle();
       if (re) throw re;
       const d = (cur && cur.data) || {}; const ev = Object.assign({}, d.e || {}), tv = Object.assign({}, d.t || {});
       const r = String(st.round);
-      ev[o.k] = Object.assign({}, ev[o.k] || {}, { [r]: b.dataset.v }); tv[o.k] = Object.assign({}, tv[o.k] || {}, { [r]: new Date().toISOString() });
+      ev[o.k] = Object.assign({}, ev[o.k] || {}, { [r]: v }); tv[o.k] = Object.assign({}, tv[o.k] || {}, { [r]: new Date().toISOString() });
       const body = Object.assign({}, d, { e: ev, t: tv, at: new Date().toISOString() });
       const { error: we } = await sb.from('docs').upsert({ path: 'vote/' + ME, coll: 'vote', id: ME, data: body, updated_at: new Date().toISOString() }, { onConflict: 'path' });
       if (we) throw we;
@@ -274,11 +437,18 @@
       const after = stateOf(o2);
       const line = !after ? '' : after.open ? (after.round > st.round ? L('It was a tie, so a tie-breaker round has started.', '동점이라 타이브레이커 라운드가 시작됐습니다.') : L(after.n + ' of ' + after.of + ' have voted. The board in the program has updated.', after.of + '명 중 ' + after.n + '명 투표. 프로그램의 보드도 바뀌었습니다.'))
         : L('That was the last vote: ' + (after.res === 'appr' ? 'Approved ' : 'Cancelled ') + after.g + '–' + after.x + '.', '마지막 표였습니다: ' + (after.res === 'appr' ? '승인 ' : '취소 ') + after.g + '–' + after.x + '.');
-      draw({ v: b.dataset.v, nm: o.nm, line });
-    } catch (err) {
-      box.querySelectorAll('.vb').forEach(x => { x.disabled = false; });
-      const m = document.createElement('p'); m.className = 'msg err'; m.textContent = L('Could not save your vote. ', '투표를 저장하지 못했습니다. ') + errText(err); box.prepend(m);
-    }
+      return { ok: true, flash: { v, nm: o.nm, line } };
+    } catch (err) { return { ok: false, err: L('Could not save your vote. ', '투표를 저장하지 못했습니다. ') + errText(err) }; }
+  }
+  box.addEventListener('click', async e => {
+    const b = e.target.closest('.vb[data-v]'); if (!b || !ME) return;
+    { const card = box.querySelector('.vc[data-h="' + b.dataset.k + '"]'); if (card) voteFx(card, b.dataset.v); }
+    box.querySelectorAll('.vb').forEach(x => { x.disabled = true; });
+    const r = await castVote(b.dataset.k, b.dataset.v);
+    if (r.ok || r.flash) { draw(r.flash); return; }
+    if (r.err === undefined && !r.ok) { draw(); return; }
+    box.querySelectorAll('.vb').forEach(x => { x.disabled = false; });
+    const m = document.createElement('p'); m.className = 'msg err'; m.textContent = r.err; box.prepend(m);
   });
 
   async function start(session) {
@@ -292,6 +462,6 @@
     draw();
   }
   /* coming back to the page refreshes it */
-  addEventListener('visibilitychange', async () => { if (!document.hidden && ME) { try { await loadAll(); draw(); } catch (e) {} } });
+  addEventListener('visibilitychange', async () => { if (!document.hidden && ME) { try { await loadAll(); draw(); if (VV) { vvPanel(); vvShow(0); } } catch (e) {} } });
   sb.auth.getSession().then(({ data }) => start(data && data.session), () => pickName());
 })();
