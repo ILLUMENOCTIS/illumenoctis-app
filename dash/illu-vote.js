@@ -312,13 +312,13 @@
       if(c.st === 'done'){ const d = new Date(c.at || ''); lab = L('Booked', '부킹 완료') + (isNaN(d) ? '' : ' · ' + d.toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {month: 'short'})); }
       else if(c.st === 'canc') lab = L('Booking · Cancelled', '부킹 · 취소');
       else { live = true; let s = ''; try{ s = window.__illuBkStage ? window.__illuBkStage(c) : ''; }catch(e){} lab = L('Booking', '부킹') + (s ? ' · ' + s : ''); }
-      put({k: c.k, nm: c.nm || '', ag: c.ag || '', who: c.by || '', live, lab, at: c.at || ''});
+      put({k: c.k, nm: c.nm || '', ag: c.ag || '', who: c.by || '', live, lab, at: c.at || '', src: 'book'});
     }
     for(const o of OPEN.values()){
       if(!o || !o.k || o.off || hidK(o.k)) continue;
       const s = stateOf(o.k); if(!s) continue;
       const lab = s.open ? L('Team Vote', '팀 투표') + ' · ' + s.n + ' ' + L('of', '/') + ' ' + s.of : L('Vote', '투표') + ' · ' + (s.res === 'appr' ? L('Approved', '승인') : L('Cancelled', '취소'));
-      put({k: o.k, nm: o.nm || '', ag: o.ag || '', who: o.by || '', live: !!s.open, lab, at: s.at || o.at || ''});
+      put({k: o.k, nm: o.nm || '', ag: o.ag || '', who: o.by || '', live: !!s.open, lab, at: s.at || o.at || '', src: 'vote'});
     }
     return [...by.values()];
   };

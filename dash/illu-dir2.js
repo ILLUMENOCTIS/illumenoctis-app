@@ -2017,14 +2017,24 @@
     const bk = null;
     /* 1.2.194: the corner tag on a model the team has worked on (Directory roster) */
     const wk = o.wk || null;
-    const wkTag = wk ? '<span class="ucwkt ' + (wk.live ? 'l' : 'd') + '" title="' + esc(wk.lab + (wkWho(wk.who) ? ' · ' + wkWho(wk.who) : '')) + '">' + wkFaces([wk], 1) + '<i></i><span>' + esc(wk.lab) + '</span></span>' : '';
-    return '<article class="uc' + (bk ? ' ucbk' : '') + (wk ? ' ucw-' + (wk.live ? 'l' : 'd') : '') + '" data-uck="' + esc(m.key) + '">' + wkTag +
+    /* 1.2.199 (user, 15 Nov 2026, demo "Smaller ways to show worked on" - "let's go with C"): nothing on the photo (it covered the
+       Team Vote date + clock); the status sits on the line under the photo, next to the heart, in short words ("Vote 5/6",
+       "Booked Nov"). When her vote buttons are on that line it is only the person's circle and the dot - the buttons and 5/6
+       already tell the vote; pointing at it gives the whole status. */
+    let wkTag = '', wkFoot = '';
+    if(wk){
+      let vOpen = wk.src === 'vote' && wk.live; try{ for(const k of [m.key, wk.k]){ const vs = k && window.__illuVoteState ? window.__illuVoteState(k) : ''; if(vs === 'open' || vs === 'tie') vOpen = true; } }catch(e){}
+      const short = String(wk.lab || '').replace(/^Team Vote · (\d+) of (\d+)$/, 'Vote $1/$2').replace(/^Booked · /, 'Booked ').replace(/^Booking · Cancelled$/, 'Booking cancelled').replace(/^Vote · /, 'Vote ').replace(/^Booking · /, '');
+      const tip = esc(wk.lab + (wkWho(wk.who) ? ' · ' + wkWho(wk.who) : ''));
+      wkFoot = '<span class="ucwks ' + (wk.live ? 'l' : 'd') + (vOpen ? ' only' : '') + '" title="' + tip + '" aria-label="' + tip + '">' + wkFaces([wk], 1) + '<i></i>' + (vOpen ? '' : '<b>' + esc(short) + '</b>') + '</span>';
+    }
+    return '<article class="uc' + (bk ? ' ucbk' : '') + (wk ? ' ucw-' + (wk.live ? 'l' : 'd') + (wk.src === 'vote' ? ' ucw-v' : '') : '') + '" data-uck="' + esc(m.key) + '">' + wkTag +
       (bk ? '<span class="ucbkt" title="' + esc((isKo() ? '부킹 진행 중 · ' : 'In booking · ') + bk.who + (bk.st ? ' · ' + bk.st : '')) + '">' + (isKo() ? '부킹 중 · ' : 'In booking · ') + esc(bk.who) + '</span>' : '') +
       '<div class="ucimg"><div class="d2t ucph" data-d2k="' + esc(m.key) + '" title="' + esc(m.nm) + '">' + pc + '</div>' +
       (minor || !/^https?:/i.test(m.href || '') ? '' : '<button type="button" class="ucarr l" data-ucarr="-1" aria-label="Previous photo">‹</button><button type="button" class="ucarr r" data-ucarr="1" aria-label="Next photo">›</button><span class="uccnt" aria-live="polite"></span>') +
       '<div class="ucov">' + (() => { try{ const v = window.__illuAvailOf && window.__illuAvailOf(m.key); return v ? '<span class="ucav ' + esc(v.t) + '" title="' + esc(v.why || '') + '">' + (v.t === 'later' ? '⏳ ' : '⛔ ') + esc(window.__illuAvailLabel(v, true)) + '</span>' : ''; }catch(e){ return ''; } })() + ''/* 1.2.189 (user, 14 Nov 2026: "let's just completely get rid of this"): no "NAME · booking" label on cards */ + '<b>' + esc(m.nm) + '</b><span class="ucag">' + esc(meta) + '</span>' + mx + '</div>' +
       (offices > 1 ? '<span class="ucbadge">' + offices + (isKo() ? '개 오피스' : ' offices') + '</span>' : '') + '</div>' +
-      '<div class="ucft"><em>' + esc(tl ? (isKo() ? tl[1] : tl[0]) : (m.div || '')) + '</em>' + lamps(m.key, m.nm, meta, m.href) + '</div></article>';
+      '<div class="ucft' + (wkFoot ? ' haswk' : '') + '"><em>' + esc(tl ? (isKo() ? tl[1] : tl[0]) : (m.div || '')) + '</em>' + lamps(m.key, m.nm, meta, m.href) + wkFoot + '</div></article>';
   }
   window.__illuCard = (m, o) => ucard(m, o);
   /* 1.2.149 (user, 12 Nov 2026, approved demo "Browse her photos right on the card"): ‹ › on every model card go
@@ -3020,6 +3030,24 @@ body.d2max #d2bar{margin-top:0}
 .uc .ucwkt .wkavs .iddisc{width:18px;height:18px}
 .uc .ucwkt:not(:has(.wkavs)){padding-left:8px}
 .uc.ucw-l .ucbadge,.uc.ucw-d .ucbadge{top:38px}
+/* 1.2.199 option C: the status on the line under the photo */
+.uc .ucft .ucwks{display:inline-flex;align-items:center;gap:4px;min-width:0;flex:0 1 auto;margin-left:auto;font:600 11px var(--sans,Inter,system-ui,sans-serif);white-space:nowrap;cursor:default}
+.uc .ucft .ucwks i{width:6px;height:6px;border-radius:50%;flex:none;background:#E07B1A}
+.uc .ucft .ucwks.d i{background:#2E9A5F}
+.uc .ucft .ucwks b{font-weight:700;overflow:hidden;text-overflow:ellipsis;min-width:0;color:#C2620C}
+.uc .ucft .ucwks.d b{color:#2E8A57}
+[data-theme="dark"] .uc .ucft .ucwks b,[data-theme="dim"] .uc .ucft .ucwks b{color:#F0A960}[data-theme="dark"] .uc .ucft .ucwks.d b,[data-theme="dim"] .uc .ucft .ucwks.d b{color:#7CD06A}
+.uc .ucft .ucwks .wkavs .iddisc{width:16px;height:16px;font-size:7.5px}
+.uc .ucft.haswk em:empty{display:none}
+.uc .ucft.haswk{justify-content:flex-start}
+/* 1.2.199 (user, 15 Nov 2026: "overlapping ... the booking label and the timeslot of when the card was activated"): on a card
+   on the Team Vote the date + clock strip keeps the top of the photo; the tag sits just under it. The small circle of who sent
+   her to the vote is not repeated when the tag is the vote's (it shows that person); on a booking tag it moves below the tag. */
+.uc:has(.ucimg > .ivstrip) > .ucwkt{top:35px}
+.uc.ucw-v .ivtop .ivfirst{display:none}
+.uc.ucw-l:not(.ucw-v) .ucimg > .ivtop,.uc.ucw-d:not(.ucw-v) .ucimg > .ivtop{top:36px}
+.uc.ucw-l:not(.ucw-v) .ucimg:has(> .ivstrip) > .ivtop,.uc.ucw-d:not(.ucw-v) .ucimg:has(> .ivstrip) > .ivtop{top:63px}
+.uc:has(.ucimg > .ivstrip).ucw-l .ucbadge,.uc:has(.ucimg > .ivstrip).ucw-d .ucbadge{top:63px}
 .uc.ucw-l .uccnt,.uc.ucw-d .uccnt{top:38px}
 @container (max-width:150px){.uc .ucwkt{font-size:9.5px;padding-right:7px}}
 
