@@ -252,6 +252,7 @@
     mv.e[k] = Object.assign({}, mv.e[k] || {}); mv.t[k] = Object.assign({}, mv.t[k] || {});
     if(mv.e[k][r] === v){ delete mv.e[k][r]; delete mv.t[k][r]; changed(); saveMyVt(); say(L('Your vote is taken back.', '내 투표를 취소했습니다.')); return; }
     mv.e[k][r] = v; mv.t[k][r] = nowIso();
+    try{ window.__illuVoteFx && window.__illuVoteFx(k, v); }catch(e){}       /* 1.2.203: the #7 light + stamp, before the card redraws */
     changed(); saveMyVt();
     const after = stateOf(k);
     const nm = (after && after.o.nm) || '';
