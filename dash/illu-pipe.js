@@ -74,7 +74,7 @@
     const rows = rowsNow();
     const of = k => rows.filter(c => bkStOf(c) === k);
     const P = of('proc'), D = of('done'), C = of('canc');
-    const tab = (k, en, ko, n) => '<button type="button" role="tab" aria-selected="' + (S.tab === k) + '" class="' + (S.tab === k ? 'on' : '') + '" data-bptab="' + k + '">' + H(L(en, ko)) + ' · ' + n + '</button>';
+    const tab = (k, en, ko, n) => '<button type="button" role="tab" aria-selected="' + (S.tab === k) + '" class="' + (S.tab === k ? 'on' : '') + '" data-bptab="' + k + '">' + H(L(en, ko)) + ' <b>' + n + '</b></button>';
     let h = '<div class="bphead"><div class="bptabs" role="tablist">' + tab('proc', 'Processing', '진행 중', P.length) + tab('done', 'Completed', '완료', D.length) + tab('canc', 'Cancelled', '취소', C.length) + '</div>' +
       '<div class="bpright"><button type="button" class="bpchip' + (S.mine ? ' on' : '') + '" data-bpmine aria-pressed="' + S.mine + '">' + L('Only mine', '내 카드만') + '</button>' +
       '</div></div>';
@@ -215,6 +215,14 @@ body.bkpipeon #bkmain{display:none!important}
 #bkpipe{display:flex;flex-direction:column;gap:14px;margin:4px 0 16px;font-family:var(--sans,Inter,system-ui,sans-serif);color:var(--ink)}
 #bkpipe .bphead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px}
 #bkpipe .bpright{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+/* 1.2.202: the program's Quiet switch (same as the Team Vote / Today's Board tabs) - these come last and win */
+#bkpipe .bptabs.bptabs{display:inline-flex;background:var(--surf2,#f1eff6);border:0;border-radius:10px;padding:3px;gap:2px;box-shadow:none;max-width:100%;overflow-x:auto;scrollbar-width:none}
+#bkpipe .bptabs.bptabs button{border:0;background:none;color:var(--mut,#7A7283);opacity:1;font:inherit;font-size:13px;font-weight:600;padding:6px 12px;border-radius:8px;min-height:32px;box-shadow:none;white-space:nowrap;flex:none}
+#bkpipe .bptabs.bptabs button:hover{color:var(--ink,#211C26)}
+#bkpipe .bptabs.bptabs button.on{background:var(--surf,#fff);color:var(--ink,#211C26);border:0;box-shadow:0 1px 2px rgba(20,10,30,.12),0 0 0 1px var(--line,#e6e0ea)}
+#bkpipe .bptabs.bptabs b{font-size:12.5px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--faint,#B3ABB8);margin-left:4px}
+#bkpipe .bptabs.bptabs button.on b{color:var(--mut,#7A7283)}
+@media (max-width:760px){#bkpipe .bptabs.bptabs button{min-height:38px;padding:6px 11px}}
 #bkpipe .bptabs{display:inline-flex;background:var(--surf);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
 #bkpipe .bptabs button{border:0;background:none;font:inherit;font-size:13px;font-weight:600;color:var(--faint);padding:0 13px;border-radius:7px;min-height:32px;cursor:pointer}
 #bkpipe .bptabs button.on{background:var(--acc);color:#fff}

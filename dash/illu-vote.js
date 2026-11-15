@@ -1995,9 +1995,13 @@
       : tab === 'to' ? empty(L('Nothing waiting for your vote', '내 투표를 기다리는 카드가 없습니다'), L('When someone presses Send to Team Vote on a card, it shows here for you to vote on. Cards you voted on are under I voted.', '누군가 카드에서 팀 투표로 보내기를 누르면 여기에 보입니다. 투표한 카드는 내가 투표한 카드에 있습니다.'))
       : empty(L('You have not voted yet', '아직 투표한 카드가 없습니다'), L('Vote on a card and it moves here.', '투표하면 카드가 여기로 옵니다.')));
   }, () => allStates().filter(needMe).length || '');
-  function subTabs(key, tab, nTo, nDone){
-    const b = (v, lab, n) => '<button type="button" role="tab" data-ivset="' + key + '=' + v + '" aria-selected="' + (tab === v) + '">' + lab + ' <b>' + n + '</b></button>';
-    return '<div class="ivsub" role="tablist">' + b('to', L('Waiting for my vote', '내 투표 대기'), nTo) + b('done', L('I voted', '내가 투표한 카드'), nDone) + '</div>';
+  /* 1.2.202 (user, 16 Nov 2026, approved demo "Today's Board vote bar" style 2 - Quiet switch): a light grey track, the
+     chosen tab a white raised button, counts in grey - orange when something needs me (votes waiting, Approved cards
+     waiting for the final confirmation). Today's Board also gets Approved and Cancelled. */
+  function subTabs(key, tab, nTo, nDone, more){
+    const b = (v, lab, n, hot) => '<button type="button" role="tab" data-ivset="' + key + '=' + v + '" aria-selected="' + (tab === v) + '">' + lab + ' <b' + (hot && n > 0 ? ' class="hot"' : '') + '>' + n + '</b></button>';
+    return '<div class="ivsub qsw" role="tablist">' + b('to', L('Waiting for my vote', '내 투표 대기'), nTo, true) + b('done', L('I voted', '내가 투표한 카드'), nDone) +
+      (more ? b('appr', L('Approved', '승인'), more.appr, true) + b('cxl', L('Cancelled', '취소'), more.cxl) : '') + '</div>';
   }
   /* Approved: waiting for the final confirmation */
   const decided = res => allStates().filter(s => !s.open && s.res === res).sort((a, b) => String(a.at).localeCompare(String(b.at)));
@@ -2070,19 +2074,27 @@
     const chip = (f, lab) => '<button type="button" class="ivtf' + (f === 'now' ? ' hot' : '') + '" data-ivset="tf=' + f + '" aria-pressed="' + (tf === f) + '">' + (f === 'now' ? '<i></i>' : '') + lab + ' <s>' + all.filter(x => inF(f, x)).length + '</s></button>';
     const opt = (v, lab) => '<option value="' + v + '"' + (ts === v ? ' selected' : '') + '>' + lab + '</option>';
     setTimeout(tick, 0);
-    const tab = VS.tsub === 'done' ? 'done' : 'to', vd = myVoted().filter(gw), vn = Math.max(24, +VS.vn || 24);
+    const tab = ['done', 'appr', 'cxl'].includes(VS.tsub) ? VS.tsub : 'to', vd = myVoted().filter(gw), vn = Math.max(24, +VS.vn || 24);
+    /* 1.2.202: Approved (waiting for the final confirmation first, then the ones sent to Booking) and Cancelled, as on the Team Vote boards */
+    const tcap = s => '<div class="ivcap">' + H(when(s.at)) + '</div>';     /* the card's own badge already says Approved / Cancelled and the score */
+    const apAll = decided('appr').filter(gw), apWait = apAll.filter(s => !s.o.conf), apDone = apAll.filter(s => s.o.conf), cxl = decided('cxl').filter(gw);
+    const apprH = apAll.length ? (apWait.length ? '<div class="ivgrid tight ivtg">' + apWait.map(s => '<div class="ivcw">' + mcard(s.k) + tcap(s) + '<button type="button" class="ivbtn pri wide" data-ivconf="' + H(s.k) + '">' + L('Confirm', '확정') + '</button></div>').join('') + '</div>' : '') +
+        (apDone.length ? '<div class="ivsec"><h3>' + L('Sent to Booking', '부킹으로 보냄') + '</h3><span class="ivpill">' + apDone.length + '</span></div><div class="ivgrid tight ivtg">' + apDone.slice(-24).reverse().map(s => '<div class="ivcw">' + mcard(s.k) + tcap(s) + '</div>').join('') + '</div>' : '')
+      : '<div class="ivempty sm">' + L('Nothing approved yet. When the team votes a card in, it waits here for the final confirmation.', '아직 승인된 카드가 없습니다. 팀이 찬성하면 최종 확정을 기다리며 여기에 표시됩니다.') + '</div>';
+    const cxlH = cxl.length ? '<div class="ivgrid tight ivtg">' + cxl.slice(-48).reverse().map(s => '<div class="ivcw">' + mcard(s.k) + tcap(s) + '<button type="button" class="ivbtn wide" data-ivre="' + H(s.k) + '">' + L('Reopen the vote', '투표 다시 열기') + '</button></div>').join('') + '</div>'
+      : '<div class="ivempty sm">' + L('No cancelled cards.', '취소된 카드가 없습니다.') + '</div>';
     const doneH = vd.length ? '<div class="ivgrid tight ivtg">' + vd.slice(0, vn).map(st => '<div class="ivcw">' + mcard(st.k) + votedCap(st) + offBox(st.k, st) + '</div>').join('') + '</div>' +
         (vd.length > vn ? '<button type="button" class="ivmore" data-ivset="vn=' + (vn + 24) + '">' + L('Show ' + Math.min(24, vd.length - vn) + ' more', Math.min(24, vd.length - vn) + '장 더 보기') + '</button>' : '')
       : '<div class="ivempty sm">' + L('You have not voted on anything yet. Vote on a card and it moves here.', '아직 투표한 카드가 없습니다. 투표하면 카드가 여기로 옵니다.') + '</div>';
     /* 1.2.138 (user, 11 Nov 2026: "this part is taking up too much space. Don't need that Waiting for your vote. I already
        have the golden bar telling me. the [team] description should be able to viewed by clicking/touching"):
        one row - the two tabs (they carry the counts), an ⓘ that opens the team note, Share vote link, Team Vote */
-    return '<section class="ivtoday' + (all.length ? ' glow' : '') + '"><div class="ivrow ivth ivth2">' + subTabs('tsub', tab, all.length, vd.length) + '<span class="ivsp"></span>' +
+    return '<section class="ivtoday' + (all.length ? ' glow' : '') + '"><div class="ivrow ivth ivth2">' + subTabs('tsub', tab, all.length, vd.length, {appr: apWait.length, cxl: cxl.length}) + '<span class="ivsp"></span>' +
       '<details class="ivinfo"><summary title="' + H(L('How the Team Vote works', '팀 투표 방법')) + '" aria-label="' + H(L('How the Team Vote works', '팀 투표 방법')) + '">i</summary><p class="ivmut sm ivtnote">' + L('Team: ', '팀: ') + H(people().map(pname).join(', ')) + ' · ' + L('the majority decides; your vote stays private until everyone has voted.', '다수결 · 모두 투표할 때까지 내 선택은 나만 봅니다.') + (mineDone ? ' · ' + L('<b>' + mineDone + '</b> you voted on are waiting for the others.', '내가 투표한 <b>' + mineDone + '</b>건은 다른 사람을 기다립니다.') : '') + '</p></details>' +
       '<button type="button" class="ivbtn ivshare ivtshare" data-ivshare>' + SHAREI + L('Share vote link', '투표 링크 보내기') + '</button>' +
       (lateN ? '' : '<button type="button" class="ivgo" data-ivgo="team">' + L('Team Vote', '팀 투표') + ' <span aria-hidden="true">→</span></button>') + '</div>' +
       (lateN ? '<div class="ivnowb"><span class="ivnbi">' + CLKI + '</span><div class="ivnbt"><b>' + L('Vote Now — ' + lateN + (lateN === 1 ? ' card needs' : ' cards need') + ' you', '지금 투표 — ' + lateN + '장이 내 투표를 기다립니다') + '</b><span>' + L('They have waited 3 hours or more. The team can’t decide without you.', '3시간 이상 기다렸습니다. 내 투표가 있어야 팀이 정할 수 있습니다.') + '</span></div><div class="ivnbb"><button type="button" data-ivset="tf=now">' + L('Show them', '보기') + '</button><button type="button" data-ivgo="team">' + L('Go to Team Vote', '팀 투표로 가기') + ' <span aria-hidden="true">→</span></button></div></div>' : '') +
-      (tab === 'done' ? doneH : (all.length ? '<div class="ivtbar"><div class="ivtfs">' + chip('all', L('All', '전체')) + chip('now', L('Vote Now', '지금 투표')) + chip('today', L('Today', '오늘')) + chip('week', L('This week', '이번 주')) + chip('older', L('Older', '이전')) + '</div><span class="ivsp"></span>' +
+      (tab === 'done' ? doneH : tab === 'appr' ? apprH : tab === 'cxl' ? cxlH : (all.length ? '<div class="ivtbar"><div class="ivtfs">' + chip('all', L('All', '전체')) + chip('now', L('Vote Now', '지금 투표')) + chip('today', L('Today', '오늘')) + chip('week', L('This week', '이번 주')) + chip('older', L('Older', '이전')) + '</div><span class="ivsp"></span>' +
         '<select class="ivts" data-ivsort aria-label="' + H(L('Order', '순서')) + '">' + opt('urg', L('Most urgent first', '급한 순')) + opt('new', L('Newest first', '최신 순')) + opt('old', L('Oldest first', '오래된 순')) + '</select></div>' : '') +
       (list.length ? '<div class="ivgrid tight ivtg">' + list.slice(0, tn).map(x => '<div class="ivcw">' + mcard(x.k) + offBox(x.k, x.st) + '</div>').join('') + '</div>' +
           (list.length > tn ? '<button type="button" class="ivmore" data-ivset="tn=' + (tn + 24) + '">' + L('Show ' + Math.min(24, list.length - tn) + ' more · ' + (list.length - tn) + ' left', Math.min(24, list.length - tn) + '장 더 보기 · ' + (list.length - tn) + '장 남음') + '</button>' : '')
@@ -2256,10 +2268,16 @@ p.pnag{cursor:default}
 .mxin textarea,.mxin input{flex:1;min-width:0;border:1px solid var(--line);border-radius:9px;padding:7px 9px;font:inherit;font-size:13px;background:var(--surf,#fff);color:var(--ink);resize:vertical}
 .mxin.lk{flex-wrap:wrap}.mxin.lk input[data-mxin="url"]{flex:1 1 100%}
 .mxerr{margin:0;font-size:12px;color:#A8323C}
-.ivsub{display:flex;gap:4px;background:var(--surf2,#f1eff6);border:1px solid var(--line,#e6e0ea);border-radius:999px;padding:3px;width:max-content;max-width:100%;overflow-x:auto;margin:2px 0 10px}
-.ivsub button{border:0;background:none;border-radius:999px;padding:6px 14px;cursor:pointer;color:var(--ink2,#494154);font:inherit;font-size:13px;font-weight:600;white-space:nowrap}
-.ivsub button[aria-selected="true"]{background:var(--acc,#5A2C57);color:#fff}
-.ivsub b{font-family:var(--mono);font-size:11px;font-weight:500;opacity:.85;margin-left:2px}
+.ivsub{display:flex;gap:2px;background:var(--surf2,#f1eff6);border:0;border-radius:10px;padding:3px;width:max-content;max-width:100%;overflow-x:auto;scrollbar-width:none;margin:2px 0 10px}
+.ivsub::-webkit-scrollbar{display:none}
+.ivsub button{flex:none;border:0;background:none;border-radius:8px;padding:6px 12px;cursor:pointer;color:var(--mut,#7A7283);font:inherit;font-size:13px;font-weight:600;white-space:nowrap;min-height:32px}
+.ivsub button:hover{color:var(--ink,#211C26)}
+.ivsub button[aria-selected="true"]{background:var(--surf,#fff);color:var(--ink,#211C26);box-shadow:0 1px 2px rgba(20,10,30,.12),0 0 0 1px var(--line,#e6e0ea)}
+.ivsub button:focus-visible{outline:2px solid var(--acc,#5A2C57);outline-offset:1px}
+.ivsub b{font-size:12.5px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--faint,#B3ABB8);margin-left:4px}
+.ivsub [aria-selected="true"] b{color:var(--mut,#7A7283)}
+.ivsub b.hot{color:#D9731A;font-weight:700}
+@media (max-width:760px){.ivsub button{min-height:38px;padding:6px 11px}}
 .vmk .ivsend{margin-left:auto;border:1px solid var(--acc,#5A2C57);color:var(--acc,#5A2C57);background:none;border-radius:999px;padding:5px 10px;font:inherit;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap;min-height:30px}
 .vmk .ivsend:hover{background:var(--wash,#EDE3EE)}
 .ivoff{border:1px dashed var(--line,#e6e0ea);background:none;border-radius:8px;padding:6px;font:inherit;font-size:12px;cursor:pointer;color:var(--ink2,#494154);width:100%}.ivoff.ivend{color:#6b2a5e;border-color:#cfb3cb;margin-bottom:6px;font-weight:600}
