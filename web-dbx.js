@@ -143,6 +143,69 @@
     if (!f.p.startsWith(f.base + '/') || f.p.slice(f.base.length + 1).split('/').length < 2) return { ok: false, why: 'not inside a model folder' };
     try { await api('files/delete_v2', { path: f.p }); RIDS.delete(ridOf(u)); return { ok: true, place: 'dbx', name: f.n }; } catch (e) { return { ok: false, why: 'Dropbox: ' + (e.summary || e.message) }; }
   };
+  /* 1.2.201 (user, 15 Nov 2026 - the comp sheet): "Upload" on the phone puts the file into HER Dropbox folder (the same rules
+     as the computer, app/main.js webPut): the right tab folder, never replacing a file (a same-named different file gets " (2)").
+     Big videos go up in 8 MB pieces. Nothing is kept in the program - only where the file is. */
+  const BK_SUBS = ['1. BOOK', '2. SNAPS', '3. VIDEOS', '4. PASSPORT', '5. CONTRACT', '6. VISA', '7. AIRLINE TICKET', '8. STATEMENT', '9. EMAIL'];
+  const tabKey = s => String(s || '').trim().replace(/^\d+\s*\.?\s*/, '').toLowerCase();
+  async function mkdir(p) { try { await api('files/create_folder_v2', { path: p, autorename: false }); } catch (e) { if (!/conflict/.test(e.summary || '')) throw e; } }
+  async function upload(p, blob) {
+    const t = await token(), CH = 8 * 1024 * 1024;
+    const call = async (ep, arg, body) => {
+      const r = await fetch('https://content.dropboxapi.com/2/' + ep, { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/octet-stream', 'Dropbox-API-Arg': JSON.stringify(arg).replace(/[\u007f-￿]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')) }, body });
+      const txt = await r.text(); let j = {}; try { j = JSON.parse(txt); } catch (e) { j = { error_summary: txt }; }
+      if (!r.ok) throw Object.assign(new Error(j.error_summary || ('HTTP ' + r.status)), { summary: j.error_summary || '', status: r.status });
+      return j;
+    };
+    const commit = { path: p, mode: 'add', autorename: false, mute: false };
+    if (blob.size <= CH) return call('files/upload', commit, blob);
+    const st = await call('upload_session/start', { close: false }, blob.slice(0, CH));
+    let off = CH;
+    while (blob.size - off > CH) { await call('upload_session/append_v2', { cursor: { session_id: st.session_id, offset: off }, close: false }, blob.slice(off, off + CH)); off += CH; }
+    return call('upload_session/finish', { cursor: { session_id: st.session_id, offset: off }, commit }, blob.slice(off));
+  }
+  window.illu.bookingPut = async (src, name, first, tab, fname, data, subdir) => {
+    if (src !== 'dbx') return { ok: false, why: 'this phone has no folders of its own' };
+    if (!S()) return { ok: false, need: 'connect' };
+    try {
+      const base = await findBase(); if (!base) return { ok: false, why: 'no ILLUMENOCTIS › BOOKING folder in this Dropbox' };
+      let dir = await findDir(base, name, first);
+      if (!dir) { const n = bkClean(name); if (!n) return { ok: false, why: 'no name' }; dir = base + '/' + n; await mkdir(dir); for (const x of BK_SUBS) await mkdir(dir + '/' + x); ROOTDIRS.at = 0; }
+      const want = tabKey(tab), std = BK_SUBS.find(x => tabKey(x) === want); if (!std) return { ok: false, why: 'unknown folder ' + tab };
+      const kids = await listAll(dir, false);
+      let sub = (kids.find(e => e['.tag'] === 'folder' && tabKey(e.name) === want) || {}).name;
+      if (!sub) { sub = std; await mkdir(dir + '/' + sub); }
+      const segs = String(subdir || '').split(/[\\/]+/).map(bkClean).filter(x => x && x !== '.' && x !== '..');
+      let cur = dir + '/' + sub; for (const g of segs) { cur += '/' + g; await mkdir(cur); }
+      const subRel = [sub, ...segs].join('/');
+      const blob = data instanceof Blob ? data : new Blob([data]);
+      const there = new Map(); for (const e of await listAll(cur, false)) if (e['.tag'] === 'file') there.set(e.name.normalize('NFC').toLowerCase(), e.size);
+      const nm = bkClean(fname).replace(/^[.\s]+/, '') || 'file', m = nm.match(/^(.*?)(\.[^.]*)?$/), b = m[1] || 'file', ext = m[2] || '';
+      for (let j = 1; j < 500; j++) {
+        const n = j === 1 ? nm : b + ' (' + j + ')' + ext, k = n.normalize('NFC').toLowerCase();
+        if (there.has(k)) { if (there.get(k) === blob.size) return { ok: true, same: true, name: n, sub: subRel, folder: dir.split('/').pop(), web: true }; continue; }
+        try { const r = await upload(cur + '/' + n, blob); return { ok: true, name: r.name || n, sub: subRel, folder: dir.split('/').pop(), web: true }; }
+        catch (e) { if (/conflict/.test(e.summary || e.message)) { there.set(k, -1); continue; } throw e; }
+      }
+      return { ok: false, why: 'too many files with that name' };
+    } catch (e) { return { ok: false, why: 'Dropbox: ' + (e.summary || e.message) }; }
+  };
+  /* 1.2.201: a view-only link to ONE file in her folder (the comp sheet's video). The person with the link sees that file only. */
+  window.illu.bookingShareFile = async (name, first, rel) => {
+    if (!S()) return { ok: false, need: 'connect' };
+    const r = String(rel || '').replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!r || r.split('/').some(x => x === '..' || x === '.')) return { ok: false, why: 'no file' };
+    try {
+      const base = await findBase(); if (!base) return { ok: false, why: 'no ILLUMENOCTIS › BOOKING folder in this Dropbox' };
+      const dir = await findDir(base, name, first); if (!dir) return { ok: false, nofolder: true };
+      const p = dir + '/' + r;
+      try { const j = await api('sharing/create_shared_link_with_settings', { path: p, settings: { requested_visibility: 'public', audience: 'public', access: 'viewer' } }); return { ok: true, url: j.url }; }
+      catch (e) {
+        if (/shared_link_already_exists/.test(e.summary || '')) { const j = await api('sharing/list_shared_links', { path: p, direct_only: true }); const l = (j.links || []).find(x => x && x.url); if (l) return { ok: true, url: l.url }; }
+        throw e;
+      }
+    } catch (e) { const m = e.summary || e.message || ''; return /missing_scope/.test(m) ? { ok: false, scope: true, why: m } : { ok: false, why: 'Dropbox: ' + m }; }
+  };
   window.illu.dropboxConnect = connect;
   window.illu.dropboxStatus = async () => { const s = S(); return s ? { connected: true, name: s.name || '', email: s.email || '', base: s.base || '' } : { connected: false }; };
   window.illu.dropboxDisconnect = async () => { LS.del('illu.dbx'); try { const c = await caches.open('illu-auth'); await c.delete('/__illu_dbx'); await c.delete('/__illu_bkmap'); } catch (e) {} return { ok: true }; };
