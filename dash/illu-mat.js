@@ -16,6 +16,13 @@
   const cardOf = k => { try{ if(/^bid:/.test(k)) return (typeof BOOK !== 'undefined' && BOOK.get(k.slice(4))) || null; return bkForKey(k); }catch(e){ return null; } };
   const tabOf = rel => { const t = String(rel).split('/')[0].replace(/^\d+\s*\.?\s*/, '').toLowerCase(); return t === 'book' ? 'book' : /^snap|^pola/.test(t) ? 'snaps' : /^video/.test(t) ? 'videos' : ''; };
   const order = rel => ({book: 0, snaps: 1, videos: 2})[tabOf(rel)] ?? 3;
+  const ZDOC = /passport|여권|visa|비자|contract|계약|ticket|티켓|항공|e-?ticket|boarding|statement|정산|invoice|인보이스|영수증|receipt|insurance|보험|외국인|등록증|신분|\bid\b|id[ _-]?card|\barc\b|bank|통장|계좌|서류|document|scan|스캔|signature|서명|card|카드|코로나|covid|vaccin|health|건강|진단/i;
+  const ZPREF = /book|snap|pola|photo|사진|프로필|profile|comp|portfolio|digital/i;
+  function zPhotos(files){
+    return files.filter(f => f.rid && IMG.test(f.rel) && !ZDOC.test(f.rel) && (f.size || 0) > 30 * 1024)
+      .sort((a, b) => (ZPREF.test(b.rel) - ZPREF.test(a.rel)) || (String(a.rel).split('/').length - String(b.rel).split('/').length) || String(a.rel).localeCompare(String(b.rel), undefined, {numeric: true}))
+      .slice(0, 300).map(f => ({u: '/_blob/' + f.rid, t: 'book', r: f.rel, z: 1}));
+  }
   async function read(k){
     const c = cardOf(k); if(!c || !can()) return [];
     let name = ''; try{ name = bvFolderName(c); }catch(e){ return []; }
@@ -23,10 +30,34 @@
     let r = null;
     try{ r = await window.illu.bookingFiles('dbx', name, first); }catch(e){ r = null; }
     if(!r || !r.ok || !r.found || !(r.files || []).some(f => IMG.test(f.rel))){ try{ const r2 = await window.illu.bookingFiles('pc', name, first); if(r2 && r2.ok && r2.found) r = r2; }catch(e){} }
+    /* 1.2.200 (user, 15 Nov 2026: "photos not showing" - Petra, Ksenia, Polina, Stasy, Lera): a card brought in from the office
+       drive has its own folder there (c.zsrc). Its photos are read from it (read only). That folder is not sorted into
+       1. BOOK / 2. SNAPS, so every image counts as a photo except the ones whose folder or file name says it is a document
+       (passport, visa, contract, ticket, statement, ID...). Folders named like book / snaps / photos come first. */
+    if((!r || !r.ok || !r.found || !(r.files || []).some(f => IMG.test(f.rel))) && c.zsrc){
+      try{ const rz = await window.illu.bookingFiles('zsrc', c.zsrc, first); if(rz && rz.ok && rz.found) return zPhotos(rz.files || []); }catch(e){}
+    }
     if(!r || !r.ok || !r.found) return [];
     return (r.files || []).filter(f => f.rid && ((IMG.test(f.rel) && order(f.rel) < 2) || (VID.test(f.rel) && tabOf(f.rel) === 'videos')))
       .sort((a, b) => order(a.rel) - order(b.rel) || String(a.rel).localeCompare(String(b.rel), undefined, {numeric: true}))
       .slice(0, 300).map(f => ({u: '/_blob/' + f.rid + (window.illu && window.illu.web && !VID.test(f.rel) ? '?w=1400' : ''), t: tabOf(f.rel), r: f.rel}));
+  }
+  /* 1.2.200: the first photo found in her office-drive folder becomes her card photo for everyone (phone included - the phone
+     cannot reach Z:), the same as pressing Photo on the card. Only for a card with no photo of its own and no agency page;
+     the Photo button still changes it. */
+  const ZPUB = new Set();
+  async function zPublish(k, ph){
+    try{
+      const c = cardOf(k); const p = (ph || []).find(x => x.z);
+      if(!c || !p || c.ph || c.pcv || c.k || ZPUB.has(c.id) || typeof setBookPic !== 'function') return;
+      if(typeof SIGNED === 'function' && !SIGNED()) return;
+      ZPUB.add(c.id);
+      const b = await fetch(p.u).then(r => r.ok ? r.blob() : null); if(!b || !b.size) return;
+      const ext = (String(p.r).match(/\.(\w+)$/) || [, 'jpg'])[1].toLowerCase();
+      const f = new File([b], 'card.' + ext, {type: b.type && /^image\//.test(b.type) ? b.type : 'image/' + (ext === 'jpg' ? 'jpeg' : ext)});
+      await setBookPic(c.id, f);
+      try{ c.phz = p.r; saveBook(c.id, true); }catch(e){}
+    }catch(e){ console.error('z photo', e); }
   }
   function load(k){
     const e = M.get(k) || {at: 0, photos: []};
@@ -35,6 +66,7 @@
     read(k).then(ph => {
       const changed = JSON.stringify(ph) !== JSON.stringify(e.photos);
       e.photos = ph; e.at = Date.now(); e.busy = false;
+      zPublish(k, ph);
       if(changed){ try{ window.__illuVoteChanged && window.__illuVoteChanged(); }catch(err){} try{ window.__illuTodayRender && window.__illuTodayRender(); }catch(err){} clearTimeout(window.__illuMatRT); window.__illuMatRT = setTimeout(() => { try{ window.__illuArrRender && window.__illuArrRender(); }catch(err){} try{ window.__illuPipe && window.__illuPipe.render(); }catch(err){} }, 300); }
     }, () => { e.busy = false; e.at = Date.now(); });
     return e;
