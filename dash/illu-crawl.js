@@ -150,6 +150,15 @@
               ms.forEach(([h]) => have.add(h));
               found.push(Object.assign({u: c.u, d: c.d, g: c.g, t: c.t}, c.x ? {x: c.x} : {}, {m: ms.map(([h, n]) => [n || '', '|' + h])}));
             }
+            /* 1.2.193 (user, 14 Nov 2026 - Perception Models: "There is no board to represent male / female ... Currently the
+               site has 22 models on their board"): no board link at all, but the home page itself shows the models (a
+               grid of pictured links): that page is the board - "Our people", sex not stated (set it on each card) */
+            if(!found.length && !cand.length){
+              L.step = 'reading the home page as the board';
+              const br = await TO(illu.crawlBoard(r.at || home), 600000);
+              const ms = (br && br.models || []).filter(([h]) => !OUT.test(h));
+              if(ms.length >= 6) found.push({u: (br && br.at) || r.at || home, d: 'Our people', g: '?', t: 'unlabelled', x: 'model', m: ms.map(([h, n]) => [n || '', '|' + h])});
+            }
             if(!found.length){ st.state = 'failed'; st.error = cand.length ? 'boards found but no model links on them (' + cand.length + ')' : 'no Women / Men / New faces / Development / Talent / Model board found on the home page'; }
           }
         }
@@ -196,11 +205,15 @@
           if(same.length >= 2){ r.rec[6] = null; for(const x of same){ E[x][6] = null; try{ const m = MEAS.get(x); if(m) m[6] = null; }catch(er){} } } }
         if(r && r.ok && r.rec){ E[k] = r.rec; if(window.__measPut) window.__measPut(k, r.rec); else MEAS.set(k, r.rec); st.measured++; L.ok++; C.found++; since++; }
         else if(r && r.gone) st.gone++;
-        else if(r && /no measurements/.test(r.error || '')) st.nomeas++;
+        else if(r && /no measurements/.test(r.error || '')){
+          st.nomeas++;
+          /* 1.2.193: no measurements on her page, but her photo is kept so her card has a picture (Perception) */
+          if(r.photo && !E[k]){ const rec = [null, null, null, null, null, null, r.photo]; E[k] = rec; try{ if(window.__measPut) window.__measPut(k, rec); else MEAS.set(k, rec); }catch(er){} st.photos = (st.photos || 0) + 1; since++; }
+        }
         else st.errors++;
         /* the agency's pages give nothing: stop early rather than read hundreds of pages */
-        if(st.read === 25 && !st.measured && st.errors >= 25){ st.state = 'failed'; st.error = 'stopped: the first 25 profiles did not answer (network) ' + (r && r.error || ''); break; }
-        if(st.read === 25 && !st.measured){ st.state = 'failed'; st.error = 'no measurements found on the first 25 profiles (' + (r && r.error || '') + ')'; break; }
+        if(st.read === 25 && !st.measured && !st.photos && st.errors >= 25){ st.state = 'failed'; st.error = 'stopped: the first 25 profiles did not answer (network) ' + (r && r.error || ''); break; }
+        if(st.read === 25 && !st.measured && !st.photos){ st.state = 'failed'; st.error = 'no measurements found on the first 25 profiles (' + (r && r.error || '') + ')'; break; }
         if(since >= 30){ since = 0; await save('meas/c' + a.id, {e: E, at: new Date().toISOString(), name: a.name}); }
         await wait(600);
       }

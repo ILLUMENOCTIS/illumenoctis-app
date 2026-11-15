@@ -880,6 +880,14 @@
     return '<button type="button" class="pnagfav' + (on ? ' on' : '') + '" data-pnagfav="' + H(d) + '" data-pnagnm="' + H(ag) + '" aria-pressed="' + on + '" aria-label="' + H(on ? L(ag + ' is in Favorite Agencies — click to remove', ag + ' 즐겨찾는 에이전시에 있음 — 누르면 뺍니다') : L('Add ' + ag + ' to Favorite Agencies', ag + ' 즐겨찾는 에이전시에 추가')) + '" title="' + H(on ? L('In Favorite Agencies — click to remove', '즐겨찾는 에이전시에 있음 — 누르면 뺍니다') : L('Add this agency to Favorite Agencies', '이 에이전시를 즐겨찾는 에이전시에 추가')) + '">' +
       '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z"/></svg></button>';
   }
+  /* 1.2.201: the side panel's gender is set from the program's Gender menu (illu-prof2.js) */
+  const pnSexPick = async (btn, v) => {
+    const g = v === 'F' || v === 'M' ? v : '?';
+    const ok = await window.__illuSetSex(btn.dataset.gmkey, g);
+    changed();
+    if(ok) say(g === 'F' ? L('Saved as Female for everyone.', '모두에게 여성으로 저장했습니다.') : g === 'M' ? L('Saved as Male for everyone.', '모두에게 남성으로 저장했습니다.') : L('Saved as not stated.', '성별 미표기로 저장했습니다.'));
+  };
+  (function reg(){ if(window.__illuGenderPick) window.__illuGenderPick('pn', pnSexPick); else setTimeout(reg, 300); })();
   function pnHead(k, a, c, fav){
     const {i, f} = a.facts || factsOf(k);
     const F = Object.assign({}, f, a.f || {});
@@ -887,7 +895,12 @@
     const tier = (a.f && a.f.tier) || f.tier || i.t || '';
     const TL = {newfaces: L('New faces', '뉴 페이스'), development: L('Development', '디벨롭먼트'), main: L('Main', '메인'), direct: L('Direct', '다이렉트')};
     const place = [a.city || i.city, a.country || i.country].filter(Boolean).join(', ');
-    const meta = [place, sex === 'F' ? L('Female', '여성') : sex === 'M' ? L('Male', '남성') : '', TL[tier] || (tier && tier !== 'unlabelled' ? tier : '')].filter(Boolean).join(' · ');
+    /* 1.2.193: the sex can be set or changed here (illu-sex.js) - "Female ✎", "Male ✎" or "Choose F / M ✎" */
+    let sk = ''; try{ sk = mkeyOf(k, c); }catch(e){}
+    const sexLab = sex === 'F' ? L('Female', '여성') : sex === 'M' ? L('Male', '남성') : '';
+    /* 1.2.201 (user's approved demo, Gender option 1): the program's one Gender menu - "Female ⌄" / "Not stated ⌄" */
+    const sexH = window.__illuSetSex && window.__illuGenderHtml && sk && /^https?:/i.test(sk) ? window.__illuGenderHtml(sex === 'F' || sex === 'M' ? sex : '', 'pn', sk, false) : H(sexLab);
+    const meta = [H(place), sexH, H(TL[tier] || (tier && tier !== 'unlabelled' ? tier : ''))].filter(Boolean).join(' · ');
     let pic = ''; try{ const id = typeof PICS !== 'undefined' && PICS.get(k); let src = id ? picURL(id) : (F.photo || ''); if(src && window.__illuSmall && /^https?:/i.test(src)) src = window.__illuSmall(src, 300); if(src) pic = '<img src="' + H(src) + '" alt="" referrerpolicy="no-referrer" decoding="async" loading="lazy">'; }catch(e){}
     const href = a.href || i.href || '';
     const ag = a.ag || i.ag || '';
@@ -899,7 +912,7 @@
     const nmTxt = H(a.nm || i.nm || '');
     return '<div class="pnhd"><div class="pnth">' + pic + '</div><div class="pnhm"><h2>' + (pg ? '<a class="pnnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(L('Open her page on the agency’s site', '에이전시 사이트에서 모델 페이지 열기')) + '">' + nmTxt + '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg></a>' : nmTxt) + '</h2>' +
       '<div class="pnagr">' + agH + agFavBtn(a, ag, href) + (mom ? '<span class="pnmom">' + L('Mother', '마더') + '</span>' : '') + '</div>' +
-      (meta ? '<p class="pnmeta">' + H(meta) + '</p>' : '') + momBox(k, a) + '</div>' +
+      (meta ? '<p class="pnmeta">' + meta + '</p>' : '') + momBox(k, a) + '</div>' +
       '<button type="button" class="pnfav' + (fav ? ' on' : '') + '" data-pnfav aria-pressed="' + fav + '" title="' + H(fav ? L('In My Favorites — click to remove', '내 즐겨찾기 — 누르면 뺍니다') : L('Add to My Favorites', '내 즐겨찾기에 추가')) + '">' + HEART + '</button></div>' +
       (a.readNote || '');
   }
@@ -2608,6 +2621,7 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pnadask p{margin:0 0 8px}.pnadask div{display:flex;gap:6px}
 .pnadhid{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--acc,#6b2a63) 9%,var(--surf,#fff));font-size:12.5px}
 .pnadhid span{flex-grow:1}
+.pn2 .pnmeta .gmn{vertical-align:baseline}.pn2 .pnmeta .gmv{font-size:inherit;color:inherit;gap:5px}.pn2 .pnmeta .gmv.ph{color:var(--faint,#B3ABB8)}.pn2 .pnmeta .gmc{width:5px;height:5px;margin-top:-3px}
 @media (max-width:700px){.pnadb{min-height:44px;font-size:14px}}
 .pn2 .pntabs{display:flex;gap:4px;background:var(--surf2,#F4F1F6);border:1px solid var(--line);border-radius:10px;padding:3px}
 .pn2 .pntabs button{flex:1;border:0;background:none;border-radius:8px;padding:6px;font:inherit;font-size:12.5px;font-weight:600;color:var(--mut);cursor:pointer;min-height:32px}

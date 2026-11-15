@@ -99,8 +99,9 @@
           /* 1.2.140: her age (or date of birth) - the same Age as on her card, booking card, contract and visa */
           '<label class="ncl"><span>' + L('Age', '나이') + '</span><input data-nc="age" inputmode="numeric" autocomplete="off" placeholder="–"></label>' +
           '<label class="ncl"><span>' + L('Date of birth (if known)', '생년월일 (아는 경우)') + '</span><input data-nc="dob" autocomplete="off" placeholder="DD/MM/YYYY"></label>' +
-          '<div class="ncl full"><span>' + L('Female / Male', '여성 / 남성') + '</span><div class="ncseg" role="radiogroup">' +
-            '<button type="button" role="radio" aria-checked="true" class="on" data-ncg="F">' + L('Female', '여성') + '</button><button type="button" role="radio" aria-checked="false" data-ncg="M">' + L('Male', '남성') + '</button></div></div>' +
+          /* 1.2.201: the program's one Gender menu (illu-prof2.js); the three hidden choices keep what is picked */
+          '<div class="ncl full"><span>' + L('Gender', '성별') + '</span><div class="ncgm">' + (window.__illuGenderHtml ? window.__illuGenderHtml('F', 'nc', '', false) : '') + '</div><div class="ncseg" role="radiogroup" hidden>' +
+            '<button type="button" role="radio" aria-checked="true" class="on" data-ncg="F">' + L('Female', '여성') + '</button><button type="button" role="radio" aria-checked="false" data-ncg="M">' + L('Male', '남성') + '</button><button type="button" role="radio" aria-checked="false" data-ncg="">' + L('Not stated', '미표기') + '</button></div></div>' +
           '<label class="ncl full"><span>' + L('Link to her page (optional)', '모델 페이지 링크 (선택)') + '</span><input data-nc="href" type="url" inputmode="url" placeholder="https://…" autocomplete="off"></label>' +
           /* 1.2.140 (user, 11 Nov 2026: "if there is no website available for the model, but I have the BOOK(PORTFOLIO)/SNAPS/
              VIDEOS available, when I create the card, I want you to also create a booking card that also then creates the
@@ -197,7 +198,7 @@
     let href = v('href');
     if(href && !/^https?:\/\//i.test(href)) href = 'https://' + href;
     if(href && !/^https?:\/\/[^\s/]+\.[^\s/]+/i.test(href)){ err(L('That link does not look like a web address.', '링크가 웹 주소가 아닌 것 같습니다.')); return; }
-    const g = (m.querySelector('[data-ncg].on') || {}).dataset ? m.querySelector('[data-ncg].on').dataset.ncg : 'F';
+    const g = m.querySelector('[data-ncg].on') ? m.querySelector('[data-ncg].on').dataset.ncg : 'F';
     const about = {nm, ag: v('ag'), city: v('city'), country: v('country')};
     /* her key: the link when there is one (the same key the crawler would give her), otherwise a new one */
     let k = href ? nk(href) : '', known = false;
@@ -321,4 +322,12 @@
 @media (prefers-color-scheme:dark){.ncphi{background:rgba(0,0,0,.5);color:#fff}}
 `;
   document.head.appendChild(css);
+  /* 1.2.201: picking in the Gender menu marks the matching hidden choice and shows it on the menu button */
+  (function reg(){ if(!window.__illuGenderPick){ setTimeout(reg, 300); return; }
+    window.__illuGenderPick('nc', (btn, v) => {
+      const box = btn.closest('.ncl'); if(!box) return;
+      box.querySelectorAll('[data-ncg]').forEach(b => { const on = b.dataset.ncg === v; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+      const w = box.querySelector('.ncgm'); if(w) w.innerHTML = window.__illuGenderHtml(v, 'nc', '', false);
+    });
+  })();
 })();

@@ -377,7 +377,7 @@
       const c = p.al.find(x => lampOf(x.key)) || p.al.find(x => hasMeas(x.key)) || p.al[0];
       if(!hasMeas(c.key)){ const w = p.al.find(x => hasMeas(x.key)); if(w) MEAS.set(c.key, measRec(w.key)); }
       const off = (c.b.off || {});
-      out.push({key: c.key, nm: p.nm, href: c.href, ag: a.name, city: off.city || a.city || '', country: off.country || a.country || '', div: c.b.d || '', g: c.b.g || '?', t: c.b.t || '',
+      out.push({key: c.key, nm: p.nm, href: c.href, ag: a.name, city: off.city || a.city || '', country: off.country || a.country || '', div: c.b.d || '', g: (window.__illuSexOf && window.__illuSexOf(c.key)) || c.b.g || '?', t: c.b.t || '',     /* 1.2.193: a sex set on her card wins */
         b: c.b, boards: p.boards, keys: p.al.map(x => x.key)});
     }
     return out;
