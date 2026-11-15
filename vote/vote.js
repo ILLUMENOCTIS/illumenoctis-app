@@ -225,10 +225,9 @@
     h += '<h2>' + H(need.length ? L(need.length + (need.length === 1 ? ' card needs' : ' cards need') + ' your vote', need.length + '장이 투표를 기다립니다') : L('Nothing waiting for your vote', '투표할 카드가 없습니다')) + '</h2>';
     if (!need.length) h += '<p class="msg">' + H(L('When a card is sent to the Team Vote, it shows up here.', '팀 투표에 카드가 올라오면 여기에 표시됩니다.')) + '</p>';
     for (const { o, st } of need) h += cardHtml(o, st) + btns(o, st) + '<p class="msg">' + H(L('Votes stay hidden until all ' + st.of + ' have voted.', '모두(' + st.of + '명) 투표할 때까지 보이지 않습니다.')) + '</p>';
-    if (done.length) {
-      h += '<h2>' + H(L('You voted, waiting for others', '투표 완료 · 다른 사람 대기')) + '</h2>';
-      for (const { o, st } of done) h += cardHtml(o, st) + btns(o, st);
-    }
+    /* 1.2.202 (user, 16 Nov 2026: "I only want to see votes that I haven't done. Apply this for all users"): cards I
+       already voted on are not shown here - only a line saying how many are still waiting for the others */
+    if (done.length) h += '<p class="msg">' + H(L(done.length + (done.length === 1 ? ' card you voted on is' : ' cards you voted on are') + ' waiting for the others.', '투표한 ' + done.length + '장은 다른 사람의 투표를 기다리는 중입니다.')) + '</p>';
     h += '<div class="foot"><a class="sec" href="../index.html">' + H(L('Open the full program', '전체 프로그램 열기')) + '</a></div>';
     box.innerHTML = h;
     box.querySelectorAll('.vc[data-h]').forEach(vc => paintImg(vc.dataset.h));
