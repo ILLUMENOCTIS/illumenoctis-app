@@ -530,7 +530,7 @@ function agApply(){
 }
 async function agSetDeleted(dom, del){
   if(!SIGNED()){ nudgeSignIn(); return false; }
-  if(!isAdmin()) return false;   /* 1.2.177: only the Admin hides / shows agencies */
+  /* 1.2.211 (user, 16 Nov 2026: "allow all USERS to hide the model photos and model agencies"): everyone signed in */
   if(!DB) return false;
   const a = AGALL.find(x => x.domain === dom);
   if(!a) return false;
@@ -585,7 +585,6 @@ function illumDialog(o){
 }
 async function agAskDelete(dom){
   if(!SIGNED()){ nudgeSignIn(); return; }
-  if(!isAdmin()) return;
   const a = AGALL.find(x => x.domain === dom);
   if(!a) return;
   let n = 0;
@@ -634,7 +633,7 @@ function agDelSection(){
     dels.map(r => '<div class="agdelrow"><div class="agdelw"><b>' + esc(r.nm || r.d) + '</b><span>' +
       esc([r.city, r.country].filter(Boolean).join(', ')) + (r.d ? ' · ' + esc(r.d) : '') + '</span>' +
       '<em>Deleted ' + esc(when(r.at)) + (r.by && PEOPLE.has(r.by) ? ' by ' + idDisc(r.by) + esc(PEOPLE.get(r.by).n) : '') +
-      '</em></div>' + (isAdmin() ? '<button type="button" class="agrevb" data-agrev="' + esc(r.d) + '">Show again</button>' : '') +
+      '</em></div>' + (SIGNED() ? '<button type="button" class="agrevb" data-agrev="' + esc(r.d) + '">Show again</button>' : '') +
       '</div>').join('') + '</section>';
 }
 
@@ -666,7 +665,7 @@ async function siteNotify(){
         '<span class="agstat agstat--' + r.s + '">' + SITESTXT[r.s] + '</span>' +
         '<em>' + esc(r.d) + (r.since ? ' · since ' + esc(when(r.since)) : '') + (r.note ? ' · ' + esc(r.note) : '') + '</em></div>' +
         '<span class="sitebtns"><a href="https://' + esc(r.d) + '" target="_blank" rel="noopener noreferrer">Open site</a>' +
-        (isAdmin() && a ? '<button type="button" data-sitedel="' + esc(r.d) + '">Hide agency</button>' : '') + '</span></div>';
+        (SIGNED() && a ? '<button type="button" data-sitedel="' + esc(r.d) + '">Hide agency</button>' : '') + '</span></div>';
     }).join('') + '</div><p class="idlgnote">The morning scan checks these again each day and clears the notice when a site is back.</p>',
     ok: 'Got it', cancel: false,
     onClick: (e, close) => {
@@ -704,7 +703,7 @@ async function loadMDel(){
 }
 async function mdelSet(k, info, del){
   if(!SIGNED()){ nudgeSignIn(); return false; }
-  if(!isAdmin()) return false;   /* 1.2.177: only the Admin hides / shows a model */
+  /* 1.2.211: everyone signed in hides / shows a model (was the Admin only, 1.2.177) */
   if(!DB) return false;
   const id = mdelId(k);
   let cur = null;
@@ -724,7 +723,7 @@ async function mdelSet(k, info, del){
 }
 function goneAcked(){ try{ return new Set(JSON.parse(localStorage.getItem('illum.goneack') || '[]')); }catch(e){ return new Set(); } }
 async function mdelAsk(k, nm, ag, href){
-  try{ if(!isAdmin()) return; }catch(e){ return; }   /* 1.2.177: only the Admin hides a model */
+  try{ if(!SIGNED()) return; }catch(e){ return; }   /* 1.2.211: everyone signed in hides a model */
   const g = GONE.get(k) || {};
   const name = nm || g.nm || 'This model';
   const agency = ag || g.ag || 'the agency';
@@ -780,7 +779,7 @@ function mdelSection(){
     dels.map(r => '<div class="agdelrow"><div class="agdelw"><b>' + esc(r.nm || r.k) + '</b><span>' +
       esc([r.ag, r.co].filter(Boolean).join(' · ')) + '</span>' +
       '<em>Removed ' + esc(when(r.at)) + (r.by && PEOPLE.has(r.by) ? ' by ' + idDisc(r.by) + esc(PEOPLE.get(r.by).n) : '') +
-      '</em></div>' + (isAdmin() ? '<button type="button" class="agrevb" data-mrev="' + esc(r.k) + '">Show again</button>' : '') +
+      '</em></div>' + (SIGNED() ? '<button type="button" class="agrevb" data-mrev="' + esc(r.k) + '">Show again</button>' : '') +
       '</div>').join('') + '</section>';
 }
 /* ---- country flags: built in, because Windows shows no flag emoji and the page may not load
@@ -3521,7 +3520,7 @@ function dirAgRow(r){
       '<span class="agcount"><b>' + dirN(r.n) + '</b></span>' +
       '<span class="agtiers">' + r.ts.map(t => '<span class="tierchip" data-t="' + esc(t) + '">' + esc(TIER[t] || t) + '</span>').join('') + '</span>' +
       '<span class="agct">' + ctsChip(a.domain) + '</span>' +
-      (isAdmin() ? '<button type="button" class="agdelb" data-agdel="' + esc(a.domain) + '" ' +
+      (SIGNED() ? '<button type="button" class="agdelb" data-agdel="' + esc(a.domain) + '" ' +
         'title="Hide this agency" aria-label="Hide ' + esc(a.name) + '">' +
         TRASHSVG + '</button>' : '<span></span>') + '</div>' +
       '<div class="agbody"></div></div>');

@@ -335,7 +335,14 @@ document.head.appendChild(st);
     const D = window.__illuAgDoms ? window.__illuAgDoms(dom) : [dom];
     const As = (typeof AG !== 'undefined' ? AG : []).filter(x => D.includes(String(x.domain || '').toLowerCase()) || x.domain === dom); if (!As.length) return [];
     const out = new Map();
-    for (const a of As) for (const b of a.boards || []) for (const m of b.m || []) { const raw = String(m[1] || ''); const url = raw.charAt(0) === '|' ? raw.slice(1) : (b.p || '') + raw; let key = url; try { key = normKey(url); } catch (e) {} if (!String(m[0] || '').trim()) continue; /* 1.2.210 (user): a model with no name is an empty card - left out */ if (!out.has(key)) out.set(key, { key, nm: m[0] || '', url, g: b.g || '?', ag: a.name, bd: b.d || '' }); }
+    /* 1.2.211: a model whose mother agency is another agency in the Directory belongs to that agency's list, not this one */
+    let MV = null; try { MV = window.__illuMomMoves ? window.__illuMomMoves() : null; } catch (e) { MV = null; }
+    const Dl = D.map(x => String(x || '').toLowerCase().replace(/^www\./, ''));
+    const mine = d => Dl.includes(d);
+    for (const a of As) for (const b of a.boards || []) for (const m of b.m || []) { const raw = String(m[1] || ''); const url = raw.charAt(0) === '|' ? raw.slice(1) : (b.p || '') + raw; let key = url; try { key = normKey(url); } catch (e) {} if (!String(m[0] || '').trim()) continue; /* 1.2.210 (user): a model with no name is an empty card - left out */ if (MV && MV.get(key) && !mine(MV.get(key))) continue; if (!out.has(key)) out.set(key, { key, nm: m[0] || '', url, g: b.g || '?', ag: a.name, bd: b.d || '' }); }
+    if (MV) { const want = [...MV.entries()].filter(([k, d]) => mine(d) && !out.has(k)).map(([k]) => k);
+      if (want.length) { const W = new Set(want); const myName = As[0].name;
+        for (const a of (typeof AG !== 'undefined' ? AG : [])) for (const b of a.boards || []) for (const m of b.m || []) { const raw = String(m[1] || ''); const url = raw.charAt(0) === '|' ? raw.slice(1) : (b.p || '') + raw; let key = url; try { key = normKey(url); } catch (e) {} if (!W.has(key) || out.has(key) || !String(m[0] || '').trim()) continue; out.set(key, { key, nm: m[0] || '', url, g: b.g || '?', ag: myName, bd: 'Mother agency', from: a.name }); } } }
     return [...out.values()].sort((p, q) => String(p.nm).localeCompare(String(q.nm), undefined, { sensitivity: 'base', numeric: true }));
   }
   window.__illuAgModels = agModels;

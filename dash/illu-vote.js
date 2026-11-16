@@ -104,7 +104,7 @@
     d.collection('vote').onSnapshot(s => { VT.clear(); for(const x of s.docs){ const v = x.data() || {}; VT.set(x.id, {e: Object.assign({}, v.e || {}), t: Object.assign({}, v.t || {})}); } ready |= 2; changed(); }, () => {});
     d.collection('vopen').onSnapshot(s => { OPEN.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k) OPEN.set(x.id, v); } ready |= 4; changed(); }, () => {});
     d.collection('vpub').onSnapshot(s => { for(const x of s.docs){ if(x.id === 'board'){ const v = x.data() || {}; PUBNOW = Object.assign({}, v.c || {}); } if(x.id === 'gal'){ const v = x.data() || {}; GALNOW = Object.assign({}, v.c || {}); } } }, () => {});
-    d.collection('mother').onSnapshot(s => { MOM.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k && v.ag) MOM.set(x.id, v); } changed(); }, () => {});
+    d.collection('mother').onSnapshot(s => { MOM.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k && v.ag) MOM.set(x.id, v); } momBump(); changed(); }, () => {});
     d.collection('avail').onSnapshot(s => { AV.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k && v.t) AV.set(x.id, v); } changed(); }, () => {});
     d.collection('vpre').onSnapshot(s => { PRE.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k) PRE.set(x.id, v); } changed(); }, () => {});
     d.collection('vnote').onSnapshot(s => { NOTE.clear(); for(const x of s.docs){ const v = x.data() || {}; NOTE.set(x.id, Object.assign({}, v.e || {})); NOTEX.set(x.id, Object.assign({}, v.x || {})); } changed(); }, () => {});
@@ -845,11 +845,32 @@
   const lc = v => String(v || '').trim().toLowerCase();
   window.__illuMother = (k, ag) => { const m = momOf(k); return !!(m && ag && lc(m.ag) === lc(ag)); };
   window.__illuMotherOf = momOf;
+  /* 1.2.211 (user, 16 Nov 2026: "When a USER sets the Mother Agency for a model, that agency will be the primary agency for
+     that model. Move the card over to that Agency."): her card moves to her mother agency in the Directory (and in its
+     model list for emails) when that agency is in the Directory; it leaves the agency she was found at. Shared with
+     illu-dir2.js / illu-ext.js as a map: her address -> the mother agency's web address. */
+  let MOMV = 0, MOMC = null, MOMCV = '';
+  function momBump(){ MOMV++; window.__illuMomV = MOMV; try{ if(typeof VIEW !== 'undefined' && VIEW === 'dir' && typeof refresh === 'function') setTimeout(() => { try{ refresh(); }catch(e){} }, 0); }catch(e){} }
+  window.__illuMomMoves = () => {
+    let A = []; try{ A = AG || []; }catch(e){}
+    const v = MOMV + ':' + A.length; if(MOMC && MOMCV === v) return MOMC;
+    const dn = x => String(x || '').trim().toLowerCase().replace(/^www\./, '');
+    const doms = new Set(A.map(x => dn(x.domain)).filter(Boolean)), byName = new Map(A.map(x => [lc(x.name), dn(x.domain)]));
+    const out = new Map();
+    for(const m of MOM.values()){
+      if(!m || m.cleared || !m.ag || !/^https?:/i.test(m.k || '')) continue;
+      let d = dn(m.dom); if(!doms.has(d)) d = byName.get(lc(m.ag)) || '';
+      if(!d || !doms.has(d)) continue;
+      let key = m.k; try{ key = normKey(m.k); }catch(e){}
+      out.set(key, d);
+    }
+    MOMC = out; MOMCV = v; return out;
+  };
   const MOMED = new Set();
   function setMom(k, ag, dom){
     if(!signedIn()) return;
     const h = hash(k), prev = MOM.get(h) || null;
-    const apply = v => { if(v){ MOM.set(h, v); save('mother/' + h, v); } else { MOM.delete(h); save('mother/' + h, {k, ag: '', by: me(), at: nowIso(), cleared: 1}); } changed(); };
+    const apply = v => { if(v){ MOM.set(h, v); save('mother/' + h, v); } else { MOM.delete(h); save('mother/' + h, {k, ag: '', by: me(), at: nowIso(), cleared: 1}); } momBump(); changed(); };
     const v = ag ? {k, ag: String(ag).trim(), dom: dom || '', by: me(), at: nowIso()} : null;
     try{ window.__illuOwnNote && window.__illuOwnNote(k, 'mother', (prev && !prev.cleared && prev.ag) || '', (v && v.ag) || ''); }catch(e){}
     apply(v);
@@ -861,7 +882,7 @@
     const same = m && lc(m.ag) === lc(ag);
     if(!MOMED.has(k)){
       if(same) return can ? '<button type="button" class="pnlk pnmomset" data-momed>' + L('Change mother agency', '마더 에이전시 변경') + '</button>' : '';
-      if(m) return '<p class="pnmomo">' + L('Mother agency: ', '마더 에이전시: ') + '<b>' + H(m.ag) + '</b>' + (can ? ' <button type="button" class="pnlk" data-momed>' + L('Change', '변경') + '</button>' : '') + '</p>';
+      if(m) return can ? '<button type="button" class="pnlk pnmomset" data-momed>' + L('Change mother agency', '마더 에이전시 변경') + '</button>' : '';   /* 1.2.211: her mother agency is named at the top now */
       return can ? '<button type="button" class="pnlk pnmomset" data-momed>' + L('Set mother agency', '마더 에이전시 지정') + '</button>' : '';
     }
     const names = (() => { try{ return [...new Set(AG.map(x => x.name))].sort((x, y) => x.localeCompare(y)); }catch(e){ return []; } })();
@@ -920,14 +941,25 @@
     let pic = ''; try{ const id = typeof PICS !== 'undefined' && PICS.get(k); let src = id ? picURL(id) : (F.photo || ''); if(src && window.__illuSmall && /^https?:/i.test(src)) src = window.__illuSmall(src, 300); if(src) pic = '<img src="' + H(src) + '" alt="" referrerpolicy="no-referrer" decoding="async" loading="lazy">'; }catch(e){}
     const href = a.href || i.href || '';
     const ag = a.ag || i.ag || '';
-    const agH = ag ? (href ? '<a class="pnagl" href="' + H(href) + '" target="_blank" rel="noopener" title="' + H(L('Her page on the agency’s site', '에이전시 사이트의 모델 페이지')) + '">' + H(ag) + ' ↗</a>'
+    let agH = ag ? (href ? '<a class="pnagl" href="' + H(href) + '" target="_blank" rel="noopener" title="' + H(L('Her page on the agency’s site', '에이전시 사이트의 모델 페이지')) + '">' + H(ag) + ' ↗</a>'
       : (a.agRef ? '<button type="button" class="pnagl" data-pnag="' + H(a.agRef) + '" title="' + H(L('Open this agency in the Directory', '디렉터리에서 이 에이전시 열기')) + '">' + H(ag) + ' ›</button>' : '<span class="pnagl">' + H(ag) + '</span>')) : '';
-    const mom = (() => { try{ return window.__illuMother && window.__illuMother(k, ag); }catch(e){ return false; } })();
+    let mom = (() => { try{ return window.__illuMother && window.__illuMother(k, ag); }catch(e){ return false; } })();
+    /* 1.2.211: her mother agency is her primary agency - named first (opens it in the Directory, where her card now is);
+       the agency she was found at follows as "also at", with the link to her page there */
+    let also = '', momDom = '';
+    const mo0 = momOf(k);
+    if(mo0 && mo0.ag && !mo0.cleared && lc(mo0.ag) !== lc(ag)){
+      let md = ''; try{ md = (window.__illuMomMoves && window.__illuMomMoves().get(/^https?:/i.test(k) ? normKey(k) : mkeyOf(k, c))) || ''; }catch(e){}
+      momDom = md || mo0.dom || '';
+      agH = md ? '<button type="button" class="pnagl" data-pnag="' + H(md) + '" title="' + H(L('Her mother agency - open it in the Directory', '마더 에이전시 - 디렉터리에서 열기')) + '">' + H(mo0.ag) + ' ›</button>' : '<span class="pnagl">' + H(mo0.ag) + '</span>';
+      mom = true;
+      if(ag) also = '<p class="pnalso">' + L('also at ', '함께 소속: ') + (href ? '<a href="' + H(href) + '" target="_blank" rel="noopener">' + H(ag) + ' ↗</a>' : H(ag)) + '</p>';
+    }
     /* 1.2.168 (user, 13 Nov 2026): her name opens her page on the agency's site */
     const pg = href || (/^https?:\/\//i.test(k || '') && !/instagram\.com/i.test(k) ? k : '');
     const nmTxt = H(a.nm || i.nm || '');
     return '<div class="pnhd"><div class="pnth">' + pic + '</div><div class="pnhm"><h2>' + (pg ? '<a class="pnnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(L('Open her page on the agency’s site', '에이전시 사이트에서 모델 페이지 열기')) + '">' + nmTxt + '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg></a>' : nmTxt) + '</h2>' +
-      '<div class="pnagr">' + agH + agFavBtn(a, ag, href) + (mom ? '<span class="pnmom">' + L('Mother', '마더') + '</span>' : '') + '</div>' +
+      '<div class="pnagr">' + agH + (also ? agFavBtn(Object.assign({}, a, {agRef: momDom}), mo0.ag, '') : agFavBtn(a, ag, href)) + (mom ? '<span class="pnmom">' + L('Mother', '마더') + '</span>' : '') + '</div>' + also +
       (meta ? '<p class="pnmeta">' + meta + '</p>' : '') + momBox(k, a) + '</div>' +
       '<button type="button" class="pnfav' + (fav ? ' on' : '') + '" data-pnfav aria-pressed="' + fav + '" title="' + H(fav ? L('In My Favorites — click to remove', '내 즐겨찾기 — 누르면 뺍니다') : L('Add to My Favorites', '내 즐겨찾기에 추가')) + '">' + HEART + '</button></div>' +
       (a.readNote || '');
@@ -1173,7 +1205,8 @@
      bottom of her side panel. Hide = her card stops showing in the Directory, boards and search for everyone (docs mdel,
      nothing deleted); she is listed under Hidden Agencies › Hidden Models at the end of the Directory's agency list. */
   let HIDEASK = '';
-  const adminOk = () => { try{ return isAdmin(); }catch(e){ return false; } };
+  /* 1.2.211 (user, 16 Nov 2026: "allow all USERS to hide the model photos and model agencies"): everyone signed in */
+  const adminOk = () => { try{ return signedIn(); }catch(e){ return false; } };
   const mkeyOf = (k, c) => { const raw = /^bid:/.test(k) ? (c && c.k) || '' : k; try{ return raw ? normKey(raw) : ''; }catch(e){ return raw; } };
   const hiddenRec = mk => { try{ const r = MDEL.get(mk); return r && r.st === 'del' ? r : null; }catch(e){ return null; } };
   function pnAdmin(k, a, c){
@@ -1184,7 +1217,7 @@
     if(hid) body = '<div class="pnadhid" role="status"><svg class="pnadi" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg><span><b>' + L('Hidden', '숨김') + '</b> — ' + L('off every board, kept in Directory › Hidden Models.', '모든 보드에서 빠지고 디렉터리 › 숨긴 모델에 보관됩니다.') + '</span><button type="button" class="pnadb" data-pnunhide>' + L('Show again', '다시 보이기') + '</button></div>';
     else if(HIDEASK === k) body = '<div class="pnadask"><p>' + H(L('Hide ' + nm + '? Her card leaves every board for everyone and goes to Directory › Hidden Models. Lamps, notes and her booking card are kept.', nm + ' — 숨길까요? 모든 보드에서 빠지고 디렉터리 › 숨긴 모델로 갑니다. 램프·메모·부킹 카드는 그대로 남습니다.')) + '</p><div><button type="button" class="pnadb pri" data-pnhideyes>' + L('Hide', '숨기기') + '</button><button type="button" class="pnadb" data-pnhideno>' + L('Cancel', '취소') + '</button></div></div>';
     else body = '<button type="button" class="pnadb" data-pnhide><svg class="pnadi" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>' + L('Hide this model', '이 모델 숨기기') + '</button>';
-    return '<section class="pns pnadmin"><div class="pnadk">' + L('ADMIN', '관리자') + '</div>' + body + '</section>';
+    return '<section class="pns pnadmin"><div class="pnadk">' + L('HIDE', '숨기기') + '</div>' + body + '</section>';
   }
   document.addEventListener('click', e => {
     const t = e.target.closest && e.target.closest('.mx [data-pnhide],.mx [data-pnhideyes],.mx [data-pnhideno],.mx [data-pnunhide]'); if(!t) return;
@@ -2653,6 +2686,8 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .vmk.open .ivl.g,.vmk.open .ivl.r{animation:none!important;box-shadow:none!important}
 .ivtshare{margin-left:auto}.ivtshare+.ivgo{margin-left:8px}
 .pn2 .pnmomset{margin:4px 0 0;font-size:12px}
+.pn2 .pnagr .pnagl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pn2 .pnalso{margin:2px 0 0;font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pn2 .pnalso a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 .pn2 .pnmomo{margin:4px 0 0;font-size:12px;color:var(--mut)}.pn2 .pnmomo b{color:var(--ink)}.pn2 .pnmomo .pnlk{margin-left:6px;font-size:12px}
 .pn2 .pnmomed{display:flex;flex-direction:column;gap:6px;margin-top:6px;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--surf2,#F1EFF6)}
 .pn2 .pnmomr{display:flex;gap:6px;align-items:center}.pn2 .pnmomr input{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:13px;background:var(--surf,#fff);color:var(--ink)}

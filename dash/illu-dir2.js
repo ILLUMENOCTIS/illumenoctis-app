@@ -49,7 +49,8 @@
   /* agencies taken off the list (docs agdel/<agency id>): hidden from the Directory for everyone,
      never deleted, and can be put back from "Show removed" at the bottom of the list */
   const REMOVED = new Map();
-  const canRemove = () => { try{ return isAdmin(); }catch(e){ return false; } };
+  /* 1.2.211 (user, 16 Nov 2026: "allow all USERS to hide the model photos and model agencies"): everyone signed in (was the Admin, 1.2.177) */
+  const canRemove = () => { try{ return typeof SIGNED === 'function' ? !!SIGNED() : true; }catch(e){ return false; } };
   async function loadRemoved(){
     try{ const snap = await DB.collection('agdel').limit(20000).get(); const ds = (snap && snap.docs) ? snap.docs : (snap || []);
       for(const d of ds){ const v = docOf(d); REMOVED.set(String(d.id), v || {}); } }catch(e){}
@@ -97,7 +98,7 @@
   let NETS = [], NETV = '';
   function nets(){
     let nb = 0; for(const a of AG) nb += a.boards.length;
-    const v = AG.length + ':' + nb + ':' + (window.__illuAGv || 0);     // __illuAGv: bumped when boards are changed in place
+    const v = AG.length + ':' + nb + ':' + (window.__illuAGv || 0) + ':' + (window.__illuMomV || 0);     // __illuAGv: bumped when boards are changed in place; __illuMomV: a mother agency was set
     if(v === NETV) return NETS;
     NETV = v;
     const by = new Map();
@@ -108,6 +109,11 @@
       by.get(k).push(a);
     });
     NETS = [];
+    /* 1.2.211: a model whose mother agency is in the Directory is listed there (a "Mother agency" board) and not at the
+       agency she was found at */
+    let MV = null; try{ MV = window.__illuMomMoves ? window.__illuMomMoves() : null; }catch(e){ MV = null; }
+    if(MV && !MV.size) MV = null;
+    const moved = [];
     for(const [k, mem] of by){
       mem.sort((p, q) => q.boards.length - p.boards.length || String(p.name || '').length - String(q.name || '').length);
       const prim = mem[0];
@@ -117,10 +123,29 @@
         const u = String(b.u || '').replace(/\/$/, '');
         if(u && seenU.has(u)) continue; if(u) seenU.add(u);
         const nb2 = Object.assign({}, b); nb2.off = officeOf(b, offices, a); nb2.src = b;
+        if(MV && Array.isArray(b.m)){
+          const keep = [];
+          for(const m of b.m){ let mk = ''; try{ mk = Array.isArray(m) && m[1] ? normKey(hrefOf(b, m)) : ''; }catch(e){} const md = mk && MV.get(mk);
+            if(md && md !== k){ moved.push({md, b, m, from: a.name}); } else keep.push(m); }
+          if(keep.length !== b.m.length) nb2.m = keep;
+        }
         boards.push(nb2);
       }
       NETS.push({i: NETS.length, key: k, name: mem.length > 1 ? netName(mem, prim) : prim.name, members: mem, offices, boards,
         domain: prim.domain || '', id: prim.id, at: prim.at || '', prim});
+    }
+    if(moved.length){
+      const byKey = new Map(NETS.map(n => [n.key, n]));
+      for(const x of moved){
+        const n = byKey.get(x.md); if(!n) continue;
+        const g = x.b.g || '?', t = x.b.t || '';
+        let vb = n.boards.find(b => b.mom && b.g === g && b.t === t);
+        /* first in the agency's board list, so it is the board that opens */
+        if(!vb){ vb = {d: 'Mother agency', u: '', p: '', g, t, m: [], mom: true, off: n.offices[0], src: null}; n.boards.splice(n.boards.filter(b => b.mom).length, 0, vb); }
+        const m2 = x.m.slice(); m2[1] = '|' + hrefOf(x.b, x.m);
+        if(!vb.m.some(y => y[1] === m2[1])) vb.m.push(m2);
+      }
+      for(const n of NETS){ const vs = n.boards.filter(b => b.mom); if(vs.length > 1) for(const b of vs) b.d = 'Mother agency · ' + (b.g === 'M' ? 'Men' : b.g === 'F' ? 'Women' : 'Models') + (b.t === 'nf' || b.t === 'newfaces' ? ' (new faces)' : ''); }
     }
     return NETS;
   }
@@ -520,7 +545,7 @@
   function hiddenNav(){
     const nA = new Set([...REMOVED.keys()]).size, nM = hidModList().length;
     return '<div class="d2hidsec">' +
-      '<div class="d2hidbar"><svg class="d2hidi" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg><b>HIDDEN</b><s>Admin only</s></div>' +
+      '<div class="d2hidbar"><svg class="d2hidi" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg><b>HIDDEN</b></div>' +
       '<button type="button" class="d2ag d2hidrow' + (D2.showRemoved ? ' on' : '') + '" data-d2hidag aria-pressed="' + !!D2.showRemoved + '"><span class="d2agt"><b>Hidden Agencies</b><s>with all their boards</s></span><span class="d2agn"><b>' + nA + '</b></span></button>' +
       '<button type="button" class="d2ag d2hidrow d2hidsub' + (D2.hidMod ? ' on' : '') + '" data-d2hidmod aria-pressed="' + !!D2.hidMod + '"><span class="d2agt"><b><i aria-hidden="true">↳</i> Hidden Models</b><s>one by one, from any agency</s></span><span class="d2agn"><b>' + nM + '</b></span></button>' +
       ((D2.showRemoved || D2.hidMod) ? '<button type="button" class="d2showrm" data-d2hidback>← Back to the list</button>' : '') +
@@ -532,7 +557,7 @@
     const who = id => { try{ return (PEOPLE.get(id) || {}).n || ''; }catch(e){ return ''; } };
     return '<div class="d2ph"><div class="d2ph1"><span class="d2hidt">Hidden</span><span class="d2pm">Not shown in the Directory, boards or search for anyone else · nothing is deleted</span></div>' +
       '<div class="d2ph2"><button type="button" class="d2pill" data-d2hidag>Hidden Agencies <s>' + REMOVED.size + '</s></button><span class="d2hidgt" aria-hidden="true">›</span><button type="button" class="d2pill on" data-d2hidmod aria-pressed="true">Hidden Models <s>' + L0.length + '</s></button></div></div>' +
-      '<div class="d2body">' + (!L0.length ? '<div class="d2empty"><p>No hidden models. Hide a model from the Admin section at the bottom of her card.</p></div>' :
+      '<div class="d2body">' + (!L0.length ? '<div class="d2empty"><p>No hidden models. Hide a model with “Hide this model” at the bottom of her side panel.</p></div>' :
       '<div class="d2grid d2hidgrid">' + L0.map(m => {
         let pc = ''; try{ const f = litFacts({key: m.k, nm: m.nm, href: m.href}); pc = picCell(m.k, m.nm, f && f.photo); }catch(e){}
         return '<article class="uc d2hidcard"><div class="ucimg"><div class="ucph">' + pc + '</div><span class="d2hidtag">Hidden</span></div>' +
@@ -585,7 +610,7 @@
           (a.domain ? '<button type="button" class="d2locedit" data-d2loc="' + esc(a.domain) + '" title="Change the country or city">' : '<span>') + esc(a.offices && a.offices.length > 1 ? a.allCities.join(' · ') + ' · ' + a.offices.length + ' offices' : [a.city, a.country].filter(Boolean).join(', ')) + (a.domain ? '</button>' : '</span>')) + ' · ' + dirN(r.n) + ' models</span>' +
       '<span class="d2sp"></span><span class="agct">' + ctsChip(a.domain) + '</span>' +
       '<button type="button" class="d2hb' + (isFav ? ' on' : '') + '" data-d2heart aria-pressed="' + !!isFav + '">' + (isFav ? '♥' : '♡') + ' Favorite</button>' +
-      (canRemove() && !D2.showRemoved ? '<button type="button" class="d2hb d2hideb" data-d2hideag="' + esc(r.id) + '" title="Hide this agency for everyone (Admin)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg><span>Hide agency</span></button>' : '') +
+      (canRemove() && !D2.showRemoved ? '<button type="button" class="d2hb d2hideb" data-d2hideag="' + esc(r.id) + '" title="Hide this agency for everyone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg><span>Hide agency</span></button>' : '') +
       '</div>' +
       '<div class="d2ph2">' + boardMenu(tabs, all, byMeas) + '</div>' +
       '<div class="d2ph3"><label class="d2mq" title="Find a model at this agency by name (all of its boards)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>' +
