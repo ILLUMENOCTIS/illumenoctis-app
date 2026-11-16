@@ -6027,8 +6027,10 @@ function paintIdModal(){
         const mine = pid === ME;
         const acts = (admin && !mine)
           ? '<span class="idpa">' +
-            (p.h ? '<button type="button" class="idlink warn" data-reset="' + pid +
-                   '">Reset password</button>' : '') +
+            /* 1.2.209 (user, 16 Nov 2026: "What do we do about a USER forgetting their password?"): every ID signs in
+               with a password since the move to real accounts, so the Admin can always set a new one (the old check
+               looked for a password kept in the person's record, which no longer exists - the button never showed) */
+            '<button type="button" class="idlink warn" data-reset="' + pid + '">Reset password</button>' +
             '<button type="button" class="idlink warn" data-merge="' + pid +
               '">Merge into mine</button>' +
             '<button type="button" class="idlink warn" data-del="' + pid +
