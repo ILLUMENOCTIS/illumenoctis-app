@@ -39,7 +39,7 @@
      A place with several pages shows them as tabs along the top and remembers the last one. */
   const GROUPS = {
     'g-atlas': {label: ['Atlas', '아틀라스'], icon: 'atl', tabs: ['atl', 'dir', 'cmpb', 'ig', 'favag']},
-    'g-opus': {label: ['Opus', '오푸스'], icon: 'bk', tabs: ['fav', 'mfav', 'team', 'appr', 'tie', 'cxl', 'unav', 'bk', 'stay', 'cmp']},
+    'g-opus': {label: ['Booking & Selection', '부킹 & 셀렉션'], icon: 'bk', tabs: ['fav', 'mfav', 'team', 'appr', 'tie', 'cxl', 'unav', 'bk', 'stay', 'cmp']},
     /* 1.2.177 (user, 13 Nov 2026: "combine these 2 and name it more ... choose when selecting the icon"): Backlog and
        404 · Blind spots are one rail button, More; pointing at it (or clicking / tapping) opens a small menu */
     'g-more': {label: ['More', '더보기'], icon: 'more', tabs: ['bkl', '404', 'bld']}
@@ -105,7 +105,7 @@
     const b = document.getElementById('v-' + v); if(!b) return '';
     let t = ''; for(const n of b.childNodes) if(n.nodeType === 3) t += n.textContent;
     t = t.trim() || b.textContent.replace((b.querySelector('.vn') || {}).textContent || '', '').trim();
-    if(v === 'arr' && /^(Updates|업데이트)$/.test(t)) t = 'Suggestiones';
+    if(v === 'arr' && /^(Updates|업데이트|Suggestiones)$/.test(t)) t = L('New Face & Development', '뉴페이스 & 디벨롭먼트');   /* 1.2.210 (user, 16 Nov 2026): Suggestiones is now New Face & Development */
     return t;
   }
   /* only the number: "1038 agencies" reads 1038 in the menu, the words would push the name out */
@@ -952,3 +952,5 @@ html[data-theme="dark"] .shtoday .shad.d,html[data-theme="dim"] .shtoday .shad.d
 })();
 /* 1.2.167: Esc closes the "i" explanation on Today's side panel */
 document.addEventListener('keydown', e => { if(e.key === 'Escape' && document.querySelector('.shinfop')){ const b = document.querySelector('[data-shinfo]'); if(b) b.click(); } });
+/* 1.2.210: the longer page names ("New Face & Development", "Booking & Selection") stay on one line in the top bar */
+(function(){ try{ const st = document.createElement('style'); st.textContent = '@media (min-width:1100px){#abtitle{white-space:nowrap}}'; document.head.appendChild(st); }catch(e){} })();

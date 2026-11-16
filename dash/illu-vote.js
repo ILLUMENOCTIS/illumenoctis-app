@@ -299,6 +299,20 @@
   /* 1.2.181 (user, 13 Nov 2026: "I want the name of the USER-Booking to be visible for all ... even if it's their own"):
      the "● NAME · booking" label on a card shows for everyone, also on the cards I am booking myself */
   window.__illuWorkOf = (k, nm, ag) => workOf(k, nm, ag, true);
+  /* 1.2.210 (user, 16 Nov 2026): the person in charge of a model - whoever sent her to Booking, before that whoever sent
+     her to the Team Vote (illu-owner.js asks anyone else before they change her details, and tells this person) */
+  window.__illuOwnerOf = k => {
+    if(!k) return null;
+    let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : null; }catch(e){}
+    if(c && c.by) return {by: c.by, nm: c.nm || '', why: 'booking', bid: c.id, k: c.k || ''};
+    const m = info(k);
+    const bs = bookersOf(k, m.nm, m.ag).filter(x => x.by);
+    c = bs.find(x => x.st === 'proc' || !x.st) || bs.find(x => x.st === 'done');
+    if(c) return {by: c.by, nm: c.nm || m.nm || '', why: 'booking', bid: c.id, k: c.k || k};
+    const o = OPEN.get(hash(k));
+    if(o && o.by && !o.off) return {by: o.by, nm: o.nm || m.nm || '', why: 'vote', bid: '', k};
+    return null;
+  };
   /* 1.2.194 (user, 14 Nov 2026: "some sort of marking on the agency name row to show that someone is working on a model or
      has already worked on a model from this agency" - A + B): every model the team has worked on, one entry per model.
      Booking cards (in progress / booked / cancelled) and Team Votes (open / approved / cancelled). live = still going. */
@@ -837,6 +851,7 @@
     const h = hash(k), prev = MOM.get(h) || null;
     const apply = v => { if(v){ MOM.set(h, v); save('mother/' + h, v); } else { MOM.delete(h); save('mother/' + h, {k, ag: '', by: me(), at: nowIso(), cleared: 1}); } changed(); };
     const v = ag ? {k, ag: String(ag).trim(), dom: dom || '', by: me(), at: nowIso()} : null;
+    try{ window.__illuOwnNote && window.__illuOwnNote(k, 'mother', (prev && !prev.cleared && prev.ag) || '', (v && v.ag) || ''); }catch(e){}
     apply(v);
     try{ let c = bkForKey(k); if(c && v && lc(c.ag) !== lc(v.ag)){ c.ag = v.ag; saveBook(c.id, true); } }catch(e){}
     try{ window.__illuUndo && window.__illuUndo.push(L('Mother agency', '마더 에이전시'), () => apply(prev)); }catch(e){}
@@ -1010,6 +1025,7 @@
     if(!signedIn()) return;
     let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){}
     const before = gOf(k, c); if(String(before[f] || '') === String(v || '')) return;
+    try{ window.__illuOwnNote && window.__illuOwnNote(k, f, before[f], v); }catch(e){}
     const nm = (c && c.nm) || info(k).nm || '';
     if(c){
       const fld = GFIELD[f], old = c[fld];
@@ -1092,6 +1108,37 @@
   }, true);
   window.__illuPreClearGty = mk => { try{ const p0 = preOf(mk); if(p0 && p0.gty) savePre(mk, {gty: ''}); }catch(e){} };
   window.__illuGuar = {get: (k) => { let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){} return gOf(k, c); }, set: gSet};
+  /* 1.2.210 (user, 16 Nov 2026, picked C of "Agency Models Shortcut"): a strip at the top of the Agency section - a few of
+     her agency's models and "All N models from <agency>" - opens the agency in the Directory with all its models as cards,
+     scrolled to her card, which is outlined for a few seconds so you keep your place. */
+  function pnAllStrip(k, a){
+    let dom = ''; try{ dom = agDomOf(a, a.ag || '', a.href || ''); }catch(e){}
+    if(!dom || !window.__illuAgModels) return '';
+    let ms = []; try{ ms = window.__illuAgModels(dom) || []; }catch(e){}
+    if(ms.length < 2) return '';
+    let me = ''; try{ me = mkeyOf(k, /^bid:/.test(k) ? BOOK.get(k.slice(4)) : null) || ''; }catch(e){}
+    const faces = [];
+    for(const m of ms){
+      if(faces.length >= 4) break;
+      if(m.key === me) continue;
+      let src = '';
+      try{
+        if(typeof isMinor === 'function' && isMinor(m.key)) continue;
+        const f = typeof litFacts === 'function' ? litFacts({key: m.key, nm: m.nm, href: m.url}) : null;
+        const h = typeof picCell === 'function' ? picCell(m.key, m.nm, f && f.photo) : '';
+        const mm = h.match(/<img[^>]*?\ssrc="([^"]+)"/); if(mm) src = mm[1].replace(/&amp;/g, '&');
+        if(/^https?:/i.test(src) && window.illu && window.illu.modelPhotos && !window.illu.web) src = 'illuimg://p/' + encodeURIComponent(src) + (/^https?:/i.test(m.url || '') ? '?r=' + encodeURIComponent(m.url) : '');
+        else if(/^https?:/i.test(src) && window.__illuSmall) src = window.__illuSmall(src, 120);
+      }catch(e){ src = ''; }
+      if(src) faces.push(src);
+    }
+    let cnt = ms.length; try{ const dn = window.__illuDirCountOf ? window.__illuDirCountOf(dom) : -1; if(dn > 0) cnt = dn; }catch(e){}
+    const agN = a.ag || (AG.find(x => lc(x.domain) === dom) || {}).name || dom;
+    return '<button type="button" class="pnall" data-pnall="' + H(dom) + '" data-pnallk="' + H(me || k) + '" title="' + H(L('Open ' + agN + ' in the Directory', '디렉터리에서 ' + agN + ' 열기')) + '">' +
+      (faces.length ? '<span class="pnallph" aria-hidden="true">' + faces.map(u => '<img alt="" loading="lazy" src="' + H(u) + '">').join('') + '</span>' : '') +
+      '<span class="pnallt"><b>' + H(L('All ' + cnt + ' models', '모델 ' + cnt + '명 모두')) + '</b><small>' + H(L('from ' + agN + ', in the Directory', agN + ' · 디렉터리')) + '</small></span><span class="pnallar" aria-hidden="true">→</span></button>';
+  }
+  window.addEventListener('error', e => { const t = e.target; if(t && t.tagName === 'IMG' && t.closest && t.closest('.pnallph')) t.remove(); }, true);
   function pnAgency(k, a){
     const pills = [];
     if(a.nPhotos) pills.push('<span class="pnpill">' + H(L(a.nPhotos + ' photos', '사진 ' + a.nPhotos + '장')) + '</span>');
@@ -1109,8 +1156,9 @@
     }catch(e){ igh = ''; }
     if(igh) pills.push('<span class="pnig">' + igh + '</span>');
     else if(a.ig) pills.push('<a class="pnpill" href="https://www.instagram.com/' + H(String(a.ig).replace(/^@/, '')) + '/" target="_blank" rel="noopener">@' + H(String(a.ig).replace(/^@/, '')) + ' ↗</a>');
-    if(!pills.length) return '';
-    return '<section class="pns">' + pnSecH(L('Agency', '에이전시')) + '<div class="pnpills">' + pills.join('') + '</div></section>';
+    let strip = ''; try{ strip = pnAllStrip(k, a); }catch(e){ strip = ''; }
+    if(!pills.length && !strip) return '';
+    return '<section class="pns">' + pnSecH(L('Agency', '에이전시')) + strip + (pills.length ? '<div class="pnpills">' + pills.join('') + '</div>' : '') + '</section>';
   }
   function pnTabs(k, c, nm, can){
     const gfa = GFASK && GFASK.split('\n')[0] === k ? '<div class="mxask"><p>' + H(L('Get files puts ' + nm + ' on the Booking board (her Team Vote carries on), makes her folder and saves the book, snaps and videos into it. You will be in charge of her card.', nm + ' — 부킹 보드에 올리고(팀 투표는 계속), 폴더를 만들어 북·스냅·영상을 저장합니다. 이 카드는 내가 담당합니다.')) + '</p><div><button type="button" class="mxb pri" data-gfyes>' + L('Put on Booking and get files', '부킹에 올리고 파일 받기') + '</button><button type="button" class="mxb" data-gfno>' + L('Cancel', '취소') + '</button></div></div>' : '';
@@ -1190,7 +1238,7 @@
     for(const x of keep){ const n = host.querySelector(x.sel); if(!n) continue; n.value = x.v; if(x.f){ try{ n.focus({preventScroll: true}); n.setSelectionRange(x.a, x.b); }catch(e){} } }
   };
   document.addEventListener('click', e => {
-    const t = e.target.closest && e.target.closest('.mx [data-pnage],.mx [data-pnagex],.mx [data-pnageok],.mx [data-pnv],.mx [data-pnfav],.mx [data-pnag],.mx [data-pnagfav],.mx [data-mxvote],.mx [data-mxget],.mx [data-mxsend],.mx [data-mxsendyes],.mx [data-mxsendno],.mx [data-gfyes],.mx [data-gfno],.mx [data-mxnote],.mx [data-mxlink],.mx [data-mxdel],.mx [data-mxopen]'); if(!t) return;
+    const t = e.target.closest && e.target.closest('.mx [data-pnage],.mx [data-pnagex],.mx [data-pnageok],.mx [data-pnv],.mx [data-pnfav],.mx [data-pnag],.mx [data-pnall],.mx [data-pnagfav],.mx [data-mxvote],.mx [data-mxget],.mx [data-mxsend],.mx [data-mxsendyes],.mx [data-mxsendno],.mx [data-gfyes],.mx [data-gfno],.mx [data-mxnote],.mx [data-mxlink],.mx [data-mxdel],.mx [data-mxopen]'); if(!t) return;
     e.preventDefault(); e.stopPropagation();
     const box = t.closest('.mx'), k = box.dataset.mxk, d = t.dataset;
     if(d.mxsend != null){ if(!signedIn()) return; MXASK = k; changed(); return; }
@@ -1200,6 +1248,7 @@
       try{ window.__illuFavAg && window.__illuFavAg.render && window.__illuFavAg.render(); }catch(err){} changed();
       say(added ? L(nm + ' added to Favorite Agencies', nm + ' — 즐겨찾는 에이전시에 추가했습니다') : L(nm + ' removed from Favorite Agencies', nm + ' — 즐겨찾는 에이전시에서 뺐습니다'), () => { ATLFAV.toggle(dom); try{ window.__illuFavAg && window.__illuFavAg.render && window.__illuFavAg.render(); }catch(err){} changed(); }); return; }
     if(d.pnag){ if(window.__illuDirGoAg) window.__illuDirGoAg(d.pnag); return; }
+    if(d.pnall){ if(window.__illuDirGoAg) window.__illuDirGoAg(d.pnall, d.pnallk || ''); return; }
     if(d.mxvote != null){ const ab = (() => { try{ return JSON.parse(box.dataset.mxab || 'null'); }catch(err){ return null; } })(); sendVote(k, ab); return; }
     if(d.mxget){ let c0 = null; try{ c0 = bkForKey(k); }catch(err){}
       /* 1.2.130 (user, 10 Nov 2026): Get files from any card - she goes onto the Booking board first (her vote carries on) */
@@ -1215,6 +1264,7 @@
       const av = ((box.querySelector('[data-mxin="age-v"]') || {}).value || '').replace(/[^\d]/g, '').slice(0, 3), dv = ((box.querySelector('[data-mxin="age-dob"]') || {}).value || '').trim();
       if(dv && typeof dobParse === 'function' && !dobParse(dv)){ const i = box.querySelector('[data-mxin="age-dob"]'); if(i){ i.setCustomValidity && i.setCustomValidity('DD/MM/YYYY'); i.reportValidity && i.reportValidity(); i.style.borderColor = '#C0303C'; } return; }
       let c = null; try{ c = bkForKey(k); }catch(err){}
+      try{ window.__illuOwnNote && window.__illuOwnNote(k, 'age', c ? (c.age || '') : ((preOf(k) || {}).age || ''), av); }catch(err){}
       if(c){ c.age = av; c.dob = dv; saveBook(c.id, true); } else savePre(k, {age: av, dob: dv});
       MXAGE = ''; changed(); try{ window.__illuRefreshCards && window.__illuRefreshCards(); }catch(err){} return; }
     if(d.mxsendyes != null){ const ab = (() => { try{ return JSON.parse(box.dataset.mxab || 'null'); }catch(err){ return null; } })(); sendBook(k, ab); return; }
@@ -1751,7 +1801,7 @@
     const list = fresh('lsort', [...favSrc].filter(([k]) => !hidK(k)).map(([k, v]) => ({k, at: v.at})).sort((a, b) => String(a.at).localeCompare(String(b.at))));
     const head = '<div class="ivhead"><span class="ivbig">' + list.length + '</span><span class="ivkick">' + (fw ? H(L(pname(fw) + '’s favorites', pname(fw) + '의 즐겨찾기')) : L('Your favorites', '내 즐겨찾기')) + '</span><span class="ivdot"></span><span class="ivkick">' + L('Only you see this board', '나만 보는 보드') + '</span><span class="ivsp"></span>' +
       seg('lsort', [['new', L('Newest first', '최신 순')], ['old', L('Oldest first', '오래된 순')]]) + '<button type="button" class="ivlink" data-ivgo="team">' + L('Team Vote →', '팀 투표 →') + '</button></div>';
-    if(!list.length) return head + empty(L('My Favorites is empty', '내 즐겨찾기가 비어 있습니다'), L('Tap the ♡ on any card — in Suggestiones, the Directory or Compare boards — and the model lands here. Press Send to Team Vote on her card when you want the team to vote.', '추천, 디렉터리, 보드 비교의 아무 카드에서 ♡를 누르면 여기에 들어옵니다. 팀 투표를 받으려면 카드의 팀 투표로 보내기를 누르세요.'));
+    if(!list.length) return head + empty(L('My Favorites is empty', '내 즐겨찾기가 비어 있습니다'), L('Tap the ♡ on any card — in New Face & Development, the Directory or Compare boards — and the model lands here. Press Send to Team Vote on her card when you want the team to vote.', '추천, 디렉터리, 보드 비교의 아무 카드에서 ♡를 누르면 여기에 들어옵니다. 팀 투표를 받으려면 카드의 팀 투표로 보내기를 누르세요.'));
     return head + '<div class="ivgrid ivtv">' + list.map(x => '<div class="ivcw">' + mcard(x.k) + '<div class="ivcap">♥ ' + H(when(x.at)) + '</div>' + stPill(x.k) + offBox(x.k) + '</div>').join('') + '</div>';
   }, () => [...myFav().keys()].filter(k => !hidK(k)).length || '', ['Favorites', '즐겨찾기']);
   /* 1.2.146 (user, 12 Nov 2026): Member Favorites - every member's favourites on one board. A model two or more
@@ -2679,6 +2729,12 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .pnkv b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pn2 .pnkv b.no{color:var(--faint);font-weight:500}
 .pn2 .pnkv .sub{display:block;font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pn2 .pnkv .sub.no{color:var(--faint)}.ivdet .pnkv .sub{white-space:normal;text-overflow:clip;line-height:1.3}.pn2 .pnkv .sub.cond{color:var(--hold,#84610F);font-weight:600}
 .pn2 .pnpills{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+/* 1.2.210: All N models from her agency */
+.pnall{display:flex;align-items:center;gap:10px;width:100%;margin:0 0 9px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--surf2,var(--surf));color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.pnall:hover{border-color:var(--acc)}.pnall:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.pnallph{display:flex;gap:3px;flex:none}.pnallph img{width:26px;height:34px;border-radius:4px;object-fit:cover;display:block;background:var(--line)}
+.pnallt{min-width:0;flex:1;display:flex;flex-direction:column;gap:1px}.pnallt b{font-size:13px;font-weight:700}.pnallt small{font-size:11.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pnallar{color:var(--acc);font-weight:800;flex:none}
 /* 1.2.208 (user, 16 Nov 2026: "don't make the ticker go down if it's too long. keep the ticker and just let the name get cut off"): her Instagram stays on the line with the photos / ✉ / ☎ pills and a long handle ends in … (the whole handle is in the tooltip and the link) */
 .pn2 .pnpills>.pnig{flex:1 1 0;min-width:76px;display:flex}
 .pn2 .pnpills>.pnig .igc{max-width:100%;min-width:0;flex:0 1 auto}

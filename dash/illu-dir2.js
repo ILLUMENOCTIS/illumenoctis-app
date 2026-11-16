@@ -821,11 +821,44 @@
   }
   /* open an agency (by its website, else its name) from the start screen */
   /* 1.2.129: the shared panel's agency name opens that agency in the Directory, from any page */
-  window.__illuDirGoAg = ref => {
+  /* 1.2.210: from the side panel's "All N models" - after the agency opens, scroll to her card and outline it for a few seconds */
+  /* put her card in the middle of the screen - by the screen, not by the list's own box (on a phone that box is short) */
+  function fitCard(el){
+    let p = el.parentElement;
+    while(p && !(p.scrollHeight > p.clientHeight + 4 && /auto|scroll/.test(getComputedStyle(p).overflowY))) p = p.parentElement;
+    const r = el.getBoundingClientRect(), want = Math.max(70, (innerHeight - r.height) / 2), d = r.top - want;
+    if(p) p.scrollTop += d; else window.scrollBy(0, d);
+    const r2 = el.getBoundingClientRect(); if(r2.bottom > innerHeight || r2.top < 0) window.scrollBy(0, r2.top - want);
+    const r3 = el.getBoundingClientRect(); if(r3.left < 0 || r3.right > innerWidth) try{ el.scrollIntoView({block: 'nearest', inline: 'center'}); }catch(e){}
+  }
+  function findCard(key){
+    if(!key) return;
+    let n = 0, until = 0, iv = 0;
+    const sel = () => document.querySelector('.uc[data-uck="' + CSS.escape(key) + '"]');
+    const mark = () => { const el = sel(); if(el && !el.classList.contains('ucfind')) el.classList.add('ucfind'); if(Date.now() > until){ clearInterval(iv); const e2 = sel(); if(e2) e2.classList.remove('ucfind'); } };
+    let allB = false;
+    const tick = () => {
+      /* "All N models": show all the agency's boards, so her card is there whichever board she is on */
+      if(!allB && D2.sel !== -1 && D2.bsel.size){ allB = true; D2.bsel.clear(); try{ refresh(); }catch(e){} setTimeout(tick, 150); return; }
+      const el = sel();
+      if(el && el.offsetParent){
+        try{ el.scrollIntoView({block: 'center', behavior: 'smooth'}); }catch(e){ el.scrollIntoView(); }
+        until = Date.now() + 4200; mark(); iv = setInterval(mark, 200);
+        /* on a phone the list can still grow above her while photos come in: look again and scroll to her if she moved off the screen */
+        for(const t of [700, 1500, 2600]) setTimeout(() => { const e3 = sel(); if(!e3) return; const r = e3.getBoundingClientRect(); if(r.top < 0 || r.bottom > innerHeight) try{ fitCard(e3); }catch(e){} }, t);   /* the grid may redraw while photos load - keep the outline on */
+        return;
+      }
+      if(++n < 40) setTimeout(tick, 100);
+    };
+    setTimeout(tick, 500);
+  }
+  window.__illuDirGoAg = (ref, key) => {
     try{ const fv = document.getElementById('illufv'); if(fv && !fv.hidden){ const x = fv.querySelector('.fvx'); if(x) x.click(); } }catch(e){}
     try{ if(D2.open){ D2.open = ''; SL.full = false; SL.auto = ''; document.body.classList.remove('d2fullcard'); } }catch(e){}
     if(typeof VIEW === 'undefined' || VIEW !== 'dir'){ try{ window.__illuGo ? window.__illuGo('dir') : setView('dir'); }catch(e){} }
-    setTimeout(() => goAgency(ref, ''), 350);
+    /* on a phone the agency list takes half the width - hide it so her agency's cards fill the screen (the ‹ › tab brings it back) */
+    try{ if(key && PHONE()) D2.listOff = true; }catch(e){}
+    setTimeout(() => { goAgency(ref, ''); if(key) setTimeout(() => findCard(key), 400); }, 350);
   };
   function goAgency(ref, key){
     const a = AG.find(x => x.domain === ref) || AG.find(x => x.name === ref);
@@ -853,6 +886,8 @@
   function setSearch(v){ const q = $('#d2q'); if(!q) return; q.value = v; q.dispatchEvent(new Event('input', {bubbles: true})); }
   /* the program's own search (Ctrl K, illu-shell.js) reads the same index and opens agencies the same way */
   /* Compare boards (illu-cmpb.js) reads the same agencies, boards and model lists */
+  /* 1.2.210: the number of models the Directory shows for an agency (each person once, across its boards) - the side panel's "All N models" uses it */
+  window.__illuDirCountOf = dom => { try{ const d = String(dom || '').toLowerCase().replace(/^www\./, ''); const n = nets().find(x => String(x.domain || '').toLowerCase().replace(/^www\./, '') === d || (x.offices || []).some(o => o.a && String(o.a.domain || '').toLowerCase() === d)); return n ? peopleCount(n, n.boards) : -1; }catch(e){ return -1; } };
   window.__illuBoards = {nets: () => nets(), modelsOf: (a, bs) => modelsOf(a, bs), removed: n => netRemoved(n)};
   window.__illuSB = {index: () => sbIndex(), goAgency: (r, k) => goAgency(r, k), setSearch: v => setSearch(v), squash: x => squash(x)};
   document.addEventListener('input', e => { if(e.target && e.target.id === 'd2sbq') sbSuggest(e.target.value); });
@@ -2252,15 +2287,15 @@
       ddH +
       '<button type="button" class="rcbtn" data-rcref' + (!ready || !pool.length ? ' disabled' : '') + '>New picks</button>' + clearH + '</div>';
     pane.classList.toggle('rcper1', PH && rcPer() === 1); pane.classList.toggle('rcper2', PH && rcPer() === 2); pane.classList.toggle('rcphone', PH);
-    pane.innerHTML = '<div class="rcwrap"><div class="rchd"><div>' + (PH ? '' : '<h2>Suggestiones</h2>') + (PH ? tabs : '<div class="rctabrow">' + tabs + ddH + '</div>') + (PH ? phRow : '<p>' + esc(sub2) + '</p>' + (tab === 'you' ? '<p class="rcprog">' + esc(prog) + '</p>' : '')) + '</div>' +
-      '<button type="button" class="illufs" data-rcfull aria-pressed="' + !!RC.full + '" title="' + (RC.full ? 'Exit full screen (Esc)' : 'Show Suggestiones on the whole screen') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (RC.full ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>') + '</svg><span>' + (RC.full ? 'Exit full screen' : 'Full screen') + '</span></button>' +
+    pane.innerHTML = '<div class="rcwrap"><div class="rchd"><div>' + (PH ? '' : '<h2>' + (isKo() ? '뉴페이스 & 디벨롭먼트' : 'New Face &amp; Development') + '</h2>') + (PH ? tabs : '<div class="rctabrow">' + tabs + ddH + '</div>') + (PH ? phRow : '<p>' + esc(sub2) + '</p>' + (tab === 'you' ? '<p class="rcprog">' + esc(prog) + '</p>' : '')) + '</div>' +
+      '<button type="button" class="illufs" data-rcfull aria-pressed="' + !!RC.full + '" title="' + (RC.full ? 'Exit full screen (Esc)' : 'Show New Face & Development on the whole screen') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (RC.full ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>') + '</svg><span>' + (RC.full ? 'Exit full screen' : 'Full screen') + '</span></button>' +
       (tab === 'you' && RC.sets && RC.sets.length > 1 ? '<div class="rcnav" role="group" aria-label="Your picks, newest first">' +
         '<button type="button" class="rcnb" data-rcstep="1"' + (RC.at < RC.sets.length - 1 ? '' : ' disabled') + ' title="Newer picks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Newer</span></button>' +
         '<span class="rcset">Page <b>' + (RC.sets.length - RC.at) + '</b> of ' + RC.sets.length + (RC.at === RC.sets.length - 1 ? ' · newest' : '') + '</span>' +
         '<button type="button" class="rcnb" data-rcstep="-1"' + (RC.at > 0 ? '' : ' disabled') + ' title="Older picks"><span>Older</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></div>' : '') +
       '<button type="button" class="rcbtn" data-rcref' + (!ready || !pool.length ? ' disabled' : '') + ' title="' + (tab === 'kor' ? 'Show the next 9 for the Korean market' : tab === 'nf' ? 'Draw the New face and Development models in a new order' : 'Show ' + RN + ' models you have not been shown yet') + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>New picks</button>' + clearH + '</div>' +
       '<div class="d2body rcbody">' + body2 + pop + '</div></div>';
-    try{ if(typeof countEl !== 'undefined' && countEl) countEl.textContent = ms.length ? ms.length + ' suggestiones' : ''; }catch(e){}
+    try{ if(typeof countEl !== 'undefined' && countEl) countEl.textContent = ms.length ? ms.length + (isKo() ? '명' : ' models') : ''; }catch(e){}
     const vn = document.getElementById('vn-arr'); if(vn) vn.textContent = '';
     rcFit();
     const G2 = $('.d2body'); if(G2){ G2.scrollTop = gTop; const C = G2.querySelector('.d2card');
@@ -2349,7 +2384,8 @@
     const b = document.getElementById('v-arr'); if(!b){ setTimeout(nameTab, 300); return; }
     const vn = b.querySelector('.vn');
     const ko = typeof LANG !== 'undefined' && LANG === 'ko';
-    b.firstChild && b.firstChild.nodeType === 3 ? (b.firstChild.textContent = 'Suggestiones') : b.insertBefore(document.createTextNode('Suggestiones'), vn || null);
+    const nm = ko ? '뉴페이스 & 디벨롭먼트' : 'New Face & Development';   /* 1.2.210: was Suggestiones */
+    b.firstChild && b.firstChild.nodeType === 3 ? (b.firstChild.textContent = nm) : b.insertBefore(document.createTextNode(nm), vn || null);
   })();
   /* scrolling the photos: hover effects pause until the scroll stops */
   (function(){ let t = 0; document.addEventListener('scroll', e => { const g = e.target; if(!g || !g.classList || !g.classList.contains('d2body')) return;
@@ -2601,6 +2637,9 @@ body.d2max .d2tog{left:-17px;width:17px}
 .d2card .litpic .d2sl > *{pointer-events:auto}
 .d2card .litpic .d2sli{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 20%;pointer-events:none;animation:d2slin .35s ease both;background:var(--surf2,#F4F2F7)}
 @keyframes d2slin{from{opacity:0}to{opacity:1}}
+.uc.ucfind{box-shadow:0 0 0 3px var(--acc,#7a3cff),0 10px 28px -10px rgba(20,10,30,.45)!important;animation:ucfind 1.1s ease 3}
+@keyframes ucfind{50%{box-shadow:0 0 0 6px var(--acc,#7a3cff),0 10px 28px -10px rgba(20,10,30,.45)}}
+@media (prefers-reduced-motion:reduce){.uc.ucfind{animation:none}}
 .d2card .litpic.d2slon > .picsrc,.d2card .litpic.d2slon > .piccopy{display:none!important}
 .d2sln{position:absolute;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:50%;border:0;padding:0;display:grid;place-items:center;cursor:pointer;
   background:rgba(255,255,255,.88);color:var(--ink,#1B1724);box-shadow:0 4px 12px -4px rgba(27,23,36,.4);opacity:0;transition:opacity .2s,transform .2s cubic-bezier(.22,1.28,.36,1)}

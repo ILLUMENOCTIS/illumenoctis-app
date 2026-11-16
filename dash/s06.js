@@ -28,7 +28,7 @@
     bar.style.top = (st ? Math.round(h) + 10 : 8) + 'px'; };
   stick(); addEventListener('resize', stick); setTimeout(stick, 1500);
   const ABOUT = {
-    'v-arr':'<p><b>Suggestiones</b> shows 50 models at a time from the whole Directory: women 167–179 cm and men 183–191 cm (measured height).</p><p><b>Refresh</b> brings 50 you have not been shown yet. Every ID goes through the list in its own random order, models new to the Directory come first, and once everyone has been shown it starts over.</p><p>Open a photo for the model’s card (slideshow, full view, lamps), and <b>Full screen</b> for the whole window.</p>',
+    'v-arr':'<p><b>New Face &amp; Development</b> shows 50 models at a time from the whole Directory: women 167–179 cm and men 183–191 cm (measured height).</p><p><b>Refresh</b> brings 50 you have not been shown yet. Every ID goes through the list in its own random order, models new to the Directory come first, and once everyone has been shown it starts over.</p><p>Open a photo for the model’s card (slideshow, full view, lamps), and <b>Full screen</b> for the whole window.</p>',
     'v-dir':'<p><b>Directory</b> lists every agency the dashboard watches, grouped by region and country. Open an agency to see its boards and models, and its contacts.</p><p><b>Download this list</b> saves every model your search and filters show — photos, measurements and links — as a page you open in your browser.</p>',
     'v-bld':'<p><b>Blind spots</b> are boards the scan cannot read on its own. Each one links straight to the agency page so it can be checked by hand.</p>',
     'v-ig':'<p><b>Instagram</b> keeps the model and agency accounts you follow, matched to their cards.</p>',
@@ -40,7 +40,7 @@
     'v-bkl':'<p><b>Backlog</b> is every lamp anyone has set, in the order it happened, filed under whoever set it. Nothing here can be edited: change the lamp and the change files itself as its own line.</p>',
     'v-404':'<p><b>404</b> lists profiles an agency has taken down. They are filed rather than deleted, because a model who leaves a board has usually signed somewhere else.</p>'};
   const ABOUT_KO = {
-    'v-arr':'<p><b>Suggestiones</b>는 전체 디렉터리에서 한 번에 50명을 보여줍니다: 여성 167–179 cm, 남성 183–191 cm(측정된 키).</p><p><b>새로고침</b>을 누르면 아직 보지 않은 50명이 나옵니다. ID마다 자기만의 무작위 순서로 전체를 돌며, 디렉터리에 새로 들어온 모델이 먼저 나오고, 모두 본 뒤에는 처음부터 다시 시작합니다.</p><p>사진을 열면 모델 카드(슬라이드쇼, 전체 보기, 램프)가 나오고, <b>전체 화면</b>으로 창 전체에 볼 수 있습니다.</p>',
+    'v-arr':'<p><b>뉴페이스 &amp; 디벨롭먼트</b>는 전체 디렉터리에서 한 번에 50명을 보여줍니다: 여성 167–179 cm, 남성 183–191 cm(측정된 키).</p><p><b>새로고침</b>을 누르면 아직 보지 않은 50명이 나옵니다. ID마다 자기만의 무작위 순서로 전체를 돌며, 디렉터리에 새로 들어온 모델이 먼저 나오고, 모두 본 뒤에는 처음부터 다시 시작합니다.</p><p>사진을 열면 모델 카드(슬라이드쇼, 전체 보기, 램프)가 나오고, <b>전체 화면</b>으로 창 전체에 볼 수 있습니다.</p>',
     'v-dir':'<p><b>디렉터리</b>는 대시보드가 지켜보는 모든 에이전시를 지역·국가별로 보여줍니다. 에이전시를 열면 보드, 모델, 연락처를 볼 수 있습니다.</p><p><b>이 목록 다운로드</b>는 검색과 필터에 맞는 모든 모델을 사진·사이즈·링크와 함께 브라우저에서 여는 페이지로 저장합니다.</p>',
     'v-bld':'<p><b>크롤 불가</b>는 스캔이 스스로 읽지 못하는 보드입니다. 각각 에이전시 페이지로 바로 연결되어 직접 확인할 수 있습니다.</p>',
     'v-ig':'<p><b>인스타그램</b>은 팔로우하는 모델·에이전시 계정을 카드와 연결해 관리합니다.</p>',

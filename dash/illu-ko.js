@@ -11,9 +11,9 @@
 (function(){
   if(typeof KO === 'undefined') return;
   Object.assign(KO, {
-    "Vote": "투표", "Voting": "투표 중", "Approved": "승인", "Cancelled": "취소", "Opus": "오푸스", "Atlas": "아틀라스", "Map": "지도", "Tie-breaker": "타이브레이커", "Lumen": "루멘", "Communicatus": "코뮤니카투스",
+    "Vote": "투표", "Voting": "투표 중", "Approved": "승인", "Cancelled": "취소", "Opus": "부킹 & 셀렉션", "Atlas": "아틀라스", "Map": "지도", "Tie-breaker": "타이브레이커", "Lumen": "루멘", "Communicatus": "코뮤니카투스",
     /* tabs and their help */
-    "Suggestiones": "수게스티오네스", "Atlas": "아틀라스", "Mother Agencies": "마더 에이전시",
+    "Suggestiones": "뉴페이스 & 디벨롭먼트", "New Face & Development": "뉴페이스 & 디벨롭먼트", "Booking & Selection": "부킹 & 셀렉션", "Atlas": "아틀라스", "Mother Agencies": "마더 에이전시",
     /* Suggestiones, New design (1.2.90) */
     "For you": "추천", "Korean market": "한국 시장", "New faces & Development": "뉴페이스 & 디벨롭먼트", "New picks": "새로 뽑기",
     "Both": "모두", "New faces": "뉴페이스", "Development": "디벨롭먼트", "New face": "뉴페이스", "See all": "모두 보기",
@@ -103,7 +103,7 @@
     "open the agency photo, then drop or paste it here": "에이전시 사진을 연 뒤 여기에 끌어 놓거나 붙여 넣으세요",
     "Photo saved": "사진 저장됨", "No photo on the agency site": "에이전시 사이트에 사진 없음", "Find photo": "사진 찾기",
     "Show 50 models you have not been shown yet": "아직 보지 않은 모델 50명 보기",
-    "Show Suggestiones on the whole screen": "수게스티오네스를 전체 화면으로",
+    "Show Suggestiones on the whole screen": "뉴페이스 & 디벨롭먼트를 전체 화면으로", "Show New Face & Development on the whole screen": "뉴페이스 & 디벨롭먼트를 전체 화면으로",
     /* lamps and booking cards */
     "Completed — move this card here": "완료 — 이 카드를 여기로 옮기기", "Cancelled — move this card here": "취소 — 이 카드를 여기로 옮기기",
     "Processing": "진행 중", "Show the details": "세부 정보 보기", "Hide the details": "세부 정보 숨기기",

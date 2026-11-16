@@ -335,7 +335,7 @@ document.head.appendChild(st);
     const D = window.__illuAgDoms ? window.__illuAgDoms(dom) : [dom];
     const As = (typeof AG !== 'undefined' ? AG : []).filter(x => D.includes(String(x.domain || '').toLowerCase()) || x.domain === dom); if (!As.length) return [];
     const out = new Map();
-    for (const a of As) for (const b of a.boards || []) for (const m of b.m || []) { const raw = String(m[1] || ''); const url = raw.charAt(0) === '|' ? raw.slice(1) : (b.p || '') + raw; let key = url; try { key = normKey(url); } catch (e) {} if (!out.has(key)) out.set(key, { key, nm: m[0] || '', url, g: b.g || '?', ag: a.name, bd: b.d || '' }); }
+    for (const a of As) for (const b of a.boards || []) for (const m of b.m || []) { const raw = String(m[1] || ''); const url = raw.charAt(0) === '|' ? raw.slice(1) : (b.p || '') + raw; let key = url; try { key = normKey(url); } catch (e) {} if (!String(m[0] || '').trim()) continue; /* 1.2.210 (user): a model with no name is an empty card - left out */ if (!out.has(key)) out.set(key, { key, nm: m[0] || '', url, g: b.g || '?', ag: a.name, bd: b.d || '' }); }
     return [...out.values()].sort((p, q) => String(p.nm).localeCompare(String(q.nm), undefined, { sensitivity: 'base', numeric: true }));
   }
   window.__illuAgModels = agModels;
