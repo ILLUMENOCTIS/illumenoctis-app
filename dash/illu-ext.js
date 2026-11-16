@@ -358,7 +358,7 @@ document.head.appendChild(st);
       setTimeout(() => { const i = box.querySelector('#tplnm'); if (i) i.focus(); }, 30);
       return;
     }
-    box.innerHTML = '<div class="tplveil" data-tplx></div><div class="tplbox" role="dialog" aria-modal="true"><h3>Which email?</h3><p class="tplto">To <b>' + escT(PK.addr) + '</b>' + (PK.ms.length ? ' · about <b>' + escT(PK.ms.map(m => String(m.nm || '').toUpperCase()).join(', ')) + '</b>' : '') + '</p>' +
+    box.innerHTML = '<div class="tplveil" data-tplx></div><div class="tplbox' + (PK.open && PK.dom ? ' wide' : '') + '" role="dialog" aria-modal="true"><h3>Which email?</h3><p class="tplto">To <b>' + escT(PK.addr) + '</b>' + (PK.ms.length ? ' · about <b>' + escT(PK.ms.map(m => String(m.nm || '').toUpperCase()).join(', ')) + '</b>' : '') + '</p>' +
       '<div class="tpllist">' + L.map(t => '<div class="tplrow"><button type="button" class="tpluse" data-tpluse="' + escT(t.id) + '"><b>' + escT(t.name) + '</b><small>' + escT(t.subject || '') + (t.id === last ? ' · last used' : '') + '</small></button><button type="button" class="tpled" data-tpled="' + escT(t.id) + '" title="Edit">Edit</button>' + (t.id !== BUILTIN.id ? '<button type="button" class="tpled tpldx' + (PK.arm === t.id ? ' on' : '') + '" data-tpldel="' + escT(t.id) + '" title="Delete this template">' + (PK.arm === t.id ? 'Delete?' : 'Delete') + '</button>' : '') + '</div>').join('') +
       '<div class="tplrow"><button type="button" class="tpluse blank" data-tpluse=""><b>Blank email</b><small>Only the address — write it yourself</small></button></div></div>' +
       '<div class="tplacts"><button type="button" data-tplnew>+ New template</button><span></span><button type="button" data-tplx>Cancel</button></div></div>';
@@ -397,7 +397,7 @@ document.head.appendChild(st);
         return '<span class="tplth">' + (src ? '<img alt="" loading="lazy" decoding="async" src="' + escT(src) + '">' : '') + '</span>';
       };
       const row = m => { const red = anyRed(m.key), tg = tagsOf(m);
-        return '<label class="tplm' + (red ? ' red' : '') + '"><input type="checkbox" data-tplm="' + escT(m.key) + '"' + (on.has(m.key) ? ' checked' : '') + (red ? ' disabled' : '') + '>' + thumb(m) + '<span class="tplmn"><b>' + escT(m.nm) + '</b><small>' + escT(m.bd) + '</small></span>' +
+        return '<label class="tplm' + (red ? ' red' : '') + (on.has(m.key) ? ' on' : '') + '" title="' + escT(m.nm + (m.bd ? ' · ' + m.bd : '')) + '"><input type="checkbox" data-tplm="' + escT(m.key) + '"' + (on.has(m.key) ? ' checked' : '') + (red ? ' disabled' : '') + ' aria-label="' + escT(m.nm) + '">' + thumb(m) + '<span class="tplmn"><b>' + escT(m.nm) + '</b><small>' + escT(m.bd) + '</small></span>' +
           '<span class="tpltags">' + (red ? '<i class="tpltag red">Ruled out</i>' : tg.map(([k, v]) => '<i class="tpltag ' + k + '">' + escT(v) + '</i>').join('')) + '</span></label>'; };
       const shown = all.filter(m => !q || String(m.nm).toLowerCase().includes(q));
       const dk = m => { const r = H && H.byModel.get(m.key); return r ? r.d : ''; };
@@ -571,13 +571,21 @@ document.head.appendChild(st);
     '#illutpl .tplchips{display:flex;flex-wrap:wrap;gap:5px}#illutpl .tplchip{display:inline-flex;align-items:center;gap:4px;background:var(--surf,#fff);border:1px solid var(--line);border-radius:999px;padding:3px 4px 3px 10px;font-size:12px;font-weight:600}#illutpl .tplchip button{border:0;background:none;cursor:pointer;color:var(--mut);font-size:11px}#illutpl .tplnone{margin:0;font-size:12px;color:var(--mut)}' +
     '#illutpl .tplcc{border:1px solid var(--line);border-radius:10px;padding:9px 11px;display:flex;flex-direction:column;gap:6px}#illutpl .tplccl{display:flex;flex-direction:column;max-height:180px;overflow:auto}#illutpl .tplcc .tplm small{margin-left:auto;text-align:right}' +
     '#illutpl .tplq{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px var(--sans)}#illutpl .tplml{max-height:240px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px 10px}#illutpl .tplm{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--ink);flex-direction:row;padding:3px 0;cursor:pointer}#illutpl .tplm small{color:var(--mut);font-size:10.5px;font-weight:400;margin-left:auto}#illutpl .tplm.red{opacity:.5}' +
-    '#illutpl .tplml{grid-template-columns:1fr;max-height:300px}#illutpl .tplgrp{grid-column:1/-1;font:600 9px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding:8px 2px 3px}#illutpl .tplgrp:first-child{padding-top:2px}' +
-    '#illutpl .tplml .tplm{display:grid;grid-template-columns:auto 34px minmax(0,1fr) auto;gap:10px;align-items:center;padding:5px 6px}' +
-    '#illutpl .tplth{width:34px;height:44px;border-radius:6px;background:var(--surf2,#eee);overflow:hidden;display:block}#illutpl .tplth img{width:100%;height:100%;object-fit:cover;display:block}' +
-    '#illutpl .tplmn{min-width:0;display:flex;flex-direction:column;gap:1px}#illutpl .tplmn b{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#illutpl .tplmn small{font-size:11px;color:var(--mut);margin:0}' +
-    '#illutpl .tpltags{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end}' +
-    '#illutpl .tplm .tpltag{font-style:normal;font-size:10.5px;font-weight:600;border-radius:999px;padding:1px 8px;white-space:nowrap}' +
-    '@media (max-width:560px){#illutpl .tplml .tplm{grid-template-columns:auto 34px minmax(0,1fr)}#illutpl .tpltags{grid-column:3;justify-content:flex-start}}' +
+    '#illutpl .tplgrp{grid-column:1/-1;font:600 9px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding:8px 2px 3px}#illutpl .tplgrp:first-child{padding-top:2px}' +
+    /* 1.2.207 (user, 16 Nov 2026: "the cards are too small for me to look through" - demo "Which Email Model View" A): the
+       window widens while the agency's models are open and shows them as photo cards, like the agency's board */
+    '#illutpl .tplbox.wide{width:min(940px,calc(100vw - 32px))}' +
+    '#illutpl .tplml{max-height:min(560px,calc(100vh - 360px));min-height:240px}' +
+    '#illutpl .tplml{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px;align-content:start;padding:2px}' +
+    '#illutpl .tplml .tplm{position:relative;display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:5px;border-radius:10px;border:2px solid transparent;cursor:pointer;min-width:0}' +
+    '#illutpl .tplml .tplm:hover{background:var(--paper,#fff)}#illutpl .tplml .tplm.on{border-color:var(--acc);background:var(--accl,#F3ECF3)}' +
+    '#illutpl .tplml .tplm input{position:absolute;top:11px;left:11px;z-index:2;width:19px;height:19px;margin:0;accent-color:var(--acc)}' +
+    '#illutpl .tplth{width:100%;aspect-ratio:3/4;height:auto;border-radius:8px;background:var(--surf2,#eee);overflow:hidden;display:block}#illutpl .tplth img{width:100%;height:100%;object-fit:cover;display:block}' +
+    '#illutpl .tplmn{min-width:0;display:flex;flex-direction:column;gap:1px}#illutpl .tplmn b{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#illutpl .tplmn small{font-size:11px;color:var(--mut);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '#illutpl .tpltags{display:flex;flex-wrap:wrap;gap:3px}#illutpl .tpltags:empty{display:none}' +
+    '#illutpl .tplm .tpltag{font-style:normal;font-size:10px;font-weight:600;border-radius:999px;padding:1px 7px;white-space:nowrap;margin:0}' +
+    '#illutpl .tplm.red{cursor:not-allowed}#illutpl .tplm.red .tplth{opacity:.45}' +
+    '@media (max-width:560px){#illutpl .tplml{grid-template-columns:repeat(2,minmax(0,1fr))}}' +
     '#illutpl .tpltag.wk{background:var(--accl,#F3ECF3);color:var(--acc)}#illutpl .tpltag.em{background:#E3F4E8;color:#23794A}#illutpl .tpltag.red{background:var(--surf2,#eee);color:var(--faint)}#illutpl .tplm.red span{opacity:.55}' +
     '#illutpl .tplhelp{margin:0;font-size:12px;color:var(--mut);line-height:1.5}#illutpl .tplhelp b{color:var(--ink)}' +
     '#illutpl .tplacts{display:flex;gap:8px;align-items:center}#illutpl .tplacts span{flex:1}#illutpl .tplacts button{border:1px solid var(--line);background:var(--surf,#fff);border-radius:20px;padding:7px 16px;cursor:pointer;color:var(--ink);font:500 13px var(--sans)}#illutpl .tplacts .tplgo{background:var(--acc);border-color:var(--acc);color:var(--on-acc,#fff)}#illutpl .tplacts .tpldel{color:#A3283F}';

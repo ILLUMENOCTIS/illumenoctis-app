@@ -1993,6 +1993,24 @@
       return '<img class="agimg"' + pre + ' data-orig="' + esc(raw) + '" src="' + esc('illuimg://p/' + encodeURIComponent(raw) + (ref ? '?r=' + encodeURIComponent(ref) : '')) + '"';
     });
   };
+  /* 1.2.207 (user, 16 Nov 2026, demo "Card Footer Marks" option A + "the USER initial instead of the orange dot"): a card
+     whose Team Vote is decided AND who is on a booking card showed "✓ Approved 4–1" and "(P) Booking" on top of each other.
+     They become one chip that reads left to right - the vote result, then the booking with the initial of the person
+     booking her (green once booked). The words stay in the tooltip. */
+  function footJoin(lm, wkFoot, wk){
+    if(!wkFoot || !wk) return lm + wkFoot;
+    const r = lm.match(/<span class="ivres (appr|cxl)"[^>]*>[\s\S]*?<b>([^<]*)<\/b><\/span>/);
+    if(!r) return lm + wkFoot;
+    const face = (wkFoot.match(/<span class="wkavs">[\s\S]*?<\/span>/) || [''])[0];      // the initials are <i> discs inside
+    /* the vote is the only thing going on: "✓ Approved 4-1" already says it - the person who sent her to the vote goes
+       inside that same mark instead of a second "Vote Approved" beside it */
+    if(wk.src !== 'book') return lm.replace(r[0], r[0].replace(/^(<span class="ivres [^"]*")/, '$1 data-who="1"').replace(/(<span class="ivres[^>]*>)/, '$1' + face.replace('class="wkavs"', 'class="wkavs ivwho"')));
+    const lab = (wkFoot.match(/<b>([\s\S]*?)<\/b>/) || ['', ''])[1] || (wk.live ? 'Booking' : 'Booked');
+    const voteT = (r[1] === 'appr' ? (isKo() ? '승인 ' : 'Approved ') : (isKo() ? '취소 ' : 'Cancelled ')) + r[2];
+    const tip = esc(voteT + ' → ' + (wk.lab || lab) + (wkWho(wk.who) ? ' · ' + wkWho(wk.who) : ''));
+    const chip = '<span class="ucchain ' + r[1] + (wk.live ? ' l' : ' d') + '" title="' + tip + '" aria-label="' + tip + '"><span class="s1">' + (r[1] === 'appr' ? '✓ ' : '✕ ') + esc(r[2]) + '</span><span class="ar" aria-hidden="true"></span><span class="s2">' + face + '<b>' + lab + '</b></span></span>';
+    return lm.replace(r[0], '') + chip;
+  }
   function ucard(m, o){
     o = o || {};
     const f = litFacts(m), minor = isMinor(m.key);
@@ -2034,7 +2052,7 @@
       (minor || !/^https?:/i.test(m.href || '') ? '' : '<button type="button" class="ucarr l" data-ucarr="-1" aria-label="Previous photo">‹</button><button type="button" class="ucarr r" data-ucarr="1" aria-label="Next photo">›</button><span class="uccnt" aria-live="polite"></span>') +
       '<div class="ucov">' + (() => { try{ const v = window.__illuAvailOf && window.__illuAvailOf(m.key); return v ? '<span class="ucav ' + esc(v.t) + '" title="' + esc(v.why || '') + '">' + (v.t === 'later' ? '⏳ ' : '⛔ ') + esc(window.__illuAvailLabel(v, true)) + '</span>' : ''; }catch(e){ return ''; } })() + ''/* 1.2.189 (user, 14 Nov 2026: "let's just completely get rid of this"): no "NAME · booking" label on cards */ + '<b>' + esc(m.nm) + '</b><span class="ucag">' + esc(meta) + '</span>' + mx + '</div>' +
       (offices > 1 ? '<span class="ucbadge">' + offices + (isKo() ? '개 오피스' : ' offices') + '</span>' : '') + '</div>' +
-      '<div class="ucft' + (wkFoot ? ' haswk' : '') + '"><em>' + esc(tl ? (isKo() ? tl[1] : tl[0]) : (m.div || '')) + '</em>' + lamps(m.key, m.nm, meta, m.href) + wkFoot + '</div></article>';
+      '<div class="ucft' + (wkFoot ? ' haswk' : '') + '"><em>' + esc(tl ? (isKo() ? tl[1] : tl[0]) : (m.div || '')) + '</em>' + footJoin(lamps(m.key, m.nm, meta, m.href), wkFoot, wk) + '</div></article>';
   }
   window.__illuCard = (m, o) => ucard(m, o);
   /* 1.2.149 (user, 12 Nov 2026, approved demo "Browse her photos right on the card"): ‹ › on every model card go
@@ -3030,6 +3048,19 @@ body.d2max #d2bar{margin-top:0}
 .uc .ucwkt .wkavs .iddisc{width:18px;height:18px}
 .uc .ucwkt:not(:has(.wkavs)){padding-left:8px}
 .uc.ucw-l .ucbadge,.uc.ucw-d .ucbadge{top:38px}
+/* 1.2.207: vote result + booking in one chip (option A) */
+.uc .ucft .ucchain{display:inline-flex;align-items:stretch;height:26px;border-radius:999px;overflow:hidden;margin-left:auto;min-width:0;flex:0 1 auto;font:600 11.5px var(--sans,Inter,system-ui,sans-serif);white-space:nowrap;cursor:default;--c1b:#E3F4E8;--c1t:#23794A;--c2b:#FFF1E6;--c2t:#C2620C}
+.uc .ucft .ucchain.cxl{--c1b:#FBE7E6;--c1t:#B4332B}
+.uc .ucft .ucchain.d{--c2b:#E3F4E8;--c2t:#23794A}
+[data-theme="dark"] .uc .ucft .ucchain,[data-theme="dim"] .uc .ucft .ucchain{--c1b:#1E3324;--c1t:#8FD3A4;--c2b:#3A2A18;--c2t:#F0A960}
+[data-theme="dark"] .uc .ucft .ucchain.cxl,[data-theme="dim"] .uc .ucft .ucchain.cxl{--c1b:#3A1F1E;--c1t:#F08A80}
+[data-theme="dark"] .uc .ucft .ucchain.d,[data-theme="dim"] .uc .ucft .ucchain.d{--c2b:#1E3324;--c2t:#8FD3A4}
+.uc .ucft .ucchain .s1{background:var(--c1b);color:var(--c1t);display:flex;align-items:center;padding:0 6px 0 9px;font-variant-numeric:tabular-nums;flex:none}
+.uc .ucft .ucchain .ar{width:0;border-top:13px solid transparent;border-bottom:13px solid transparent;border-left:7px solid var(--c1b);background:var(--c2b);flex:none}
+.uc .ucft .ucchain .s2{background:var(--c2b);color:var(--c2t);display:flex;align-items:center;gap:4px;padding:0 9px 0 5px;min-width:0}
+.uc .ucft .ucchain .s2 b{font-weight:700;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.uc .ucft .ucchain .wkavs{display:inline-flex;flex:none}.uc .ucft .ucchain .wkavs .iddisc{width:16px;height:16px;font-size:7.5px}
+.uc .ucft .ivres .ivwho{display:inline-flex;margin-right:1px}.uc .ucft .ivres .ivwho .iddisc{width:16px;height:16px;font-size:7.5px}
 /* 1.2.199 option C: the status on the line under the photo */
 .uc .ucft .ucwks{display:inline-flex;align-items:center;gap:4px;min-width:0;flex:0 1 auto;margin-left:auto;font:600 11px var(--sans,Inter,system-ui,sans-serif);white-space:nowrap;cursor:default}
 .uc .ucft .ucwks i{width:6px;height:6px;border-radius:50%;flex:none;background:#E07B1A}
