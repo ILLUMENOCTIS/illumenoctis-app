@@ -2679,6 +2679,11 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .pnkv b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pn2 .pnkv b.no{color:var(--faint);font-weight:500}
 .pn2 .pnkv .sub{display:block;font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pn2 .pnkv .sub.no{color:var(--faint)}.ivdet .pnkv .sub{white-space:normal;text-overflow:clip;line-height:1.3}.pn2 .pnkv .sub.cond{color:var(--hold,#84610F);font-weight:600}
 .pn2 .pnpills{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+/* 1.2.208 (user, 16 Nov 2026: "don't make the ticker go down if it's too long. keep the ticker and just let the name get cut off"): her Instagram stays on the line with the photos / ✉ / ☎ pills and a long handle ends in … (the whole handle is in the tooltip and the link) */
+.pn2 .pnpills>.pnig{flex:1 1 0;min-width:76px;display:flex}
+.pn2 .pnpills>.pnig .igc{max-width:100%;min-width:0;flex:0 1 auto}
+.pn2 .pnpills>.pnig .igc span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pn2 .pnpills>.pnig .igc .igset,.pn2 .pnpills>.pnig .igc svg{flex:none}
 .pn2 .pnpill{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--ink);text-decoration:none;background:var(--surf,#fff)}
 .pn2 a.pnpill{color:var(--acc)}
 .pnadmin{border-top:1px dashed var(--line,#d9d3e2);margin-top:6px;padding-top:12px;display:flex;flex-direction:column;gap:8px}

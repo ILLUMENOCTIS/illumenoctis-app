@@ -1993,23 +1993,36 @@
       return '<img class="agimg"' + pre + ' data-orig="' + esc(raw) + '" src="' + esc('illuimg://p/' + encodeURIComponent(raw) + (ref ? '?r=' + encodeURIComponent(ref) : '')) + '"';
     });
   };
-  /* 1.2.207 (user, 16 Nov 2026, demo "Card Footer Marks" option A + "the USER initial instead of the orange dot"): a card
-     whose Team Vote is decided AND who is on a booking card showed "✓ Approved 4–1" and "(P) Booking" on top of each other.
-     They become one chip that reads left to right - the vote result, then the booking with the initial of the person
-     booking her (green once booked). The words stay in the tooltip. */
+  /* 1.2.208 (user, 16 Nov 2026: "it all looks very different" - demo "Card Status Footer", option A): every status on a card
+     is the same pill on the right of the footer - the initial of the person in charge, then the status in its colour
+     (green approved / booked, orange booking, red cancelled). While the vote is open the Go / Pass buttons and the count
+     stay (those are pressed) and nothing else is added. A decided vote that went on to booking is one pill:
+     "(P) Booking ✓ 4-1". On a narrow card the words Approved / Cancelled drop and the score stays. */
   function footJoin(lm, wkFoot, wk){
-    if(!wkFoot || !wk) return lm + wkFoot;
+    if(/class="ivl /.test(lm)) return lm;                                           // vote open: its own buttons only
     const r = lm.match(/<span class="ivres (appr|cxl)"[^>]*>[\s\S]*?<b>([^<]*)<\/b><\/span>/);
-    if(!r) return lm + wkFoot;
+    if(!r && !wk) return lm + wkFoot;
     const face = (wkFoot.match(/<span class="wkavs">[\s\S]*?<\/span>/) || [''])[0];      // the initials are <i> discs inside
-    /* the vote is the only thing going on: "✓ Approved 4-1" already says it - the person who sent her to the vote goes
-       inside that same mark instead of a second "Vote Approved" beside it */
-    if(wk.src !== 'book') return lm.replace(r[0], r[0].replace(/^(<span class="ivres [^"]*")/, '$1 data-who="1"').replace(/(<span class="ivres[^>]*>)/, '$1' + face.replace('class="wkavs"', 'class="wkavs ivwho"')));
-    const lab = (wkFoot.match(/<b>([\s\S]*?)<\/b>/) || ['', ''])[1] || (wk.live ? 'Booking' : 'Booked');
-    const voteT = (r[1] === 'appr' ? (isKo() ? '승인 ' : 'Approved ') : (isKo() ? '취소 ' : 'Cancelled ')) + r[2];
-    const tip = esc(voteT + ' → ' + (wk.lab || lab) + (wkWho(wk.who) ? ' · ' + wkWho(wk.who) : ''));
-    const chip = '<span class="ucchain ' + r[1] + (wk.live ? ' l' : ' d') + '" title="' + tip + '" aria-label="' + tip + '"><span class="s1">' + (r[1] === 'appr' ? '✓ ' : '✕ ') + esc(r[2]) + '</span><span class="ar" aria-hidden="true"></span><span class="s2">' + face + '<b>' + lab + '</b></span></span>';
-    return lm.replace(r[0], '') + chip;
+    const who = wk ? wkWho(wk.who) : '';
+    const ko = isKo();
+    let cls, body, tip;
+    if(r && (!wk || wk.src !== 'book')){
+      const ok = r[1] === 'appr';
+      cls = ok ? 'ok' : 'bad';
+      body = (ok ? '✓' : '✕') + '<span class="wd"> ' + (ok ? (ko ? '승인' : 'Approved') : (ko ? '취소' : 'Cancelled')) + '</span> <b>' + esc(r[2]) + '</b>';
+      tip = (ok ? 'Approved ' : 'Cancelled ') + r[2] + (who ? ' · ' + who : '');
+    }else{
+      const lab = String(wk.lab || '');
+      const canc = /Cancelled|취소/.test(lab), done = !wk.live && !canc;
+      cls = canc ? 'bad' : done ? 'ok' : 'or';
+      let txt = done ? lab.replace(/^Booked · /, 'Booked ').replace(/^부킹 완료 · /, '부킹 완료 ') : canc ? (ko ? '부킹 취소' : 'Booking cancelled') : (ko ? '부킹' : 'Booking');
+      if(wk.src === 'vote' && !r) txt = lab.replace(/^Vote · /, '').replace(/^투표 · /, '');
+      body = esc(txt) + (r && r[1] === 'appr' ? ' <b>✓ ' + esc(r[2]) + '</b>' : r ? ' <b>✕ ' + esc(r[2]) + '</b>' : '');
+      const stage = wk.live ? lab.replace(/^Booking · |^부킹 · /, '').replace(/^Booking$|^부킹$/, '') : '';
+      tip = (r ? (r[1] === 'appr' ? 'Approved ' : 'Cancelled ') + r[2] + ' → ' : '') + lab + (who ? ' · ' + who : '');
+      if(stage) body += '<span class="wd2"> · ' + esc(stage) + '</span>';
+    }
+    return (r ? lm.replace(r[0], '') : lm) + '<span class="ucst ' + cls + '" title="' + esc(tip) + '" aria-label="' + esc(tip) + '">' + face + '<span class="tx">' + body + '</span></span>';
   }
   function ucard(m, o){
     o = o || {};
@@ -3048,19 +3061,15 @@ body.d2max #d2bar{margin-top:0}
 .uc .ucwkt .wkavs .iddisc{width:18px;height:18px}
 .uc .ucwkt:not(:has(.wkavs)){padding-left:8px}
 .uc.ucw-l .ucbadge,.uc.ucw-d .ucbadge{top:38px}
-/* 1.2.207: vote result + booking in one chip (option A) */
-.uc .ucft .ucchain{display:inline-flex;align-items:stretch;height:26px;border-radius:999px;overflow:hidden;margin-left:auto;min-width:0;flex:0 1 auto;font:600 11.5px var(--sans,Inter,system-ui,sans-serif);white-space:nowrap;cursor:default;--c1b:#E3F4E8;--c1t:#23794A;--c2b:#FFF1E6;--c2t:#C2620C}
-.uc .ucft .ucchain.cxl{--c1b:#FBE7E6;--c1t:#B4332B}
-.uc .ucft .ucchain.d{--c2b:#E3F4E8;--c2t:#23794A}
-[data-theme="dark"] .uc .ucft .ucchain,[data-theme="dim"] .uc .ucft .ucchain{--c1b:#1E3324;--c1t:#8FD3A4;--c2b:#3A2A18;--c2t:#F0A960}
-[data-theme="dark"] .uc .ucft .ucchain.cxl,[data-theme="dim"] .uc .ucft .ucchain.cxl{--c1b:#3A1F1E;--c1t:#F08A80}
-[data-theme="dark"] .uc .ucft .ucchain.d,[data-theme="dim"] .uc .ucft .ucchain.d{--c2b:#1E3324;--c2t:#8FD3A4}
-.uc .ucft .ucchain .s1{background:var(--c1b);color:var(--c1t);display:flex;align-items:center;padding:0 6px 0 9px;font-variant-numeric:tabular-nums;flex:none}
-.uc .ucft .ucchain .ar{width:0;border-top:13px solid transparent;border-bottom:13px solid transparent;border-left:7px solid var(--c1b);background:var(--c2b);flex:none}
-.uc .ucft .ucchain .s2{background:var(--c2b);color:var(--c2t);display:flex;align-items:center;gap:4px;padding:0 9px 0 5px;min-width:0}
-.uc .ucft .ucchain .s2 b{font-weight:700;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.uc .ucft .ucchain .wkavs{display:inline-flex;flex:none}.uc .ucft .ucchain .wkavs .iddisc{width:16px;height:16px;font-size:7.5px}
-.uc .ucft .ivres .ivwho{display:inline-flex;margin-right:1px}.uc .ucft .ivres .ivwho .iddisc{width:16px;height:16px;font-size:7.5px}
+/* 1.2.208: one status pill for every status (option A) */
+.uc .ucft .ucst{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px 0 4px;border-radius:999px;margin-left:auto;min-width:0;flex:0 1 auto;max-width:100%;overflow:hidden;font:700 11.5px var(--sans,Inter,system-ui,sans-serif);white-space:nowrap;cursor:default;background:var(--stb);color:var(--stt)}
+.uc .ucft .ucst.ok{--stb:#E3F4E8;--stt:#23794A}.uc .ucft .ucst.or{--stb:#FFF1E6;--stt:#C2620C}.uc .ucft .ucst.bad{--stb:#FBE7E6;--stt:#B4332B}
+[data-theme="dark"] .uc .ucft .ucst.ok,[data-theme="dim"] .uc .ucft .ucst.ok{--stb:#1E3324;--stt:#8FD3A4}[data-theme="dark"] .uc .ucft .ucst.or,[data-theme="dim"] .uc .ucft .ucst.or{--stb:#3A2A18;--stt:#F0A960}[data-theme="dark"] .uc .ucft .ucst.bad,[data-theme="dim"] .uc .ucft .ucst.bad{--stb:#3A1F1E;--stt:#F08A80}
+.uc .ucft .ucst .tx{overflow:hidden;text-overflow:ellipsis;min-width:0}.uc .ucft .ucst b{font-weight:600}
+.uc .ucft .ucst:not(:has(.wkavs)){padding-left:9px}
+.uc .ucft .ucst .wkavs{display:inline-flex;flex:none}.uc .ucft .ucst .wkavs .iddisc{width:18px;height:18px;font-size:8px}
+.uc .ucft .ucst .wd2{font-weight:600;opacity:.85}
+@container (max-width:188px){.uc .ucft .ucst .wd,.uc .ucft .ucst .wd2{display:none}.uc .ucft .ucst{gap:4px;padding-right:8px}}
 /* 1.2.199 option C: the status on the line under the photo */
 .uc .ucft .ucwks{display:inline-flex;align-items:center;gap:4px;min-width:0;flex:0 1 auto;margin-left:auto;font:600 11px var(--sans,Inter,system-ui,sans-serif);white-space:nowrap;cursor:default}
 .uc .ucft .ucwks i{width:6px;height:6px;border-radius:50%;flex:none;background:#E07B1A}
