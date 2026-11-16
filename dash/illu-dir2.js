@@ -883,9 +883,13 @@
     if(typeof VIEW === 'undefined' || VIEW !== 'dir'){ try{ window.__illuGo ? window.__illuGo('dir') : setView('dir'); }catch(e){} }
     /* on a phone the agency list takes half the width - hide it so her agency's cards fill the screen (the ‹ › tab brings it back) */
     try{ if(key && PHONE()) D2.listOff = true; }catch(e){}
-    setTimeout(() => { goAgency(ref, ''); if(key) setTimeout(() => findCard(key), 400); }, 350);
+    /* 1.2.211 (user, 16 Nov 2026: "the screen ended up freezing, or just not being able to direct me to the directory agency
+       list"): the Directory was left on Hidden Agencies (and a region filter), so the agency could not be found and the
+       blur of a closed card stayed on. Come back to the normal list; if filters still hide the agency, they are cleared. */
+    try{ D2.showRemoved = false; D2.hidMod = false; D2.confirm = null; document.body.classList.remove('d2carding', 'd2closing', 'd2opening'); }catch(e){}
+    setTimeout(() => { goAgency(ref, '', true); if(key) setTimeout(() => findCard(key), 400); }, 350);
   };
-  function goAgency(ref, key){
+  function goAgency(ref, key, clearIfHidden){
     const a = AG.find(x => x.domain === ref) || AG.find(x => x.name === ref);
     const q = $('#d2q'); if(!q) return;
     q.value = a ? a.name : ref; q.dispatchEvent(new Event('input', {bubbles: true}));
@@ -899,7 +903,9 @@
           if(D2.sel !== x.id) r2.click();
           if(key) setTimeout(() => { if(D2.sel === x.id){ D2.open = key; refresh(); } }, 80);
         }, 250); return; }
-      if(++tries < 20) setTimeout(look, 50);          // the list is still being redrawn for the search
+      if(++tries < 20){ setTimeout(look, 50); return; }          // the list is still being redrawn for the search
+      /* not in the list: the filters (region, country, board, favorites…) hide it - clear them once and look again */
+      if(clearIfHidden){ try{ D2.fav = false; clearAll(); }catch(e){} goAgency(ref, key, false); }
     };
     setTimeout(look, 30);
   }
@@ -1171,6 +1177,7 @@
     const G2 = $('.d2body'); if(G2 && r){ G2.scrollTop = gTop; const C = G2.querySelector('.d2card');
       if(C){ placeCard(C); cardEnter(C); } else D2.shownKey = '';
       G2.classList.toggle('carding', !!C); document.body.classList.toggle('d2carding', !!C); const V = G2.querySelector('.d2veil'); if(V) V.style.height = G2.scrollHeight + 'px'; }
+    else if(!r) document.body.classList.remove('d2carding');   /* 1.2.211: no agency open = no card open - the blur goes */
     syncBar(byMeas ? '<b>' + totalFit.toLocaleString() + '</b> ' + (totalFit === 1 ? 'model fits' : 'models fit') + ' · in <b>' + list.length.toLocaleString() + '</b> ' + (list.length === 1 ? 'agency' : 'agencies') :
       (BND && BND.any && measState !== 'ready' ? 'Reading the measurements…' : ''));
     if(VIEW === 'dir') countEl.textContent = list.length + (list.length === 1 ? ' agency' : ' agencies');
@@ -1652,7 +1659,9 @@
     if(e.target.closest('[data-d2undo]')){ const u = D2.lastRemoved; hideToast(); if(u) restoreAg(u.n, u.mem); return; }
     if(e.target.closest('[data-d2showrm]')){ D2.showRemoved = !D2.showRemoved; D2.hidMod = false; D2.sel = -1; D2.listTop = 0; D2.keepTop = true; refresh(); return; }
     /* 1.2.177: Hidden Agencies › Hidden Models at the end of the agency list (Admin) */
-    if(e.target.closest('[data-d2hidag]')){ D2.showRemoved = true; D2.hidMod = false; D2.sel = -1; D2.listTop = 0; D2.keepTop = true; refresh(); return; }
+    /* 1.2.211 (user: "I'm not able to see the names of the hidden agencies"): the search box and the filters were still on
+       (e.g. "ANGER" + Europe), so the list said none matched - Hidden Agencies always lists all of them */
+    if(e.target.closest('[data-d2hidag]')){ try{ const q = $('#d2q'); if(q && q.value){ q.value = ''; q.dispatchEvent(new Event('input', {bubbles: true})); } clearAll(); }catch(err){} D2.showRemoved = true; D2.hidMod = false; D2.sel = -1; D2.listTop = 0; D2.keepTop = true; refresh(); return; }
     if(e.target.closest('[data-d2hidmod]')){ D2.hidMod = true; D2.showRemoved = false; D2.sel = -1; D2.keepTop = true; refresh(); return; }
     if(e.target.closest('[data-d2hidback]')){ D2.hidMod = false; D2.showRemoved = false; D2.sel = -1; D2.listTop = 0; D2.keepTop = true; refresh(); return; }
     const ms0 = e.target.closest('[data-d2mshow]');
