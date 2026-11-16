@@ -46,6 +46,28 @@
   const css = document.createElement('style');
   css.textContent = '.ivcw:not(:has(article)){display:none!important}';
   document.head.appendChild(css);
+  /* 1.2.211: a model someone else hides (or shows again) leaves (or comes back to) every board here too, right away -
+     before, the hidden list was read once when the program started */
+  const redraw = () => {
+    try{ typeof refresh === 'function' && refresh(); }catch(e){}
+    try{ typeof renderArrivals === 'function' && renderArrivals(); }catch(e){}
+    try{ window.__illuVoteRerender && window.__illuVoteRerender(); }catch(e){}
+    try{ window.__illuRecoRender && window.__illuRecoRender(); }catch(e){}
+  };
+  (function live(){
+    let db = null; try{ db = typeof DB !== 'undefined' ? DB : null; }catch(e){}
+    if(!db || !db.collection || typeof MDEL === 'undefined'){ setTimeout(live, 1500); return; }
+    let first = true, sig = '';
+    try{ db.collection('mdel').onSnapshot(sn => {
+      const docs = (sn && sn.docs) || [];
+      const s2 = docs.map(d => { const v = typeof docOf === 'function' ? docOf(d) : d.data(); return v && v.k ? v.k + ':' + v.st : ''; }).sort().join('|');
+      if(s2 === sig) return; sig = s2;
+      for(const d of docs){ const v = typeof docOf === 'function' ? docOf(d) : d.data(); if(v && v.k) MDEL.set(v.k, v); }
+      try{ if(typeof DIRSUB !== 'undefined') DIRSUB = ''; }catch(e){}
+      if(first){ first = false; return; }
+      setTimeout(redraw, 50);
+    }, () => {}); }catch(e){}
+  })();
   /* the moment a model is hidden (or shown again) every board is drawn again */
   try{
     if(typeof mdelSet === 'function' && !mdelSet.__hid){
@@ -56,6 +78,7 @@
           try{ typeof refresh === 'function' && refresh(); }catch(e){}
           try{ typeof renderArrivals === 'function' && renderArrivals(); }catch(e){}
           try{ window.__illuVoteRerender && window.__illuVoteRerender(); }catch(e){}
+          try{ window.__illuRecoRender && window.__illuRecoRender(); }catch(e){}   /* 1.2.211: New Face & Development */
         }, 50);
         return r;
       };

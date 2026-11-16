@@ -2086,6 +2086,8 @@
   }
   function ucard(m, o){
     o = o || {};
+    /* 1.2.211: a hidden model's card is never drawn on a board (Hidden Models draws its own cards) */
+    try{ if(!o.showHidden && window.__illuIsHidden && window.__illuIsHidden(m)) return ''; }catch(e){}
     const f = litFacts(m), minor = isMinor(m.key);
     const pc = viaCache(picCell(m.key, m.nm, minor ? '' : f.photo), m.key, m.href).replace('<img class="agimg"', '<img class="agimg" loading="lazy" decoding="async"').replace(' fetchpriority="high"', '');
     const band = o.kor ? KB()[m.g === 'M' ? 'M' : 'F'] : null;
@@ -2217,6 +2219,7 @@
   /* the card's words (board, no measurements) follow the language switch */
   try{ new MutationObserver(() => { try{ if(VIEW === 'arr') recoRender(); else if(VIEW === 'dir') refresh(); }catch(e){} }).observe(document.documentElement, {attributes: true, attributeFilter: ['lang']}); }catch(e){}
   function tile2(m, kor){ return ucard(m, {kor}); }
+  window.__illuRecoRender = () => { try{ if(VIEW === 'arr') recoRender(); }catch(e){} };
   function tile2Old(m, kor){
     const f = litFacts(m), minor = isMinor(m.key);
     const pc = picCell(m.key, m.nm, minor ? '' : f.photo).replace('<img class="agimg"', '<img class="agimg" loading="lazy" decoding="async"').replace(' fetchpriority="high"', '');
@@ -2257,6 +2260,10 @@
       }
       ms = ms.concat((RC.fx || []).filter(m => recoOk(m, fs) && !ms.some(x => x.key === m.key)));
     } else { RC.fkey = ''; RC.fx = []; }
+    /* 1.2.211 (user, 16 Nov 2026: "I hid the card and the card still shows"): a hidden model leaves this board too - she is
+       under Directory › Hidden › Hidden Models */
+    const hidM = m => { try{ return !!(window.__illuIsHidden && window.__illuIsHidden(m)); }catch(e){ return false; } };
+    ms = ms.filter(m => !hidM(m));
     const tab = RC.tab;
     let list = ms, strip = [], nfAll = [];
     if(ready && tab === 'kor') list = krList(fs);
@@ -2264,6 +2271,8 @@
     if(ready) nfAll = nfList(fs);
     /* 1.2.108 (user, 8 Nov 2026): pages of 60 instead of "Show more" growing the list downward */
     const nfPages = Math.max(1, Math.ceil(nfAll.length / 60)); if(RC.nfPg >= nfPages) RC.nfPg = nfPages - 1; if(!(RC.nfPg >= 0)) RC.nfPg = 0;
+    if(tab === 'nf') list = nfAll.slice(RC.nfPg * 60, RC.nfPg * 60 + 60);
+    nfAll = nfAll.filter(m => !hidM(m)); list = list.filter(m => !hidM(m));
     if(tab === 'nf') list = nfAll.slice(RC.nfPg * 60, RC.nfPg * 60 + 60);
     if(tab === 'you') strip = nfAll.slice(0, 12);
     const every = list.concat(strip.filter(m => !list.some(x => x.key === m.key)));
