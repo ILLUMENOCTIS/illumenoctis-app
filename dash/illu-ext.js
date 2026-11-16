@@ -338,6 +338,9 @@ document.head.appendChild(st);
     for (const a of As) for (const b of a.boards || []) for (const m of b.m || []) { const raw = String(m[1] || ''); const url = raw.charAt(0) === '|' ? raw.slice(1) : (b.p || '') + raw; let key = url; try { key = normKey(url); } catch (e) {} if (!out.has(key)) out.set(key, { key, nm: m[0] || '', url, g: b.g || '?', ag: a.name, bd: b.d || '' }); }
     return [...out.values()].sort((p, q) => String(p.nm).localeCompare(String(q.nm), undefined, { sensitivity: 'base', numeric: true }));
   }
+  window.__illuAgModels = agModels;
+  /* a model photo that can't load leaves an empty box (the program does not run inline handlers) */
+  window.addEventListener('error', e => { const t = e.target; if (t && t.tagName === 'IMG' && t.closest && t.closest('#illutpl .tplth')) t.remove(); }, true);
   function tplPick(anchor, addr, agName, ms, dom) { PK = { addr, agName, ms: (ms || []).slice(), dom: dom || '', edit: null, open: true, q: '', cc: [] }; let box = document.getElementById('illutpl'); if (!box) { box = document.createElement('div'); box.id = 'illutpl'; document.body.appendChild(box); } box.hidden = false; paintPick(); }
   function paintPick() {
     const box = document.getElementById('illutpl'); if (!box || box.hidden || !PK) return;
@@ -379,9 +382,23 @@ document.head.appendChild(st);
         if (r) t.push(['em', 'Emailed ' + day(r.dt) + (r.rep ? ' · replied' : '')]);
         return t;
       };
+      /* 1.2.205 (user, 16 Nov 2026: "from the previous design, there was a window that showed the model cards"): each model
+         with her card photo, her name and board under it, as in the approved demo - the same photo her card shows */
+      const thumb = m => {
+        let src = '';
+        try {
+          if (!(typeof isMinor === 'function' && isMinor(m.key))) {
+            const f = typeof litFacts === 'function' ? litFacts({ key: m.key, nm: m.nm, href: m.url }) : null;
+            const h = typeof picCell === 'function' ? picCell(m.key, m.nm, f && f.photo) : '';
+            const mm = h.match(/<img[^>]*?\ssrc="([^"]+)"/); if (mm) src = mm[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+            if (/^https?:/i.test(src) && window.illu && window.illu.modelPhotos && !window.illu.web && !window.__noVia) src = 'illuimg://p/' + encodeURIComponent(src) + (/^https?:/i.test(m.url || '') ? '?r=' + encodeURIComponent(m.url) : '');
+          }
+        } catch (e) { src = ''; }
+        return '<span class="tplth">' + (src ? '<img alt="" loading="lazy" decoding="async" src="' + escT(src) + '">' : '') + '</span>';
+      };
       const row = m => { const red = anyRed(m.key), tg = tagsOf(m);
-        return '<label class="tplm' + (red ? ' red' : '') + '"><input type="checkbox" data-tplm="' + escT(m.key) + '"' + (on.has(m.key) ? ' checked' : '') + (red ? ' disabled' : '') + '><span>' + escT(m.nm) + '</span>' +
-          (red ? '<i class="tpltag red">Ruled out</i>' : tg.length ? tg.map(([k, v]) => '<i class="tpltag ' + k + '">' + escT(v) + '</i>').join('') : '<small>' + escT(m.bd) + '</small>') + '</label>'; };
+        return '<label class="tplm' + (red ? ' red' : '') + '"><input type="checkbox" data-tplm="' + escT(m.key) + '"' + (on.has(m.key) ? ' checked' : '') + (red ? ' disabled' : '') + '>' + thumb(m) + '<span class="tplmn"><b>' + escT(m.nm) + '</b><small>' + escT(m.bd) + '</small></span>' +
+          '<span class="tpltags">' + (red ? '<i class="tpltag red">Ruled out</i>' : tg.map(([k, v]) => '<i class="tpltag ' + k + '">' + escT(v) + '</i>').join('')) + '</span></label>'; };
       const shown = all.filter(m => !q || String(m.nm).toLowerCase().includes(q));
       const dk = m => { const r = H && H.byModel.get(m.key); return r ? r.d : ''; };
       const worked = shown.filter(m => tagsOf(m).length).sort((a, b) => dk(b).localeCompare(dk(a))), rest = shown.filter(m => !tagsOf(m).length);
@@ -555,7 +572,12 @@ document.head.appendChild(st);
     '#illutpl .tplcc{border:1px solid var(--line);border-radius:10px;padding:9px 11px;display:flex;flex-direction:column;gap:6px}#illutpl .tplccl{display:flex;flex-direction:column;max-height:180px;overflow:auto}#illutpl .tplcc .tplm small{margin-left:auto;text-align:right}' +
     '#illutpl .tplq{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px var(--sans)}#illutpl .tplml{max-height:240px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px 10px}#illutpl .tplm{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--ink);flex-direction:row;padding:3px 0;cursor:pointer}#illutpl .tplm small{color:var(--mut);font-size:10.5px;font-weight:400;margin-left:auto}#illutpl .tplm.red{opacity:.5}' +
     '#illutpl .tplml{grid-template-columns:1fr;max-height:300px}#illutpl .tplgrp{grid-column:1/-1;font:600 9px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding:8px 2px 3px}#illutpl .tplgrp:first-child{padding-top:2px}' +
-    '#illutpl .tplm .tpltag{font-style:normal;font-size:10.5px;font-weight:600;border-radius:999px;padding:1px 8px;white-space:nowrap;margin-left:4px}#illutpl .tplm .tpltag:first-of-type{margin-left:auto}' +
+    '#illutpl .tplml .tplm{display:grid;grid-template-columns:auto 34px minmax(0,1fr) auto;gap:10px;align-items:center;padding:5px 6px}' +
+    '#illutpl .tplth{width:34px;height:44px;border-radius:6px;background:var(--surf2,#eee);overflow:hidden;display:block}#illutpl .tplth img{width:100%;height:100%;object-fit:cover;display:block}' +
+    '#illutpl .tplmn{min-width:0;display:flex;flex-direction:column;gap:1px}#illutpl .tplmn b{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#illutpl .tplmn small{font-size:11px;color:var(--mut);margin:0}' +
+    '#illutpl .tpltags{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end}' +
+    '#illutpl .tplm .tpltag{font-style:normal;font-size:10.5px;font-weight:600;border-radius:999px;padding:1px 8px;white-space:nowrap}' +
+    '@media (max-width:560px){#illutpl .tplml .tplm{grid-template-columns:auto 34px minmax(0,1fr)}#illutpl .tpltags{grid-column:3;justify-content:flex-start}}' +
     '#illutpl .tpltag.wk{background:var(--accl,#F3ECF3);color:var(--acc)}#illutpl .tpltag.em{background:#E3F4E8;color:#23794A}#illutpl .tpltag.red{background:var(--surf2,#eee);color:var(--faint)}#illutpl .tplm.red span{opacity:.55}' +
     '#illutpl .tplhelp{margin:0;font-size:12px;color:var(--mut);line-height:1.5}#illutpl .tplhelp b{color:var(--ink)}' +
     '#illutpl .tplacts{display:flex;gap:8px;align-items:center}#illutpl .tplacts span{flex:1}#illutpl .tplacts button{border:1px solid var(--line);background:var(--surf,#fff);border-radius:20px;padding:7px 16px;cursor:pointer;color:var(--ink);font:500 13px var(--sans)}#illutpl .tplacts .tplgo{background:var(--acc);border-color:var(--acc);color:var(--on-acc,#fff)}#illutpl .tplacts .tpldel{color:#A3283F}';

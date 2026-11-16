@@ -40,6 +40,55 @@
   const emOf = c => (EM().emOf ? EM().emOf(c) : ((c.em && Array.isArray(c.em.list)) ? c.em : {list: []}));
   const thread = s => EM().threadKey ? EM().threadKey(s) : lc(s).replace(/^((re|fw|fwd)\s*:\s*)+/i, '');
   const excl = (c, e) => { try{ return !!(EM().excluded && EM().excluded(c, e)); }catch(er){ return false; } };
+  /* 1.2.205: the team's mail with the agency in Hiworks (not only what is on booking cards). The PC program looks it up
+     when the agency's window opens (at most every 15 minutes) and keeps it in docs aghist/<domain> so phones show it too:
+     {s: [{no, dt, to, subject, ms: [{key, nm}], who, read}], i: [{no, dt, from, subject}], at}. The models of an email are
+     found by her page link in the text, or her full name - never a first name alone (two girls can share one). */
+  const HW = new Map(), BUSY = new Set(), TRIED = new Map();
+  const dbOk = () => { try{ return typeof DB !== 'undefined' && DB && typeof ME !== 'undefined' && ME; }catch(e){ return false; } };
+  const nk = u => { try{ return normKey(u); }catch(e){ return u; } };
+  const reEsc = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  function modelsIn(e, dom){
+    const all = (window.__illuAgModels ? window.__illuAgModels(dom) : []).map(m => ({key: m.key, nm: m.nm}));
+    for(const c of cards()) if(c.k) all.push({key: nk(c.k), nm: c.nm || ''});
+    const byKey = new Map(all.map(m => [m.key, m]));
+    const out = new Map();
+    for(const u of e.links || []){ const m = byKey.get(nk(u)); if(m) out.set(m.key, m); }
+    const txt = ' ' + String(e.subject || '') + '\n' + String(e.text || '') + ' ';
+    const keysOf = new Map(); for(const m of all){ const n = lc(m.nm).replace(/\s+/g, ' '); if(!keysOf.has(n)) keysOf.set(n, new Set()); keysOf.get(n).add(m.key); }
+    for(const m of all){
+      const nm = String(m.nm || '').trim(); if(out.has(m.key) || nm.split(/\s+/).length < 2) continue;      // full names only
+      if(keysOf.get(lc(nm).replace(/\s+/g, ' ')).size > 1) continue;                                        // two models share this name: never guess
+      if(new RegExp('(^|[^\\p{L}])' + reEsc(nm) + '(?![\\p{L}])', 'iu').test(txt)) out.set(m.key, m);
+    }
+    return [...out.values()].map(m => ({key: m.key, nm: m.nm}));
+  }
+  async function hwLoad(dom){
+    if(!dom || BUSY.has(dom) || !dbOk()) return; BUSY.add(dom);
+    try{
+      let d = HW.get(dom);
+      if(!d){ try{ const g = await DB.doc('aghist/' + dom).get(); d = g && g.exists ? g.data() : null; }catch(e){} d = d || {s: [], i: [], at: ''}; HW.set(dom, d); soon(); }
+      const can = window.illu && window.illu.hiworksAgency && !window.illu.web;
+      if(!can || (d.at && Date.now() - Date.parse(d.at) < 15 * 60e3) || Date.now() - (TRIED.get(dom) || 0) < 15 * 60e3) return;
+      TRIED.set(dom, Date.now());
+      const addrs = contactsOf(dom).map(c => lc(c.e)).filter(a => !MINE.test(a)), D = doms(dom);
+      const have = (d.s || []).filter(x => x.read).map(x => String(x.no));
+      const r = await window.illu.hiworksAgency(addrs, D, ME, have);
+      if(!r || !r.ok) return;
+      const old = new Map((d.s || []).map(x => [String(x.no), x]));
+      const s = r.sent.map(e => {
+        const o = old.get(String(e.no));
+        if(o && o.read && !e.read) return o;
+        const m = String(e.name || '').match(/\(([^)]{1,30})\)\s*$/);
+        return {no: e.no, dt: e.dt, to: e.to.concat(e.cc || []).filter(a => !MINE.test(a)), subject: e.subject, ms: e.read ? modelsIn(e, dom) : (o ? o.ms : []), who: m ? m[1].trim() : '', read: e.read ? 1 : 0};
+      });
+      d = {s, i: r.ins.map(x => ({no: x.no, dt: x.dt, from: x.from, subject: x.subject})), at: r.at, by: ME};
+      HW.set(dom, d); soon();
+      try{ await DB.doc('aghist/' + dom).set(d); }catch(e){ console.error('aghist save', e); }
+    }catch(e){ console.error('aghist', e); }
+    finally{ BUSY.delete(dom); }
+  }
+  window.__illuAgHwLoad = hwLoad;
   /* the history of one agency */
   function hist(dom){
     const D = doms(dom), a = AGL().find(x => lc(x.domain) === lc(dom)), agn = lc(a && a.name);
@@ -63,8 +112,28 @@
         if(!r.who) r.who = whoOf(c, e);
       }
     }
+    /* 1.2.205: and what Hiworks has */
+    const hw = HW.get(dom);
+    if(hw){
+      for(const x of hw.i || []) ins.push({t: thread(x.subject), d: dkey(x.dt), dt: x.dt});
+      for(const x of hw.s || []){
+        const k = 'hw:' + x.no, to = (x.to || []).map(lc).filter(a => !MINE.test(a));
+        if(to.length && !to.some(a => addrs.has(a) || inDoms(a, D))) continue;
+        let r = by.get(k);
+        if(!r){ r = {k, dt: x.dt, d: dkey(x.dt), to, subject: x.subject || '', t: thread(x.subject), ms: [], who: x.who || ''}; by.set(k, r); }
+        for(const m of x.ms || []) if(!r.ms.some(y => y.key === m.key)) r.ms.push({key: m.key, nm: m.nm});
+        if(!r.who && x.who) r.who = x.who;
+        if(!r.to.length) r.to = to;
+      }
+    }
     const list = [...by.values()].sort((p, q) => q.d.localeCompare(p.d));
-    for(const r of list){ const rep = ins.filter(i => i.t && i.t === r.t && i.d > r.d).sort((p, q) => p.d.localeCompare(q.d))[0]; r.rep = rep ? rep.dt : ''; }
+    /* a reply belongs to the newest email of the same thread sent before it (many inquiries share one subject line) */
+    for(const r of list) r.rep = '';
+    for(const i of ins.slice().sort((p, q) => p.d.localeCompare(q.d))){
+      if(!i.t) continue;
+      const r = list.filter(x => x.t === i.t && x.d < i.d).sort((p, q) => q.d.localeCompare(p.d))[0];
+      if(r && !r.rep) r.rep = i.dt;
+    }
     const byAddr = new Map(), byModel = new Map();
     for(const r of list){ for(const t of r.to) if(!byAddr.has(t)) byAddr.set(t, r); for(const m of r.ms) if(!byModel.has(m.key)) byModel.set(m.key, r); }
     const cardOf = new Map(mine.map(c => [c.k || ('bid:' + c.id), c]));
@@ -74,7 +143,7 @@
   window.__illuAgDoms = doms;
   window.__illuAgDay = day;
   const cap = s => String(s || '').toLowerCase().replace(/(^|[\s\-'])(\p{Ll})/gu, (m, a, b) => a + b.toUpperCase());
-  const short = ms => ms.length ? cap(ms[0].nm) + (ms.length > 1 ? ' +' + (ms.length - 1) : '') : '';
+  const short = (ms, subj) => ms.length ? cap(ms[0].nm) + (ms.length > 1 ? ' +' + (ms.length - 1) : '') : String(subj || '').slice(0, 40);
   const COLS = ['#E9C6DE', '#C9D6F2', '#CDE8D2', '#F2DCC2', '#DCD3F0', '#F0CFCF'];
   const col = s => { let h = 0; for(const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return COLS[h % COLS.length]; };
   /* ---- the contact window ---- */
@@ -82,7 +151,8 @@
   function paint(){
     const m = document.getElementById('ctmodal'); if(!m || m.dataset.on !== '1') return;
     const box = m.querySelector('.ctbox .cts[data-dom]'); if(!box) return;
-    const dom = box.dataset.dom, H = hist(dom);
+    const dom = box.dataset.dom; hwLoad(dom);
+    const H = hist(dom);
     const body = m.querySelector('.ctbbody');
     let st = body.querySelector('.illuhist');
     const sig = dom + '|' + OPENALL + '|' + H.list.map(r => r.k + r.rep + r.ms.length + r.who).join(',');
@@ -92,7 +162,7 @@
       const html = '<h4>Emailed before <em>· ' + H.list.length + (H.list.length === 1 ? ' email' : ' emails') + ' · last ' + E(day(H.list[0].dt)) + '</em></h4><div class="ihl">' +
         show.map(r => '<span class="ihdt">' + E(day(r.dt)) + '</span>' +
           (r.who ? '<span class="ihwho" style="--c:' + col(r.who) + '" title="' + E(r.who) + '">' + E(r.who.charAt(0).toUpperCase()) + '</span>' : '<span class="ihwho none" title="Sent from booking1@mdient.com">·</span>') +
-          '<span class="ihm"><b>' + E(r.ms.map(x => String(x.nm).toUpperCase()).join(', ')) + '</b>' + (r.to.length ? ' <span>· to ' + E(r.to.join(', ')) + '</span>' : '') + '</span>' +
+          '<span class="ihm">' + (r.ms.length ? '<b>' + E(r.ms.map(x => String(x.nm).toUpperCase()).join(', ')) + '</b>' : '<i title="No model named in this email">' + E(r.subject || '(no subject)') + '</i>') + (r.to.length ? ' <span>· to ' + E(r.to.join(', ')) + '</span>' : '') + '</span>' +
           '<span class="ihst ' + (r.rep ? 'rep' : 'wait') + '">' + (r.rep ? 'Replied ' + E(day(r.rep)) : 'No reply yet') + '</span>').join('') + '</div>' +
         (H.list.length > 5 ? '<button type="button" class="ihmore" data-ihmore>' + (OPENALL ? 'Show fewer' : 'Show all ' + H.list.length) + '</button>' : '');
       if(!st){ st = document.createElement('section'); st.className = 'illuhist'; st.setAttribute('aria-label', 'Emailed before'); body.prepend(st); }
@@ -104,7 +174,7 @@
       const r = a ? H.byAddr.get(a) : null;
       let el = row.querySelector('.illuctl');
       if(!r){ if(el) el.remove(); return; }
-      const t = day(r.dt) + ' · ' + short(r.ms) + ' · ' + (r.rep ? 'replied' : 'no reply');
+      const t = day(r.dt) + ' · ' + short(r.ms, r.subject) + ' · ' + (r.rep ? 'replied' : 'no reply');
       if(!el){ el = document.createElement('span'); el.className = 'illuctl'; row.appendChild(el); }
       if(el.textContent !== t){ el.textContent = t; el.classList.toggle('wait', !r.rep); el.title = (r.who ? r.who + ' emailed' : 'Emailed') + ' about ' + r.ms.map(x => x.nm).join(', ') + ' on ' + day(r.dt); }
     });
@@ -130,7 +200,7 @@
 .illuhist .ihwho{width:20px;height:20px;border-radius:50%;background:var(--c);color:#3a2a38;font-size:10px;font-weight:700;display:grid;place-items:center}
 .illuhist .ihwho.none{background:var(--line2,#eee);color:var(--faint)}
 .illuhist .ihm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.illuhist .ihm b{font-weight:650;letter-spacing:.02em}.illuhist .ihm span{color:var(--faint)}
+.illuhist .ihm b{font-weight:650;letter-spacing:.02em}.illuhist .ihm i{font-style:normal;color:var(--ink2,var(--ink))}.illuhist .ihm span{color:var(--faint)}
 .illuhist .ihst{font-size:11px;font-weight:600;border-radius:999px;padding:2px 9px;white-space:nowrap}
 .illuhist .ihst.rep{background:#E3F4E8;color:#23794A}.illuhist .ihst.wait{background:#FBEFD9;color:#9A5B12}
 .illuhist .ihmore{margin-top:8px;border:0;background:none;color:var(--acc);font:600 12px var(--sans);cursor:pointer;padding:2px 0}
