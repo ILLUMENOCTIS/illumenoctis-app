@@ -2256,7 +2256,10 @@
      on the sign-in. They sign in with their own PIN (once per phone) and vote on every card waiting for them. */
   const VOTEURL = 'https://illumenoctis.github.io/illumenoctis-app/vote/';
   const SHAREI = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8l7.4-4.4M8.3 13.2l7.4 4.4"/></svg>';
-  let SHSEL = new Set();
+  /* SHSEL empty = everyone (every box ticked). 1.2.214 (user, 16 Nov 2026: "when I click/select Everyone, I want the boxes to
+     check to show that all users have been selected"): Everyone ticks every box; unticking one keeps the others; ticking
+     everyone by hand is Everyone again. SHNONE: every box unticked - nothing to copy until someone is ticked. */
+  let SHSEL = new Set(), SHNONE = false;
   function shareUrl(){ const ns = people().filter(p => SHSEL.has(p)).map(pname).filter(Boolean); return VOTEURL + (ns.length ? '#n=' + ns.map(encodeURIComponent).join(',') : ''); }
   function shareMsg(){ const n = allStates().filter(s => s.open).length; return L('ILLUMÉNOCTIS · Team Vote — ' + n + (n === 1 ? ' card is' : ' cards are') + ' up for the vote. Sign in with your name and PIN, then vote:', 'ILLUMÉNOCTIS · 팀 투표 — ' + n + '장이 투표에 올라와 있습니다. 이름과 PIN으로 로그인한 뒤 투표하세요:') + '\n' + shareUrl(); }
   function shareDraw(){
@@ -2264,10 +2267,17 @@
     if(!m){ m = document.createElement('div'); m.id = 'ivshm'; m.className = 'ivshm'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m);
       m.addEventListener('click', e => {
         if(e.target === m || e.target.closest('[data-shx]')){ m.remove(); return; }
-        const cb = e.target.closest('input[data-shp]'); if(cb){ cb.checked ? SHSEL.add(cb.dataset.shp) : SHSEL.delete(cb.dataset.shp); shareDraw(); return; }
-        if(e.target.closest('[data-shall]')){ SHSEL = new Set(); shareDraw(); return; }
+        const cb = e.target.closest('input[data-shp]'); if(cb){
+          const all = people();
+          if(!SHSEL.size && !SHNONE) SHSEL = new Set(all);   /* from Everyone: start from every box ticked */
+          SHNONE = false;
+          cb.checked ? SHSEL.add(cb.dataset.shp) : SHSEL.delete(cb.dataset.shp);
+          if(all.every(p => SHSEL.has(p))) SHSEL = new Set();   /* all ticked = Everyone */
+          else if(!SHSEL.size) SHNONE = true;
+          shareDraw(); return; }
+        if(e.target.closest('[data-shall]')){ SHSEL = new Set(); SHNONE = false; shareDraw(); return; }
         const cp = e.target.closest('[data-shcopy]');
-        if(cp){ const txt = cp.dataset.shcopy === 'msg' ? shareMsg() : shareUrl(); const done = () => { const o = cp.textContent; cp.textContent = L('Copied ✓', '복사됨 ✓'); setTimeout(() => { cp.textContent = o; }, 1400); };
+        if(cp){ if(SHNONE) return; const txt = cp.dataset.shcopy === 'msg' ? shareMsg() : shareUrl(); const done = () => { const o = cp.textContent; cp.textContent = L('Copied ✓', '복사됨 ✓'); setTimeout(() => { cp.textContent = o; }, 1400); };
           try{ (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(done, () => { const ta = m.querySelector('textarea'); ta.value = txt; ta.select(); try{ document.execCommand('copy'); done(); }catch(err){} }); }catch(err){} return; }
         if(e.target.closest('[data-shnative]')){ try{ navigator.share({title: 'ILLUMÉNOCTIS · Team Vote', text: shareMsg().replace(/\n\S+$/, ''), url: shareUrl()}).catch(() => {}); }catch(err){} return; }
       });
@@ -2279,11 +2289,11 @@
     const waitFor = p => open.filter(s => s.voters.includes(p) && !voteOf(p, s.k, s.round)).length;
     m.innerHTML = '<div class="ivshp"><div class="ivshh"><b>' + L('Share the Team Vote', '팀 투표 링크 보내기') + '</b><button type="button" class="ivshx" data-shx aria-label="' + L('Close', '닫기') + '">×</button></div>' +
       '<p class="ivshd">' + L('One link to the Team Vote. They sign in with their own name and PIN (once on each phone) and vote on every card waiting for them, in any browser. Their votes show here at once.', '팀 투표 링크 하나입니다. 받은 사람은 자기 이름과 PIN으로 로그인(기기마다 한 번)한 뒤, 브라우저에서 자기 투표를 기다리는 모든 카드에 투표합니다. 투표는 바로 여기에 반영됩니다.') + '</p>' +
-      '<div class="ivshl"><span>' + L('Who is it for?', '누구에게 보내나요?') + '</span><button type="button" class="ivshall' + (SHSEL.size ? '' : ' on') + '" data-shall>' + L('Everyone', '모두') + '</button></div>' +
-      '<div class="ivshps">' + ppl.map(p => { const w = waitFor(p); return '<label class="ivshpp"><input type="checkbox" data-shp="' + H(p) + '"' + (SHSEL.has(p) ? ' checked' : '') + '>' + capDisc(p) + '<b>' + H(pname(p)) + (p === me() ? ' <small style="font-weight:500;opacity:.65">' + L('(you — for your other phone)', '(나 — 다른 기기용)') + '</small>' : '') + '</b><span class="ivshn' + (w ? ' wt' : '') + '">' + (w ? L(w + ' to vote', w + '장 대기') : L('nothing to vote', '대기 없음')) + '</span></label>'; }).join('') + '</div>' +
+      '<div class="ivshl"><span>' + L('Who is it for?', '누구에게 보내나요?') + '</span><button type="button" class="ivshall' + (SHSEL.size || SHNONE ? '' : ' on') + '" data-shall aria-pressed="' + !(SHSEL.size || SHNONE) + '">' + L('Everyone', '모두') + '</button></div>' +
+      '<div class="ivshps">' + ppl.map(p => { const w = waitFor(p); return '<label class="ivshpp"><input type="checkbox" data-shp="' + H(p) + '"' + (SHSEL.has(p) || (!SHSEL.size && !SHNONE) ? ' checked' : '') + '>' + capDisc(p) + '<b>' + H(pname(p)) + (p === me() ? ' <small style="font-weight:500;opacity:.65">' + L('(you — for your other phone)', '(나 — 다른 기기용)') + '</small>' : '') + '</b><span class="ivshn' + (w ? ' wt' : '') + '">' + (w ? L(w + ' to vote', w + '장 대기') : L('nothing to vote', '대기 없음')) + '</span></label>'; }).join('') + '</div>' +
       '<div class="ivshu">' + H(shareUrl()) + '</div>' +
-      '<div class="ivsha"><button type="button" class="ivbtn pri" data-shcopy="msg">' + L('Copy message + link', '메시지 + 링크 복사') + '</button><button type="button" class="ivbtn" data-shcopy="url">' + L('Copy link', '링크 복사') + '</button>' + (navigator.share ? '<button type="button" class="ivbtn" data-shnative>' + L('Share…', '공유…') + '</button>' : '') + '</div>' +
-      '<p class="ivshd sm">' + L(SHSEL.size ? 'Only the people ticked are listed on the sign-in. ' : 'Everyone on the team is listed on the sign-in. ', SHSEL.size ? '선택한 사람만 로그인 목록에 나옵니다. ' : '팀 전원이 로그인 목록에 나옵니다. ') + L('Paste it into KakaoTalk, WhatsApp or a text message.', '카카오톡, 왓츠앱, 문자에 붙여 넣으세요.') + '</p>' +
+      '<div class="ivsha"' + (SHNONE ? ' style="opacity:.45;pointer-events:none"' : '') + '><button type="button" class="ivbtn pri" data-shcopy="msg">' + L('Copy message + link', '메시지 + 링크 복사') + '</button><button type="button" class="ivbtn" data-shcopy="url">' + L('Copy link', '링크 복사') + '</button>' + (navigator.share ? '<button type="button" class="ivbtn" data-shnative>' + L('Share…', '공유…') + '</button>' : '') + '</div>' +
+      '<p class="ivshd sm">' + (SHNONE ? L('Tick at least one person. ', '한 명 이상 선택하세요. ') : L(SHSEL.size ? 'Only the people ticked are listed on the sign-in. ' : 'Everyone on the team is listed on the sign-in. ', SHSEL.size ? '선택한 사람만 로그인 목록에 나옵니다. ' : '팀 전원이 로그인 목록에 나옵니다. ')) + L('Paste it into KakaoTalk, WhatsApp or a text message.', '카카오톡, 왓츠앱, 문자에 붙여 넣으세요.') + '</p>' +
       '<textarea aria-hidden="true" tabindex="-1" class="ivsht"></textarea></div>';
   }
   document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-ivshare]'); if(b){ e.preventDefault(); e.stopPropagation(); shareDraw(); } }, true);
