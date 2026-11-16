@@ -16,14 +16,14 @@ const KO = LS.get('illum.lang') === 'ko';
 const W = KO ? {
   open: '여는 중…', who: 'ID로 로그인', pick: '이름을 고르고 비밀번호를 입력하세요.', pw: '비밀번호', signin: '로그인',
   make: '새 ID 만들기', have: '이미 ID가 있어요', name: '이름', colour: '내 색', pw4: '비밀번호 · 4자 이상', create: 'ID 만들기',
-  first: '처음 만든 ID가 관리자가 되며, 비밀번호를 재설정할 수 있습니다.', wrong: '이름 또는 비밀번호가 틀렸습니다.',
+  first: '처음 만든 ID가 관리자가 되며, 비밀번호를 재설정할 수 있습니다.', wrong: '이름 또는 비밀번호가 틀렸습니다. 비밀번호를 잊었다면 관리자(Paul)에게 새 비밀번호를 받으세요.',
   taken: '이미 있는 이름입니다.', ctaken: '이미 쓰고 있는 색입니다.', short: '비밀번호는 4자 이상이어야 합니다.',
   noname: '이름을 입력하세요.', nopick: '이름을 선택하세요.', net: '공유 데이터베이스에 연결할 수 없습니다. 인터넷 연결을 확인하세요.',
   loading: '디렉터리를 불러오는 중…'
 } : {
   open: 'Opening…', who: 'Sign in with your ID', pick: 'Pick your name and type your password.', pw: 'Password', signin: 'Sign in',
   make: 'Create a new ID', have: 'I already have an ID', name: 'Your name', colour: 'Your colour', pw4: 'Password · at least 4 characters', create: 'Create ID',
-  first: 'The first ID made becomes the owner, who can reset passwords.', wrong: 'Wrong name or password.',
+  first: 'The first ID made becomes the owner, who can reset passwords.', wrong: 'Wrong name or password. Forgot it? Ask the Admin (Paul) to set a new one for you.',
   taken: 'That name is already taken.', ctaken: 'That colour is already taken.', short: 'The password needs at least 4 characters.',
   noname: 'Please type a name.', nopick: 'Please pick your name.', net: 'Could not reach the shared database. Check the internet connection.',
   loading: 'Reading the directory…'
