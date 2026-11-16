@@ -348,9 +348,20 @@ document.head.appendChild(st);
   window.__illuAgModels = agModels;
   /* a model photo that can't load leaves an empty box (the program does not run inline handlers) */
   window.addEventListener('error', e => { const t = e.target; if (t && t.tagName === 'IMG' && t.closest && t.closest('#illutpl .tplth')) t.remove(); }, true);
-  function tplPick(anchor, addr, agName, ms, dom) { PK = { addr, agName, ms: (ms || []).slice(), dom: dom || '', edit: null, open: true, q: '', cc: [] }; let box = document.getElementById('illutpl'); if (!box) { box = document.createElement('div'); box.id = 'illutpl'; document.body.appendChild(box); } box.hidden = false; paintPick(); }
+  function tplPick(anchor, addr, agName, ms, dom) { PK = { addr, agName, ms: (ms || []).slice(), dom: dom || '', edit: null, open: true, q: '', cc: [], full: PKWIN.full, min: false, f: { bd: [], g: '', st: '', ht: ['', ''], bu: ['', ''], wa: ['', ''], hp: ['', ''] } }; try { if (typeof measState !== 'undefined' && measState === 'idle' && typeof loadMeas === 'function') loadMeas(); } catch (e) {} let box = document.getElementById('illutpl'); if (!box) { box = document.createElement('div'); box.id = 'illutpl'; document.body.appendChild(box); } box.hidden = false; paintPick(); }
+  /* 1.2.213 (user, 16 Nov 2026: "allow me to go full screen, minimize/maximize, include all filters within this window so I
+     can look up the model quicker"): ⛶ fills the screen (remembered), – folds the window into a small bar at the bottom so the
+     program behind can be used, and the model list has its own filters: board, women/men, emailed or not, measurements. */
+  const PKWIN = { full: (() => { try { return localStorage.getItem('illu.tpl.full') === '1'; } catch (e) { return false; } })() };
   function paintPick() {
     const box = document.getElementById('illutpl'); if (!box || box.hidden || !PK) return;
+    box.classList.toggle('min', !!PK.min);
+    if (PK.min && !PK.edit) {
+      box.innerHTML = '<div class="tplmini" role="dialog" aria-label="Which email? (folded)"><span class="tplminit"><b>Which email?</b><small>To ' + escT(PK.addr) + ' · ' + PK.ms.length + (PK.ms.length === 1 ? ' model' : ' models') + '</small></span>' +
+        '<button type="button" class="tplwb" data-tplmin title="Open the window again" aria-label="Open the window again"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>' +
+        '<button type="button" class="tplwb" data-tplx title="Close" aria-label="Close">✕</button></div>';
+      return;
+    }
     const me = (typeof ME !== 'undefined' && ME) || '';
     let last = ''; try { last = localStorage.getItem('illu.tpl.last.' + me) || ''; } catch (e) {}
     const L = list(); if (last) L.sort((p, q) => (q.id === last) - (p.id === last));
@@ -365,7 +376,10 @@ document.head.appendChild(st);
       setTimeout(() => { const i = box.querySelector('#tplnm'); if (i) i.focus(); }, 30);
       return;
     }
-    box.innerHTML = '<div class="tplveil" data-tplx></div><div class="tplbox' + (PK.open && PK.dom ? ' wide' : '') + '" role="dialog" aria-modal="true"><h3>Which email?</h3><p class="tplto">To <b>' + escT(PK.addr) + '</b>' + (PK.ms.length ? ' · about <b>' + escT(PK.ms.map(m => String(m.nm || '').toUpperCase()).join(', ')) + '</b>' : '') + '</p>' +
+    const winB = '<span class="tplwin"><button type="button" class="tplwb" data-tplmin title="Fold the window to a small bar" aria-label="Minimise">–</button>' +
+      '<button type="button" class="tplwb" data-tplfull aria-pressed="' + !!PK.full + '" title="' + (PK.full ? 'Back to the normal size' : 'Full screen') + '" aria-label="' + (PK.full ? 'Back to the normal size' : 'Full screen') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (PK.full ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>') + '</svg></button>' +
+      '<button type="button" class="tplwb" data-tplx title="Close" aria-label="Close">✕</button></span>';
+    box.innerHTML = '<div class="tplveil" data-tplx></div><div class="tplbox' + (PK.open && PK.dom ? ' wide' : '') + (PK.full ? ' full' : '') + '" role="dialog" aria-modal="true"><div class="tplhd"><h3>Which email?</h3>' + winB + '</div><p class="tplto">To <b>' + escT(PK.addr) + '</b>' + (PK.ms.length ? ' · about <b>' + escT(PK.ms.map(m => String(m.nm || '').toUpperCase()).join(', ')) + '</b>' : '') + '</p>' +
       '<div class="tpllist">' + L.map(t => '<div class="tplrow"><button type="button" class="tpluse" data-tpluse="' + escT(t.id) + '"><b>' + escT(t.name) + '</b><small>' + escT(t.subject || '') + (t.id === last ? ' · last used' : '') + '</small></button><button type="button" class="tpled" data-tpled="' + escT(t.id) + '" title="Edit">Edit</button>' + (t.id !== BUILTIN.id ? '<button type="button" class="tpled tpldx' + (PK.arm === t.id ? ' on' : '') + '" data-tpldel="' + escT(t.id) + '" title="Delete this template">' + (PK.arm === t.id ? 'Delete?' : 'Delete') + '</button>' : '') + '</div>').join('') +
       '<div class="tplrow"><button type="button" class="tpluse blank" data-tpluse=""><b>Blank email</b><small>Only the address — write it yourself</small></button></div></div>' +
       '<div class="tplacts"><button type="button" data-tplnew>+ New template</button><span></span><button type="button" data-tplx>Cancel</button></div></div>';
@@ -406,15 +420,43 @@ document.head.appendChild(st);
       const row = m => { const red = anyRed(m.key), tg = tagsOf(m);
         return '<label class="tplm' + (red ? ' red' : '') + (on.has(m.key) ? ' on' : '') + '" title="' + escT(m.nm + (m.bd ? ' · ' + m.bd : '')) + '"><input type="checkbox" data-tplm="' + escT(m.key) + '"' + (on.has(m.key) ? ' checked' : '') + (red ? ' disabled' : '') + ' aria-label="' + escT(m.nm) + '">' + thumb(m) + '<span class="tplmn"><b>' + escT(m.nm) + '</b><small>' + escT(m.bd) + '</small></span>' +
           '<span class="tpltags">' + (red ? '<i class="tpltag red">Ruled out</i>' : tg.map(([k, v]) => '<i class="tpltag ' + k + '">' + escT(v) + '</i>').join('')) + '</span></label>'; };
-      const shown = all.filter(m => !q || String(m.nm).toLowerCase().includes(q));
+      const F = PK.f, FC = new Map();
+      const fx = m => { let f = FC.get(m.key); if (!f) { try { f = typeof litFacts === 'function' ? litFacts({ key: m.key, nm: m.nm, href: m.url, g: m.g }) : {}; } catch (e) { f = {}; } FC.set(m.key, f); } return f; };
+      const sexOf = m => { let g = ''; try { g = (window.__illuSexOf && window.__illuSexOf(m.key)) || ''; } catch (e) {} return g || (m.g && m.g !== '?' ? m.g : (fx(m).g || '?')); };
+      const rng = (v, r) => { const lo = parseFloat(r[0]), hi = parseFloat(r[1]); if (isNaN(lo) && isNaN(hi)) return true; if (v == null || isNaN(v)) return false; return (isNaN(lo) || v >= lo) && (isNaN(hi) || v <= hi); };
+      const passF = m => {
+        if (F.bd.length && !F.bd.includes(m.bd || '')) return false;
+        if (F.g && sexOf(m) !== F.g) return false;
+        if (F.st === 'done' && !tagsOf(m).length) return false;
+        if (F.st === 'new' && tagsOf(m).length) return false;
+        const f = fx(m); return rng(f.ht, F.ht) && rng(f.bu, F.bu) && rng(f.wa, F.wa) && rng(f.hp, F.hp);
+      };
+      const fOn = F.bd.length || F.g || F.st || [F.ht, F.bu, F.wa, F.hp].some(r => r[0] !== '' || r[1] !== '');
+      const shown = all.filter(m => (!q || String(m.nm).toLowerCase().includes(q)) && passF(m));
+      const bds = new Map(); for (const m of all) bds.set(m.bd || '', (bds.get(m.bd || '') || 0) + 1);
+      const chip = (attr, v, lab, on, n) => '<button type="button" class="tplfc' + (on ? ' on' : '') + '" ' + attr + '="' + escT(v) + '" aria-pressed="' + !!on + '">' + escT(lab) + (n != null ? ' <s>' + n + '</s>' : '') + '</button>';
+      const box2 = (k, lab) => '<span class="tplfm"><b>' + lab + '</b><input inputmode="decimal" data-tplf="' + k + '.0" placeholder="from" value="' + escT(F[k][0]) + '" aria-label="' + lab + ' from"><i>–</i><input inputmode="decimal" data-tplf="' + k + '.1" placeholder="to" value="' + escT(F[k][1]) + '" aria-label="' + lab + ' to"></span>';
+      /* on a phone the filters fold under one button, so the photos stay in view */
+      const narrow = (() => { try { return matchMedia('(max-width:560px)').matches; } catch (e) { return false; } })();
+      const nOn = F.bd.length + (F.g ? 1 : 0) + (F.st ? 1 : 0) + [F.ht, F.bu, F.wa, F.hp].filter(r => r[0] !== '' || r[1] !== '').length;
+      const fOpen = !narrow || PK.fopen;
+      const filt = (narrow ? '<button type="button" class="tplftog" data-tplftog aria-expanded="' + !!fOpen + '">Filters' + (nOn ? ' · ' + nOn : '') + ' <span aria-hidden="true">' + (fOpen ? '▴' : '▾') + '</span></button>' : '') +
+        (!fOpen ? '<div class="tplfn">' + (fOn || q ? 'Showing <b>' + shown.length + '</b> of ' + all.length : all.length + ' models') + '</div>' : '') +
+        (!fOpen ? '' : '<div class="tplfilt" role="group" aria-label="Filter the models">' +
+        (bds.size > 1 ? '<div class="tplfr"><span class="tplfl">Board</span>' + [...bds.entries()].sort((a, b) => b[1] - a[1]).map(([b, n]) => chip('data-tplfbd', b, b || 'No board', F.bd.includes(b), n)).join('') + '</div>' : '') +
+        '<div class="tplfr"><span class="tplfl">Show</span>' + chip('data-tplfg', '', 'Everyone', !F.g) + chip('data-tplfg', 'F', 'Women', F.g === 'F') + chip('data-tplfg', 'M', 'Men', F.g === 'M') +
+          '<span class="tplfsep"></span>' + chip('data-tplfst', '', 'All', !F.st) + chip('data-tplfst', 'done', 'Emailed or worked on', F.st === 'done') + chip('data-tplfst', 'new', 'Not contacted yet', F.st === 'new') + '</div>' +
+        '<div class="tplfr"><span class="tplfl">cm</span>' + box2('ht', 'Height') + box2('bu', 'Bust') + box2('wa', 'Waist') + box2('hp', 'Hips') +
+          (fOn ? '<button type="button" class="tplfclr" data-tplfclr>Clear filters</button>' : '') + '</div>' +
+        '<div class="tplfn">' + (fOn || q ? 'Showing <b>' + shown.length + '</b> of ' + all.length : all.length + ' models') + '</div></div>');
       const dk = m => { const r = H && H.byModel.get(m.key); return r ? r.d : ''; };
       const worked = shown.filter(m => tagsOf(m).length).sort((a, b) => dk(b).localeCompare(dk(a))), rest = shown.filter(m => !tagsOf(m).length);
       const sec = '<div class="tplms"><div class="tplmsh"><b>Models in this email · ' + PK.ms.length + '</b><button type="button" data-tplmore>' + (PK.open ? 'Hide the list' : '+ Add models from ' + escT(PK.agName)) + '</button></div>' +
         (PK.ms.length ? '<div class="tplchips">' + PK.ms.map(m => '<span class="tplchip">' + escT(String(m.nm).toUpperCase()) + '<button type="button" data-tploff="' + escT(m.key) + '" aria-label="Remove">✕</button></span>').join('') + '</div>' : '<p class="tplnone">No model — the email goes without a model list.</p>') +
-        (PK.open ? '<input class="tplq" data-tplq placeholder="Find one of their ' + all.length + ' models…" value="' + escT(PK.q) + '"><div class="tplml">' +
+        (PK.open ? '<input class="tplq" data-tplq placeholder="Find one of their ' + all.length + ' models…" value="' + escT(PK.q) + '">' + filt + '<div class="tplml">' +
           (worked.length ? '<div class="tplgrp">Already emailed or worked on</div>' + worked.map(row).join('') : '') +
           (rest.length ? (worked.length ? '<div class="tplgrp">Everyone else</div>' : '') + rest.slice(0, 400).map(row).join('') : '') +
-          (!shown.length ? '<p class="tplnone">No model called "' + escT(PK.q) + '".</p>' : '') + '</div>' : '') + '</div>';
+          (!shown.length ? '<p class="tplnone">' + (q && !fOn ? 'No model called "' + escT(PK.q) + '".' : 'No model matches these filters.') + '</p>' : '') + '</div>' : '') + '</div>';
       const to = box.querySelector('.tplto'); if (to) to.insertAdjacentHTML('afterend', sec);
       if (PK.open && PK.focusQ) { const i = box.querySelector('[data-tplq]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
     }
@@ -430,6 +472,13 @@ document.head.appendChild(st);
     }
   }
   document.addEventListener('change', e => { const c = e.target.closest && e.target.closest('#illutpl [data-tplcc]'); if (!c || !PK) return; const v = c.dataset.tplcc; PK.cc = PK.cc.filter(x => x.toLowerCase() !== v.toLowerCase()); if (c.checked) PK.cc.push(v); paintPick(); }, true);
+  function keepPaint() { const l0 = document.querySelector('#illutpl .tplml'); const st = l0 ? l0.scrollTop : 0; paintPick(); const l = document.querySelector('#illutpl .tplml'); if (l) l.scrollTop = Math.min(st, l.scrollHeight); }
+  /* the measurement boxes: the list follows as you type, the cursor stays in the box */
+  document.addEventListener('input', e => { const i = e.target.closest && e.target.closest('#illutpl [data-tplf]'); if (!i || !PK) return;
+    const [k, j] = i.dataset.tplf.split('.'); if (!PK.f[k]) return; PK.f[k][+j] = i.value.replace(/[^\d.,]/g, '').replace(',', '.'); const c = i.selectionStart, sel = i.dataset.tplf;
+    clearTimeout(keepPaint.t); keepPaint.t = setTimeout(() => { keepPaint(); const n = document.querySelector('#illutpl [data-tplf="' + sel + '"]'); if (n) { n.focus(); try { n.setSelectionRange(c, c); } catch (er) {} } }, 250); }, true);
+  /* Esc folds back from full screen first */
+  document.addEventListener('keydown', e => { if (e.key !== 'Escape' || !PK || PK.edit) return; const box = document.getElementById('illutpl'); if (!box || box.hidden) return; if (PK.full) { e.preventDefault(); e.stopPropagation(); PK.full = PKWIN.full = false; try { localStorage.setItem('illu.tpl.full', '0'); } catch (er) {} paintPick(); } }, true);
   document.addEventListener('input', e => { const i = e.target.closest && e.target.closest('#illutpl [data-tplq]'); if (!i || !PK) return; PK.q = i.value; PK.focusQ = true; paintPick(); PK.focusQ = false; }, true);
   document.addEventListener('change', e => { const c = e.target.closest && e.target.closest('#illutpl [data-tplm]'); if (!c || !PK) return;
     const m = agModels(PK.dom).find(x => x.key === c.dataset.tplm); if (!m) return;
@@ -437,10 +486,17 @@ document.head.appendChild(st);
     const keepScroll = (document.querySelector('#illutpl .tplml') || {}).scrollTop || 0; paintPick(); const l = document.querySelector('#illutpl .tplml'); if (l) l.scrollTop = keepScroll; }, true);
   document.addEventListener('click', async e => {
     const box = document.getElementById('illutpl'); if (!box || box.hidden || !box.contains(e.target) || !PK) return;
-    const b = e.target.closest('[data-tplx],[data-tpluse],[data-tpled],[data-tplnew],[data-tplback],[data-tplsave],[data-tpldel],[data-tplmore],[data-tploff],[data-tplccall]'); if (!b) return;
+    const b = e.target.closest('[data-tplftog],[data-tplmin],[data-tplfull],[data-tplfbd],[data-tplfg],[data-tplfst],[data-tplfclr],[data-tplx],[data-tpluse],[data-tpled],[data-tplnew],[data-tplback],[data-tplsave],[data-tpldel],[data-tplmore],[data-tploff],[data-tplccall]'); if (!b) return;
     e.preventDefault(); e.stopPropagation();
     const me = (typeof ME !== 'undefined' && ME) || '';
-    if (b.hasAttribute('data-tplx')) { box.hidden = true; PK = null; return; }
+    if (b.hasAttribute('data-tplx')) { box.hidden = true; box.classList.remove('min'); PK = null; return; }
+    if (b.hasAttribute('data-tplmin')) { PK.min = !PK.min; paintPick(); return; }
+    if (b.hasAttribute('data-tplfull')) { PK.full = PKWIN.full = !PK.full; try { localStorage.setItem('illu.tpl.full', PK.full ? '1' : '0'); } catch (er) {} paintPick(); return; }
+    if (b.dataset.tplfbd != null) { const v = b.dataset.tplfbd; PK.f.bd = PK.f.bd.includes(v) ? PK.f.bd.filter(x => x !== v) : PK.f.bd.concat([v]); keepPaint(); return; }
+    if (b.dataset.tplfg != null) { PK.f.g = b.dataset.tplfg; keepPaint(); return; }
+    if (b.dataset.tplfst != null) { PK.f.st = b.dataset.tplfst; keepPaint(); return; }
+    if (b.hasAttribute('data-tplftog')) { PK.fopen = !PK.fopen; keepPaint(); return; }
+    if (b.hasAttribute('data-tplfclr')) { PK.f = { bd: [], g: '', st: '', ht: ['', ''], bu: ['', ''], wa: ['', ''], hp: ['', ''] }; keepPaint(); return; }
     if (b.hasAttribute('data-tplmore')) { PK.open = !PK.open; PK.focusQ = PK.open; paintPick(); PK.focusQ = false; return; }
     if (b.hasAttribute('data-tplccall')) { const all = [...box.querySelectorAll('[data-tplcc]')].map(x => x.dataset.tplcc); PK.cc = PK.cc.length === all.length ? [] : all; paintPick(); return; }
     if (b.dataset.tploff) { PK.ms = PK.ms.filter(x => x.key !== b.dataset.tploff); paintPick(); return; }
@@ -595,7 +651,25 @@ document.head.appendChild(st);
     '@media (max-width:560px){#illutpl .tplml{grid-template-columns:repeat(2,minmax(0,1fr))}}' +
     '#illutpl .tpltag.wk{background:var(--accl,#F3ECF3);color:var(--acc)}#illutpl .tpltag.em{background:#E3F4E8;color:#23794A}#illutpl .tpltag.red{background:var(--surf2,#eee);color:var(--faint)}#illutpl .tplm.red span{opacity:.55}' +
     '#illutpl .tplhelp{margin:0;font-size:12px;color:var(--mut);line-height:1.5}#illutpl .tplhelp b{color:var(--ink)}' +
-    '#illutpl .tplacts{display:flex;gap:8px;align-items:center}#illutpl .tplacts span{flex:1}#illutpl .tplacts button{border:1px solid var(--line);background:var(--surf,#fff);border-radius:20px;padding:7px 16px;cursor:pointer;color:var(--ink);font:500 13px var(--sans)}#illutpl .tplacts .tplgo{background:var(--acc);border-color:var(--acc);color:var(--on-acc,#fff)}#illutpl .tplacts .tpldel{color:#A3283F}';
+    '#illutpl .tplacts{display:flex;gap:8px;align-items:center}#illutpl .tplacts span{flex:1}#illutpl .tplacts button{border:1px solid var(--line);background:var(--surf,#fff);border-radius:20px;padding:7px 16px;cursor:pointer;color:var(--ink);font:500 13px var(--sans)}#illutpl .tplacts .tplgo{background:var(--acc);border-color:var(--acc);color:var(--on-acc,#fff)}#illutpl .tplacts .tpldel{color:#A3283F}' +
+    /* 1.2.213: window buttons, full screen, folded bar, filters */
+    '#illutpl .tplhd{display:flex;align-items:center;gap:8px}#illutpl .tplhd h3{flex:1}' +
+    '#illutpl .tplwin{display:flex;gap:4px;flex:none}#illutpl .tplwb{width:32px;height:32px;border:1px solid var(--line);border-radius:9px;background:var(--surf,#fff);color:var(--ink);display:grid;place-items:center;cursor:pointer;font:600 15px/1 var(--sans);padding:0}' +
+    '#illutpl .tplwb:hover{border-color:var(--acc);color:var(--acc)}#illutpl .tplwb svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}#illutpl .tplwb[aria-pressed="true"]{background:var(--accl,#F3ECF3);border-color:var(--acc);color:var(--acc)}' +
+    '#illutpl .tplbox.full{width:calc(100vw - 24px);max-width:none;height:calc(100vh - 24px);max-height:none}' +
+    '#illutpl .tplbox.full .tplms{flex:1 0 auto}#illutpl .tplbox.full .tplml{max-height:calc(100vh - 330px);min-height:320px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}' +
+    '#illutpl.min{position:fixed;inset:auto 0 0 auto;width:auto;height:auto;background:none;display:block;z-index:9000;padding:0 max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) 0}' +
+    '#illutpl .tplmini{display:flex;align-items:center;gap:8px;background:var(--paper,#fff);color:var(--ink);border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 40px rgba(20,14,38,.28);padding:8px 8px 8px 14px;font:14px var(--sans);max-width:calc(100vw - 32px)}' +
+    '#illutpl .tplminit{display:flex;flex-direction:column;min-width:0}#illutpl .tplminit small{font-size:11.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '#illutpl .tplfilt{display:flex;flex-direction:column;gap:6px;padding:2px 0 4px;border-bottom:1px solid var(--line)}' +
+    '#illutpl .tplfr{display:flex;flex-wrap:wrap;align-items:center;gap:5px}#illutpl .tplfl{font:600 9.5px var(--mono,ui-monospace,monospace);letter-spacing:.12em;text-transform:uppercase;color:var(--faint);width:46px;flex:none}' +
+    '#illutpl .tplfc{border:1px solid var(--line);background:var(--surf,#fff);color:var(--ink);border-radius:999px;padding:4px 10px;font:500 12px var(--sans);cursor:pointer;white-space:nowrap}#illutpl .tplfc s{text-decoration:none;color:var(--faint);font-size:11px}' +
+    '#illutpl .tplfc.on{background:var(--acc);border-color:var(--acc);color:var(--on-acc,#fff)}#illutpl .tplfc.on s{color:inherit;opacity:.8}#illutpl .tplfsep{width:1px;height:18px;background:var(--line);margin:0 3px}' +
+    '#illutpl .tplfm{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--line);border-radius:999px;padding:2px 4px 2px 10px;background:var(--surf,#fff)}#illutpl .tplfm b{font-size:12px;font-weight:600;margin-right:3px}#illutpl .tplfm i{font-style:normal;color:var(--faint)}' +
+    '#illutpl .tplfm input{width:46px;border:0;border-radius:999px;padding:3px 6px;font:13px var(--sans);background:var(--surf2,#f6f3f8);text-align:center;font-variant-numeric:tabular-nums}' +
+    '#illutpl .tplfclr{border:0;background:none;color:var(--acc);font:600 12px var(--sans);cursor:pointer;text-decoration:underline;text-underline-offset:2px}' +
+    '#illutpl .tplftog{align-self:flex-start;border:1px solid var(--line);background:var(--surf,#fff);color:var(--acc);border-radius:999px;padding:6px 14px;font:600 13px var(--sans);cursor:pointer}#illutpl .tplfn{font-size:11.5px;color:var(--mut)}#illutpl .tplfn b{color:var(--ink)}' +
+    '@media (max-width:560px){#illutpl .tplfl{width:100%}#illutpl .tplfm input{width:40px}}';
   document.head.appendChild(st);
 })();
 

@@ -88,7 +88,7 @@
       const sig = (isFile ? 'f' : isAg ? 'a' : '') + '|' + raw + '|' + (S.arm === raw ? 1 : 0);
       if(dw.dataset.sig !== sig){ dw.dataset.sig = sig;
         dw.innerHTML = isFile ? '<button type="button" class="fvmain fvdel' + (S.arm === raw ? ' on' : '') + '" data-fvdel title="' + esc(L('Not her - delete this ' + (isV(cur) ? 'video' : 'photo') + ' from her folder', '이 모델이 아님 - 폴더에서 삭제')) + '">🗑 ' + esc(S.arm === raw ? (S.armTxt || L('Delete? Press again', '삭제할까요? 한 번 더')) : L('Delete', '삭제')) + '</button>'
-          : isAg ? '<button type="button" class="fvmain fvdel" data-fvhide title="' + esc(L('Not her - hide this photo from the slideshows (the agency site is not changed)', '이 모델이 아님 - 슬라이드쇼에서 숨기기 (에이전시 사이트는 그대로)')) + '">⊘ ' + esc(L('Not her · Hide', '이 모델 아님 · 숨기기')) + '</button>' : ''; } }
+          : isAg ? '<button type="button" class="fvmain fvdel" data-fvhide title="' + esc(L('Hide this photo from the slideshows, for everyone (the agency site is not changed)', '이 사진을 모두의 슬라이드쇼에서 숨기기 (에이전시 사이트는 그대로)')) + '">⊘ ' + esc(L('Hide', '숨기기')) + '</button>' : ''; } }
     /* 1.2.148: rotate the photo shown (for everyone) */
     const rw = box.querySelector('.fvrotw'); if(rw){ const want = n && !isV(cur) && window.__illuRotBtns ? 1 : 0; if(rw.dataset.on !== String(want)){ rw.dataset.on = want; rw.innerHTML = want ? window.__illuRotBtns('fvrot') : ''; } }
     try{ if(window.__illuRot){ delete img.dataset.rotsig; window.__illuRot.apply(img); } }catch(e){}

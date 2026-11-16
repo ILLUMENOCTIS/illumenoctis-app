@@ -1359,7 +1359,7 @@
        (1.2.192) the "Not her - Hide" of the other photo viewer (1.2.174) was out of reach - it is here too now, for a photo
        from her agency page (slide 2 on; slide 1 is her card photo). Hidden for the whole team; the agency site is not changed. */
     if(SL.undo && Date.now() - SL.undo.at < 6000) h += '<button type="button" class="d2slhide und" data-d2slundo title="Put the photo back in her slideshow (Ctrl + Z works too)">✓ Photo hidden · <u>Undo</u></button>';
-    else if(cur && window.__illuHidePhoto && /^https?:/i.test(m.href || '')) h += '<button type="button" class="d2slhide" data-d2slhide title="Not her - hide this photo from the slideshows, for everyone (the agency site is not changed)">⊘ Not her · Hide</button>';
+    else if(cur && window.__illuHidePhoto && /^https?:/i.test(m.href || '')) h += '<button type="button" class="d2slhide" data-d2slhide title="Hide this photo from the slideshows, for everyone (the agency site is not changed)">⊘ Hide</button>';
     /* 1.2.148: turn the photo shown (for everyone) */
     if((cur || pic.querySelector(':scope > img')) && window.__illuRotBtns) h += window.__illuRotBtns('d2rot');
     if(n > 1){
