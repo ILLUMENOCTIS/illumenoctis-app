@@ -660,17 +660,40 @@ st.textContent = '#illuupd{position:fixed;right:18px;bottom:18px;z-index:99999;m
   '#illuver .idnote{margin:4px 0 8px}#illuver .sum{font-size:12px;color:var(--mut);white-space:pre-line;margin:6px 0 0}';
 document.head.appendChild(st);
 let shown = null;
+/* 1.2.206 (user, 16 Nov 2026: "the program isn't restarting with the update on its own"): once an update is in, the
+   program restarts by itself after a 30-second countdown. It waits while someone is typing (a field with text in it, or
+   a key pressed in the last 20 s) or has a window open, so nothing being written is lost. "Not now" waits 30 minutes. */
+let lastKey = 0, TIMER = 0;
+window.addEventListener('keydown', () => { lastKey = Date.now(); }, true);
+const busy = () => {
+  if (Date.now() - lastKey < 20000) return 'typing';
+  const a = document.activeElement;
+  if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) && !/^(checkbox|radio|button|submit|range|color|file)$/i.test(a.type || '') && String(a.value || a.textContent || '').trim()) return 'typing';
+  const open = ['#illutpl', '#illucm', '#ctmodal[data-on="1"]', '#illucomp:not([hidden])', '#bvmodal:not([hidden])'].some(q => { const e = document.querySelector(q); return e && e.offsetParent !== null; });
+  return open ? 'window' : '';
+};
 function toast(u) {
   if (!u || u.state !== 'ready' || shown === u.v) return;
   shown = u.v;
   const old = document.getElementById('illuupd'); if (old) old.remove();
   document.body.insertAdjacentHTML('beforeend', '<div id="illuupd" role="status"><b>ILLUMÉNOCTIS ' + escH(u.v) + ' is ready</b>' +
-    (u.notes ? '<p>' + escH(u.notes) + '</p>' : '<p>Restart the program to use it.</p>') +
-    '<div class="r"><button type="button" class="idbtn alt" data-x="later">Later</button><button type="button" class="idbtn" data-x="go">Restart now</button></div></div>');
-  const box = document.getElementById('illuupd');
+    (u.notes ? '<p>' + escH(u.notes) + '</p>' : '') + '<p class="cd" aria-live="polite"></p>' +
+    '<div class="r"><button type="button" class="idbtn alt" data-x="later">Not now</button><button type="button" class="idbtn" data-x="go">Restart now</button></div></div>');
+  const box = document.getElementById('illuupd'), cd = box.querySelector('.cd');
+  let left = 30;
+  const tick = () => {
+    if (!box.isConnected) return;
+    if (left > 0) { cd.textContent = 'Restarting by itself in ' + left + ' s…'; left--; TIMER = setTimeout(tick, 1000); return; }
+    const b = busy();
+    if (b) { cd.textContent = b === 'typing' ? 'Restarting as soon as you finish typing…' : 'Restarting when you close the open window…'; TIMER = setTimeout(tick, 3000); return; }
+    cd.textContent = 'Restarting…'; window.illu.restart();
+  };
+  tick();
   box.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.x === 'go') window.illu.restart(); else box.remove();
+    clearTimeout(TIMER);
+    if (b.dataset.x === 'go') { window.illu.restart(); return; }
+    box.remove(); setTimeout(() => { shown = null; toast(u); }, 30 * 60e3);
   });
 }
 window.illu.onUpdateReady(toast);

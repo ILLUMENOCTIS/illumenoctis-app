@@ -154,7 +154,7 @@
     "Run it again": "다시 실행", "Run it again — what came in already is kept.": "다시 실행 — 이미 들어온 내용은 유지됩니다.",
     "Another computer is crawling this list - waiting": "다른 컴퓨터가 이 목록을 수집 중 — 대기",
     "Done.": "완료.", "Stopped:": "중지됨:", "Check for updates": "업데이트 확인", "Checking…": "확인 중…",
-    "This is the newest version.": "최신 버전입니다.", "Restart now": "지금 다시 시작", "Restart the program to use it.": "사용하려면 프로그램을 다시 시작하세요.",
+    "This is the newest version.": "최신 버전입니다.", "Restart now": "지금 다시 시작", "Not now": "나중에", "Restarting as soon as you finish typing…": "입력을 마치면 바로 다시 시작합니다…", "Restarting when you close the open window…": "열린 창을 닫으면 다시 시작합니다…", "Restarting…": "다시 시작하는 중…", "Restart the program to use it.": "사용하려면 프로그램을 다시 시작하세요.",
     "Later": "나중에", "Update": "업데이트", "Program": "프로그램", "Publish an update to everyone…": "모두에게 업데이트 배포…",
     "Choose the import file…": "가져올 파일 선택…", "Bring over from the dashboard": "대시보드에서 가져오기", "Bring it over": "가져오기",
     "The directory in the program is replaced by this one.": "프로그램의 디렉터리가 이것으로 바뀝니다.",
