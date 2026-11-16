@@ -43,10 +43,23 @@
     const pr = (async () => { const { data, error } = await sb.storage.from('assets').download(id); if (error || !data) throw error || new Error('no photo'); return URL.createObjectURL(data); })();
     OBJ.set(id, pr); pr.catch(() => OBJ.delete(id)); return pr;
   }
+  /* 1.2.215 (user, 16 Nov 2026: "a considerable amount of delay and lag regarding the slideshow and the photos appearing"):
+     measured in Chrome - a photo straight from the agency's site: 0.7-1.1 s; the same photo through the resizing service
+     (images.weserv.nl): 15-25 s or more the first time. The agencies' photos are already 1000-1200 px, so the page now
+     loads them straight from the agency (no referrer, as some sites refuse other sites' pages) and only uses the resizing
+     service when that fails. */
   function setImg(img, u, w) {
-    img.dataset.u = u;
+    img.dataset.u = u; img.dataset.w = w; delete img.dataset.via;
     if (/^\/_blob\//.test(u)) { img.removeAttribute('src'); blobUrl(u).then(s => { if (img.dataset.u === u) img.src = s; }, () => { if (img.dataset.u === u) bad(img); }); }
+    else if (/^https?:\/\//i.test(u)) { img.referrerPolicy = 'no-referrer'; img.decoding = 'async'; img.src = u; }
     else img.src = small(u, w);
+  }
+  /* the next and previous photos load while you look at this one */
+  const PRE = new Map();
+  function preload(u) {
+    if (!u || PRE.has(u) || !/^https?:\/\//i.test(u) || BAD.has(u)) return;
+    const im = new Image(); im.referrerPolicy = 'no-referrer'; im.decoding = 'async'; im.src = u; PRE.set(u, im);
+    if (PRE.size > 60) PRE.delete(PRE.keys().next().value);
   }
   function bad(img) {
     const u = img.dataset.u; if (u) BAD.add(u);
@@ -162,10 +175,11 @@
     const strip = v.querySelector('.vvs'), sig = VV.src + '|' + it.map(x => x.u).join('|');
     if (strip.dataset.sig !== sig) {
       strip.dataset.sig = sig;
-      strip.innerHTML = it.length > 1 ? it.map((x, n) => '<button type="button" data-vvt="' + n + '" class="' + (x.vid ? 'v' : '') + '" aria-label="' + H((x.vid ? L('Video ', '영상 ') : L('Photo ', '사진 ')) + (n + 1)) + '">' + (x.vid ? '' : '<img alt="">') + '</button>').join('') : '';
+      strip.innerHTML = it.length > 1 ? it.map((x, n) => '<button type="button" data-vvt="' + n + '" class="' + (x.vid ? 'v' : '') + '" aria-label="' + H((x.vid ? L('Video ', '영상 ') : L('Photo ', '사진 ')) + (n + 1)) + '">' + (x.vid ? '' : '<img alt="" loading="lazy">') + '</button>').join('') : '';
       strip.querySelectorAll('[data-vvt]').forEach((b, n) => { const im = b.querySelector('img'); if (im) setImg(im, it[n].u, 160); });
     }
     strip.querySelectorAll('[data-vvt]').forEach((b, n) => b.classList.toggle('on', n === i));
+    if (it.length > 1) { const nx = it[(i + 1) % it.length], pv = it[(i - 1 + it.length) % it.length]; if (!nx.vid) preload(nx.u); if (!pv.vid) preload(pv.u); }
     const on = strip.querySelector('.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' });
     ph.classList.toggle('isvid', !!cur.vid);
     if (cur.vid) { ph.style.width = ph.style.height = ''; } else requestAnimationFrame(vvFit);
@@ -273,7 +287,9 @@
     if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
     if (el.closest('#vv')) vvShow(dx < 0 ? 1 : -1); else { const vc = el.closest('.vc'); if (vc) step(vc.dataset.h, dx < 0 ? 1 : -1); }
   }, { passive: true });
-  addEventListener('error', e => { const t = e.target; if (t && t.tagName === 'IMG' && (t.closest('.vc') || t.closest('#vv'))) { if (t.closest('.vvs')) { const b = t.closest('button'); if (b) b.remove(); return; } bad(t); } }, true);
+  addEventListener('error', e => { const t = e.target; if (t && t.tagName === 'IMG' && (t.closest('.vc') || t.closest('#vv'))) {
+      /* straight from the agency did not work: try once through the resizing service before giving up on the photo */
+      const u0 = t.dataset.u; if (u0 && /^https?:\/\//i.test(u0) && !t.dataset.via) { t.dataset.via = '1'; t.src = small(u0, +t.dataset.w || 900); return; } if (t.closest('.vvs')) { const b = t.closest('button'); if (b) b.remove(); return; } bad(t); } }, true);
   const say = (t, err) => { box.innerHTML = '<p class="msg' + (err ? ' err' : '') + '">' + H(t) + '</p>'; };
 
   /* ---------- signing in ---------- */
