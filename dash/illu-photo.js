@@ -11,7 +11,11 @@
    so the card still has a face if the agency takes the picture down. */
 (function(){
   'use strict';
-  if(!window.illu || !window.illu.findPhoto) return;
+  /* 1.2.245 (user, 18 Nov 2026: "I'm not able to set the photo as the main photo on the card via mobile slideshow screen"):
+     on the phone / web this part did not run at all, so there was no "Use as card photo" and a chosen card photo was not
+     shown. Now it runs there in a light form: the chosen card photos (pmain) only - no photo finding, sweeping or backups,
+     and none of the big photo-link lists (they are only needed where the finder runs). */
+  const LITE = !window.illu || !window.illu.findPhoto;
   const PLINK = new Map(), PFAIL = new Map(), BROKEN = new Set(), TRIED = new Set(), WAIT = new Map();
   const WEEK = 7 * 864e5;
   const SHARED = new Set(), PLINKSINGLE = new Set();
@@ -42,7 +46,7 @@
   async function load(){
     for(let i = 0; i < 60 && (typeof DB === 'undefined' || !DB); i++) await new Promise(r => setTimeout(r, 500));
     if(typeof DB === 'undefined' || !DB) return;
-    try{
+    if(!LITE) try{
       const [a, b, c, d] = await Promise.all([DB.collection('plink').limit(10000).get(), DB.collection('pfail').limit(10000).get(),
         DB.collection('plinkb').limit(5000).get(), DB.collection('psweep').limit(5000).get()]);
       /* board sweeps first, single finds on top (they are newer and aimed at one model) */
@@ -112,6 +116,7 @@
   const lit = key => { try{ return !!lampOf(key); }catch(e){ return false; } };
 
   async function find(key){
+    if(LITE) return;
     if(!ready || !key || TRIED.has(key) || WAIT.has(key) || BPEND.has(key)) return;
     if(PICS.get(key)) return;
     const f0 = PFAIL.get(key);
@@ -154,6 +159,7 @@
   /* backup copies, one at a time */
   const BQ = [], BDONE = new Set(); let bBusy = false;
   function backup(key){
+    if(LITE) return;
     if(BDONE.has(key) || PICS.get(key) || BQ.includes(key)) return;
     BQ.push(key); bPump();
   }
@@ -189,6 +195,7 @@
   }
   /* lit models with no saved copy yet get one, gently, after the page settles */
   function backupLit(){
+    if(LITE) return;
     try{
       const keys = new Set();
       if(typeof MARKS !== 'undefined') for(const [k, v] of MARKS) if(v) keys.add(k);
@@ -391,7 +398,7 @@
       if(!ASSETS) return '';
       let blob = null;
       if(/^\/_blob\/bk\./.test(url)){ const r = await fetch(url); if(r.ok) blob = await r.blob(); }
-      else if(/^https?:/i.test(url) && illu.photoThumb){ const r = await illu.photoThumb(url, page || ''); if(r && r.jpeg) blob = new Blob([r.jpeg], {type: 'image/jpeg'}); }
+      else if(/^https?:/i.test(url) && window.illu && illu.photoThumb){ const r = await illu.photoThumb(url, page || ''); if(r && r.jpeg) blob = new Blob([r.jpeg], {type: 'image/jpeg'}); }
       if(!blob || !blob.size || !/^image\//i.test(blob.type || 'image/jpeg')) return '';
       const res = await ASSETS.upload(new File([blob], 'photo.' + ((blob.type || '').split('/')[1] || 'jpg').replace('jpeg', 'jpg'), {type: blob.type || 'image/jpeg'}));
       return res && res.id ? '/_blob/' + res.id : '';

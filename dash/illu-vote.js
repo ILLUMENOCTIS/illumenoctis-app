@@ -1028,7 +1028,7 @@
     /* 1.2.168 (user, 13 Nov 2026): her name opens her page on the agency's site */
     const pg = pgM || href || (/^https?:\/\//i.test(k || '') && !/instagram\.com/i.test(k) ? k : '');
     const nmTxt = H(a.nm || i.nm || '');
-    return '<div class="pnhd"><div class="pnth">' + pic + '</div><div class="pnhm"><h2>' + (pg ? '<a class="pnnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(L('Open her page on the agency’s site', '에이전시 사이트에서 모델 페이지 열기')) + '">' + nmTxt + '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg></a>' : nmTxt) + '</h2>' +
+    return '<div class="pnhd"><div class="pnth">' + pic + '</div><div class="pnhm"><h2>' + (pg ? '<a class="pnnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(L('Open her page on the agency’s site', '에이전시 사이트에서 모델 페이지 열기')) + '">' + nmTxt + '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg></a>' : nmTxt) + (window.__illuNameEditHtml && sk && /^https?:/i.test(sk) ? window.__illuNameEditHtml(sk, a.nm || i.nm || '') : '') /* 1.2.247: ✎ edit her name (illu-mname.js) */ + '</h2>' +
       '<div class="pnagr">' + agH + (MO ? agFavBtn(Object.assign({}, a, MO.dom ? {agRef: MO.dom} : {}), MO.ag, '') : agFavBtn(a, ag, href)) + (mom ? '<span class="pnmom">' + L('Mother', '마더') + '</span>' : '') + '</div>' + also +
       (meta ? '<p class="pnmeta">' + meta + '</p>' : '') + momBox(k, a) + '</div>' +
       '<button type="button" class="pnfav' + (fav ? ' on' : '') + '" data-pnfav aria-pressed="' + fav + '" title="' + H(fav ? L('In My Favorites — click to remove', '내 즐겨찾기 — 누르면 뺍니다') : L('Add to My Favorites', '내 즐겨찾기에 추가')) + '">' + HEART + '</button></div>' +

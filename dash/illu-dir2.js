@@ -1145,7 +1145,9 @@
   (function(){
     const bridge = !!(window.illu && window.illu.zoomTarget);
     let hover = false, picked = false, sent = '';
-    const send = () => { const t = window.__illuZoomDoc || (DV() && (hover || picked) && $('.d2body .d2grid')) ? 'photos' : 'page'; if(t !== sent){ sent = t; if(bridge) try{ illu.zoomTarget(t); }catch(e){} document.body.classList.toggle('d2pzon', t === 'photos'); } };
+    /* 1.2.246 (user, 18 Nov 2026 - New Face & Development full screen: "the top bar with the filters/selections ... I want
+       the board to expand with only the cards"): the New Face page's grid (.rcbody .rc2grid) counts as the photo area too */
+    const send = () => { const t = window.__illuZoomDoc || (DV() && (hover || picked) && (VIEW === 'arr' ? $('#pane-arr .rcbody .rc2grid') : $('.d2body .d2grid'))) ? 'photos' : 'page'; if(t !== sent){ sent = t; if(bridge) try{ illu.zoomTarget(t); }catch(e){} document.body.classList.toggle('d2pzon', t === 'photos'); } };
     document.addEventListener('pointerover', e => { const h = !!(e.target.closest && e.target.closest('.d2body')); if(h !== hover){ hover = h; send(); } });
     document.addEventListener('pointerdown', e => { picked = !!(e.target.closest && e.target.closest('.d2body')); send(); }, true);
     document.addEventListener('mouseleave', () => { hover = false; send(); });
@@ -1156,10 +1158,11 @@
       D2.pz = d === '0' ? 1 : Math.max(.6, Math.min(2.6, Math.round(old * (d === '+' ? 1.15 : 1 / 1.15) * 100) / 100));
       if(Math.abs(D2.pz - 1) < .04) D2.pz = 1;
       if(D2.pz === old) return;
-      const G = $('.d2body'), ratio = G && G.scrollHeight ? G.scrollTop / G.scrollHeight : 0;
+      const GB = () => VIEW === 'arr' ? $('#pane-arr .rcbody') : $('.d2body');     // the scroll box of the page in view
+      const G = GB(), ratio = G && G.scrollHeight ? G.scrollTop / G.scrollHeight : 0;
       document.body.style.setProperty('--pz', String(D2.pz));
       refresh();
-      const G2 = $('.d2body'); if(G2) G2.scrollTop = ratio * G2.scrollHeight;
+      const G2 = GB(); if(G2) G2.scrollTop = ratio * G2.scrollHeight;
     };
     if(bridge && illu.onPhotoZoom) illu.onPhotoZoom(d => window.__illuPhotoZoom(d));
   })();
@@ -1448,11 +1451,14 @@
     const enc = s2 => String(s2).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]);
     const full = SL.full;
     let h = '';
-    if(cur) h += '<img class="d2sli" alt="" src="' + enc(slImg(cur.url, full ? 2000 : 900)) + '" draggable="false">';
+    /* 1.2.242: a film from her page plays in the slideshow (muted, looping; the sound and controls are on it) */
+    const curV = !!cur && (cur.cat === 'Video' || /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(cur.url || ''));
+    if(cur && curV){ const old = pic.querySelector('.d2sl video.d2slv'); if(old && old.getAttribute('src') === cur.url) h += '<!--v-->'; else h += '<video class="d2sli d2slv" src="' + enc(cur.url) + '" autoplay muted loop playsinline controls preload="metadata"></video>'; }
+    else if(cur) h += '<img class="d2sli" alt="" src="' + enc(slImg(cur.url, full ? 2000 : 900)) + '" draggable="false">';
     h += '<button type="button" class="d2slf" data-d2slf aria-pressed="' + full + '" title="' + (full ? 'Exit full view · F or Esc' : 'Full view · F') + '" aria-label="' + (full ? 'Exit full view' : 'Full view') + '">' + (full ? IC_EXIT : IC_FULL) + '<span>' + (full ? 'Exit full view' : 'Full view') + '</span><kbd>F</kbd></button>';
     /* 1.2.112: make the photo shown the card photo (only a link is kept - nothing is saved); back to the crawler's photo */
     const PH = window.__illuPhoto, picked = PH && PH.PMAIN && PH.PMAIN.get(m.key);
-    if(cur && PH && PH.setMain) h += '<button type="button" class="d2slmain" data-d2slmain title="Show this photo on the model’s card, for everyone (the photo is not saved — only which one to show)">★ Use as card photo</button>';
+    if(cur && !curV && PH && PH.setMain) h += '<button type="button" class="d2slmain" data-d2slmain title="Show this photo on the model’s card, for everyone (the photo is not saved — only which one to show)">★ Use as card photo</button>';
     else if(!cur && picked && PH.clearMain) h += '<button type="button" class="d2slmain back" data-d2slunmain title="Go back to the photo the program found">↺ Back to the original photo</button>';
     /* 1.2.196 (user, 15 Nov 2026: "what happened to the hide photo function?"): since cards open straight in this full view
        (1.2.192) the "Not her - Hide" of the other photo viewer (1.2.174) was out of reach - it is here too now, for a photo
@@ -1460,7 +1466,7 @@
     if(SL.undo && Date.now() - SL.undo.at < 6000) h += '<button type="button" class="d2slhide und" data-d2slundo title="Put the photo back in her slideshow (Ctrl + Z works too)">✓ Photo hidden · <u>Undo</u></button>';
     else if(cur && window.__illuHidePhoto && /^https?:/i.test(m.href || '')) h += '<button type="button" class="d2slhide" data-d2slhide title="Hide this photo from the slideshows, for everyone (the agency site is not changed)">⊘ Hide</button>';
     /* 1.2.148: turn the photo shown (for everyone) */
-    if((cur || pic.querySelector(':scope > img')) && window.__illuRotBtns) h += window.__illuRotBtns('d2rot');
+    if(!curV && (cur || pic.querySelector(':scope > img')) && window.__illuRotBtns) h += window.__illuRotBtns('d2rot');
     if(n > 1){
       h += '<button type="button" class="d2sln prev" data-d2sl="-1" aria-label="Previous photo"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg></button>' +
         '<button type="button" class="d2sln next" data-d2sl="1" aria-label="Next photo"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg></button>' +
@@ -1473,16 +1479,18 @@
       h += '<div class="d2slno" role="note"><b>No slideshow</b><span>' + enc(t) + '</span>' +
         (a && m.href ? '<a href="' + enc(m.href) + '" target="_blank" rel="noopener noreferrer">' + enc(a) + ' ↗</a>' : '') + '</div>';
     }
-    box.innerHTML = h;
+    /* the film keeps playing while the buttons around it are redrawn */
+    if(h.includes('<!--v-->')){ const v = box.querySelector('video.d2slv'); if(v) v.remove(); box.innerHTML = h; if(v) box.insertBefore(v, box.firstChild); } else box.innerHTML = h;
     pic.classList.toggle('d2slon', !!cur);
     /* full view: the thumbnails under the photo, and the profile link in the details */
     let strip = C.querySelector(':scope > .d2slstrip');
     if(full && n > 1){
       if(!strip){ strip = document.createElement('div'); strip.className = 'd2slstrip'; strip.setAttribute('aria-label', 'All photos'); C.appendChild(strip); }
       const main = pic.querySelector(':scope > img');
-      const srcs = [main ? (main.currentSrc || main.src) : ''].concat(SL.photos.map(x => slImg(x.url, 240)));
+      const isVu = x => x.cat === 'Video' || /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(x.url || '');
+      const srcs = [main ? (main.currentSrc || main.src) : ''].concat(SL.photos.map(x => isVu(x) ? 'video:' + x.url : slImg(x.url, 240)));
       if(strip.dataset.n !== String(n) || strip.dataset.k !== SL.key){ strip.dataset.n = n; strip.dataset.k = SL.key;
-        strip.innerHTML = srcs.map((u, k) => '<button type="button" class="d2slt" data-d2slt="' + k + '" aria-label="Photo ' + (k + 1) + '">' + (u ? '<img alt="" loading="lazy" src="' + enc(u) + '">' : '') + '</button>').join(''); }
+        strip.innerHTML = srcs.map((u, k) => '<button type="button" class="d2slt" data-d2slt="' + k + '" aria-label="Photo ' + (k + 1) + '">' + (u && u.startsWith('video:') ? '<video muted preload="metadata" src="' + enc(u.slice(6)) + '#t=0.5"></video><i class="d2slplay" aria-hidden="true">▶</i>' : u ? '<img alt="" loading="lazy" src="' + enc(u) + '">' : '') + '</button>').join(''); }
       strip.querySelectorAll('.d2slt').forEach((b, k) => b.classList.toggle('on', k === i));
       const on = strip.querySelector('.d2slt.on'); if(on) try{ on.scrollIntoView({block: 'nearest', inline: 'nearest'}); }catch(e){}
     }else if(strip) strip.remove();
@@ -2857,6 +2865,8 @@ html:has(body.d2fullcard),body.d2fullcard{overflow:hidden!important}
 .d2card.d2full .d2slstrip{grid-column:1;grid-row:2;display:flex;gap:8px;padding:10px 14px;background:#1E1924;overflow-x:auto;scrollbar-width:thin;scrollbar-color:#4A4052 transparent}
 .d2slt{flex:none;width:56px;aspect-ratio:3/4;padding:0;border:2px solid transparent;border-radius:8px;overflow:hidden;background:#2A2230;cursor:pointer;opacity:.55;transition:opacity .2s,border-color .2s,transform .2s}
 .d2slt img{width:100%;height:100%;object-fit:cover;display:block}
+.d2slt{position:relative}.d2slt video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}.d2slt .d2slplay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-style:normal;text-shadow:0 1px 4px rgba(0,0,0,.7);pointer-events:none}
+.d2card .litpic video.d2slv{object-fit:contain!important;background:#16121B;pointer-events:auto}
 .d2slt:hover{opacity:.85;transform:translateY(-2px)}
 .d2slt.on{opacity:1;border-color:#fff}
 .d2card.d2full .litxc{position:absolute!important;top:16px!important;right:376px!important;left:auto!important;z-index:5}
@@ -3429,7 +3439,7 @@ body.d2max #d2bar{margin-top:0}
     const sig = r + '|' + ew + 'x' + eh + '|' + im.naturalWidth;
     if(im.dataset.rotsig === sig) return;
     im.dataset.rotsig = sig;
-    if(!r){ if(im.dataset.rotd){ im.style.removeProperty('transform'); delete im.dataset.rotd; } return; }
+    if(!r){ if(im.dataset.rotd){ im.style.removeProperty('transform'); im.style.removeProperty('transform-origin'); delete im.dataset.rotd; } return; }
     let s = 1;
     if(r % 180 && ew && eh){
       const fit = getComputedStyle(im).objectFit;
@@ -3440,6 +3450,9 @@ body.d2max #d2bar{margin-top:0}
       }else s = Math.min(ew / eh, eh / ew);
     }
     im.style.setProperty('transform', 'rotate(' + r + 'deg)' + (s !== 1 ? ' scale(' + s.toFixed(4) + ')' : ''), 'important');
+    /* 1.2.241 (user, 18 Nov 2026: "when the photo rotates, it's not centered in the full screen"): the card photo zooms from
+       20% down (its gentle zoom), so a turn swung it off to the top-left - a turned photo now always turns about its middle */
+    im.style.setProperty('transform-origin', '50% 50%', 'important');
     im.dataset.rotd = '1';
   }
   const SEL = '.d2card .litpic img, #illufv .fvimg, #illufv .fvt img, .d2slstrip img, .litpic img.agimg, .litpic.has > img, .ucimg img';
