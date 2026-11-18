@@ -5,7 +5,9 @@
 'use strict';
 const CFG = window.ILLU_CONFIG;
 const sb = window.supabase.createClient(CFG.url, CFG.key, {
-  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'illu.auth' }
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'illu.auth.' + ((String(CFG.url).match(/\/\/([a-z0-9]+)\./) || [])[1] || 'x') },   // 1.2.217: one sign-in per Supabase project
+  /* 1.2.216: every request is counted (and can be paused) by the download meter */
+  global: window.IlluNet ? { fetch: window.IlluNet.fetch } : {}
 });
 window.__sb = sb;
 const $ = s => document.querySelector(s);
@@ -133,7 +135,7 @@ function buildAG(ags, bds, mds, extra) {
     }
     return {
       id: a.id, site: a.website || '', name: a.name, domain: a.domain || '', country: a.country || '', city: a.city || '', boards,
-      n: boards.reduce((s, b) => s + b.m.length, 0), region: a.region || 'Unknown', at: a.agency_type || '',
+      n: boards.reduce((s, b) => s + b.m.length, 0), region: a.region || 'Unknown', at: a.agency_type || '', added: a.created_at || '',
       tiers: [...new Set(boards.map(b => b.t))], sexes: [...new Set(boards.map(b => b.g))]
     };
   });
@@ -157,21 +159,84 @@ async function readAll(table, cols) {
   if (out.length >= total && total % 1000 === 0 && total) { const d = await page(total); out.push(...d); }
   return out;
 }
+/* 1.2.216 (17 Nov 2026): the directory (2,400 agencies, 27,700 models: about 5 MB) and the crawler's boards
+   (about 6 MB) used to be downloaded in full every time the program opened. They are now kept on this computer
+   (IlluCache) and read again only when they changed: the directory carries a version number that the database
+   raises on every change (dir_version), and the crawler's boards are brought up to date with just the changed
+   documents. If the copy here can't be used, everything is read as before. */
+const KC = window.IlluCache || null;
+async function directory() {
+  let v = null;
+  try { const r = await sb.from('dir_version').select('v').eq('id', 1).maybeSingle(); if (!r.error && r.data) v = r.data.v; } catch (e) {}
+  if (KC && v != null) {
+    const kept = await KC.getMeta('dir');
+    if (kept && kept.v === v && Array.isArray(kept.mds) && kept.mds.length) return kept;
+  }
+  const [ags, bds, mds, ppl] = await Promise.all([
+    // agency_type came later; a database without it still opens
+    readAll('agencies', 'id,name,domain,country,city,region,website,agency_type,created_at').catch(() => readAll('agencies', 'id,name,domain,country,city,region,website,agency_type')).catch(() => readAll('agencies', 'id,name,domain,country,city,region,website')),   /* 1.2.223: created_at for the NEW tag */
+    readAll('boards', 'id,agency_id,division,gender,tier,url,active'),
+    readAll('models', 'id,board_id,agency_id,name,profile_url,gone'),
+    readAll('people', 'id,is_admin')
+  ]);
+  const d = { v, ags, bds, mds, ppl };
+  if (KC && v != null) await KC.setMeta('dir', d);
+  return d;
+}
+const later = (a, b) => (!a ? b : !b ? a : (Date.parse(b) > Date.parse(a) ? b : a));
+async function keptDocs(colls) {
+  const k = KC ? await KC.getMeta('gate.docs') : null;
+  const fresh = k && k.sync && k.checked && Date.now() - k.checked < 25 * 86400e3 && colls.every(c => Array.isArray((k.rows || {})[c]));
+  if (fresh) {
+    try {
+      const since = new Date(Date.parse(k.sync) - 120e3).toISOString();
+      const nowR = await sb.rpc('illu_now');
+      const qnow = !nowR.error && nowR.data ? new Date(Date.parse(String(nowR.data).replace(' ', 'T').replace(/\+00$/, '+00:00')) - 60e3).toISOString() : null;
+      /* which documents changed (path and time only), then just those this computer doesn't have in that version */
+      const ch = await sb.from('docs').select('path,coll,updated_at').in('coll', colls).gt('updated_at', since).order('updated_at').limit(1000);
+      const tb = await sb.from('doc_tombs').select('path,coll,deleted_at').in('coll', colls).gt('deleted_at', since);
+      if (!ch.error && !tb.error && ch.data.length < 1000) {   // 1000 or more: read afresh (the database answers at most 1000 rows)
+        let sync = k.sync;
+        for (const c of colls) k.rows[c] = new Map(k.rows[c].map(r => [r.path, r]));
+        const need = [];
+        for (const r of ch.data) { sync = later(sync, r.updated_at); const h = k.rows[r.coll].get(r.path); if (!h || h.u !== r.updated_at) need.push(r.path); }
+        for (let i = 0; i < need.length; i += 100) {
+          const g = await sb.from('docs').select('path,id,coll,data,updated_at').in('path', need.slice(i, i + 100));
+          if (g.error) throw g.error;
+          for (const r of g.data) k.rows[r.coll].set(r.path, { path: r.path, id: r.id, data: r.data, u: r.updated_at });
+        }
+        for (const t of tb.data) { sync = later(sync, t.deleted_at); if (k.rows[t.coll]) k.rows[t.coll].delete(t.path); }
+        for (const c of colls) k.rows[c] = [...k.rows[c].values()];
+        k.sync = qnow && Date.parse(qnow) > Date.parse(sync) ? qnow : sync; k.checked = Date.now();
+        if (KC) KC.setMeta('gate.docs', k);
+        return k.rows;
+      }
+    } catch (e) {}
+  }
+  let mark = null;
+  try { const r = await sb.from('docs').select('updated_at').order('updated_at', { ascending: false }).limit(1); if (!r.error && r.data && r.data[0]) mark = r.data[0].updated_at; } catch (e) {}
+  const rows = {};
+  for (const c of colls) {
+    rows[c] = [];
+    for (let from = 0; ; from += 500) {
+      const r = await sb.from('docs').select('path,id,data,updated_at').eq('coll', c).order('id').range(from, from + 499);
+      if (r.error) { mark = null; break; }
+      rows[c].push(...(r.data || []).map(x => ({ path: x.path, id: x.id, data: x.data, u: x.updated_at })));
+      if ((r.data || []).length < 500) break;
+    }
+  }
+  if (KC && mark) KC.setMeta('gate.docs', { sync: mark, checked: Date.now(), rows });
+  return rows;
+}
 let entering = false;
 async function enter(session) {
   if (entering || !session) return;
   entering = true;
   $('#box').innerHTML = '<p class="lead">' + esc(W.loading) + '</p>';
   try {
-    const [ags, bds, mds, ppl, CRB, DEL] = await Promise.all([
-      // agency_type came later; a database without it still opens
-      readAll('agencies', 'id,name,domain,country,city,region,website,agency_type').catch(() => readAll('agencies', 'id,name,domain,country,city,region,website')),
-      readAll('boards', 'id,agency_id,division,gender,tier,url,active'),
-      readAll('models', 'id,board_id,agency_id,name,profile_url,gone'),
-      readAll('people', 'id,is_admin'),
-      sb.from('docs').select('id,data').eq('coll', 'crawlb').then(r => r.data || [], () => []),
-      sb.from('docs').select('id').eq('coll', 'agdel').then(r => r.data || [], () => [])
-    ]).then(r => r);
+    const [D, K] = await Promise.all([directory(), keptDocs(['crawlb', 'agdel']).catch(() => ({ crawlb: [], agdel: [] }))]);
+    const { ags, bds, mds, ppl } = D;
+    const CRB = K.crawlb || [], DEL = K.agdel || [];
     const extra = new Map((CRB || []).map(d => [String(d.id), d.data || {}]));
     const admin = (ppl.find(p => p.is_admin) || {}).id || '';
     /* agencies removed from the Directory (docs agdel/<id>) come marked, so they can be put back */
