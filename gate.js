@@ -248,7 +248,7 @@ async function enter(session) {
       await window.illu.setToken(session.access_token);
     }
     LS.set('illum.me', session.user.id);
-    location.replace('dash/index.html');
+    location.replace('dash/index.html' + (/^#cards=[a-z0-9]+$/i.test(location.hash || '') ? location.hash : ''));   /* 1.2.261: a "cards sent to you" link survives the sign-in */
   } catch (e) {
     entering = false; document.documentElement.classList.add('gform');
     $('#box').innerHTML = '<p class="err">' + esc(errText(e)) + '</p><div class="acts"><span></span><button type="button" class="btn pri" id="retry">OK</button></div>';

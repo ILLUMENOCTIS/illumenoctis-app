@@ -1031,7 +1031,9 @@
     return '<div class="pnhd"><div class="pnth">' + pic + '</div><div class="pnhm"><h2>' + (pg ? '<a class="pnnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(L('Open her page on the agency’s site', '에이전시 사이트에서 모델 페이지 열기')) + '">' + nmTxt + '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg></a>' : nmTxt) + (window.__illuNameEditHtml && sk && /^https?:/i.test(sk) ? window.__illuNameEditHtml(sk, a.nm || i.nm || '') : '') /* 1.2.247: ✎ edit her name (illu-mname.js) */ + '</h2>' +
       '<div class="pnagr">' + agH + (MO ? agFavBtn(Object.assign({}, a, MO.dom ? {agRef: MO.dom} : {}), MO.ag, '') : agFavBtn(a, ag, href)) + (mom ? '<span class="pnmom">' + L('Mother', '마더') + '</span>' : '') + '</div>' + also +
       (meta ? '<p class="pnmeta">' + meta + '</p>' : '') + momBox(k, a) + '</div>' +
-      '<button type="button" class="pnfav' + (fav ? ' on' : '') + '" data-pnfav aria-pressed="' + fav + '" title="' + H(fav ? L('In My Favorites — click to remove', '내 즐겨찾기 — 누르면 뺍니다') : L('Add to My Favorites', '내 즐겨찾기에 추가')) + '">' + HEART + '</button></div>' +
+      '<div class="pnhbtns"><button type="button" class="pnfav' + (fav ? ' on' : '') + '" data-pnfav aria-pressed="' + fav + '" title="' + H(fav ? L('In My Favorites — click to remove', '내 즐겨찾기 — 누르면 뺍니다') : L('Add to My Favorites', '내 즐겨찾기에 추가')) + '">' + HEART + '</button>' +
+      /* 1.2.261: send her card to a user (illu-cardsend.js) */
+      (window.__illuSendBtn ? window.__illuSendBtn(k) : '') + '</div></div>' +
       (a.readNote || '');
   }
   function pnMeas(k, a, c){
@@ -1340,6 +1342,10 @@
     changed();
   }, true);
   window.__illuModelPanel = modelPanel;
+  /* 1.2.261: for illu-cardsend.js - a card the way the boards draw it, what is known about a model, and her full view */
+  window.__illuMcard = k => { try{ return mcard(k); }catch(e){ return ''; } };
+  window.__illuKInfo = k => { try{ return info(k); }catch(e){ return {key: k}; } };
+  window.__illuOpenK = (k, ph) => openFull(k, ph || null);
   /* the older block (Booking / Notes / Links) - kept for anything that still asks for it */
   function extras(k, about){
     if(!k) return '';
@@ -2241,7 +2247,7 @@
     const chip = (v, lab, n) => '<button type="button" class="ivchip' + ((VS.cwho || 'all') === v ? ' on' : '') + '" data-ivset="cwho=' + H(v) + '">' + lab + (n != null ? ' <span>' + n + '</span>' : '') + '</button>';
     const head = '<div class="ivhead"><span class="ivbig">' + allStates().filter(s => s.open).length + '</span><span class="ivkick">' + L('Faces up for the team vote', '팀 투표에 오른 얼굴') + '</span><span class="ivdot"></span>' +
       chip('all', L('Everyone', '모두')) + ppl.map(p => chip(p, capDisc(p) + H(pname(p)), all.filter(s => s.o.by === p).length)).join('') +
-      '<span class="ivsp"></span>' + '<button type="button" class="ivbtn ivshare" data-ivshare>' + SHAREI + L('Share vote link', '투표 링크 보내기') + '</button>' + (tab === 'to' ? seg('corder', [['old', L('Oldest first', '오래된 순')], ['new', L('Newest first', '최신 순')]]) : '') + '</div>' +
+      '<span class="ivsp"></span>' + (window.__illuSendSelBtn ? window.__illuSendSelBtn() : '') + '<button type="button" class="ivbtn ivshare" data-ivshare>' + SHAREI + L('Share vote link', '투표 링크 보내기') + '</button>' + (tab === 'to' ? seg('corder', [['old', L('Oldest first', '오래된 순')], ['new', L('Newest first', '최신 순')]]) : '') + '</div>' +
       subTabs('vsub', tab, to.length, vd.length);
     const cw = st => '<div class="ivcw">' + mcard(st.k) + (tab === 'to' ? '<div class="ivcap">' + H(L('Sent by ', '보낸 사람: ') + pname(st.o.by) + ' · ' + when(st.o.at)) + '</div>' + stPill(st.k) : votedCap(st)) + offBox(st.k, st) + '</div>';
     const list = tab === 'to' ? to : vd;
@@ -2348,7 +2354,7 @@
        one row - the two tabs (they carry the counts), an ⓘ that opens the team note, Share vote link, Team Vote */
     return '<section class="ivtoday' + (all.length ? ' glow' : '') + '"><div class="ivrow ivth ivth2">' + subTabs('tsub', tab, all.length, vd.length, {appr: apWait.length, cxl: cxl.length}) + '<span class="ivsp"></span>' +
       '<details class="ivinfo"><summary title="' + H(L('How the Team Vote works', '팀 투표 방법')) + '" aria-label="' + H(L('How the Team Vote works', '팀 투표 방법')) + '">i</summary><p class="ivmut sm ivtnote">' + L('Team: ', '팀: ') + H(people().map(pname).join(', ')) + ' · ' + L('the majority decides; your vote stays private until everyone has voted.', '다수결 · 모두 투표할 때까지 내 선택은 나만 봅니다.') + (mineDone ? ' · ' + L('<b>' + mineDone + '</b> you voted on are waiting for the others.', '내가 투표한 <b>' + mineDone + '</b>건은 다른 사람을 기다립니다.') : '') + '</p></details>' +
-      '<button type="button" class="ivbtn ivshare ivtshare" data-ivshare>' + SHAREI + L('Share vote link', '투표 링크 보내기') + '</button>' +
+      (window.__illuSendSelBtn ? window.__illuSendSelBtn() : '') + '<button type="button" class="ivbtn ivshare ivtshare" data-ivshare>' + SHAREI + L('Share vote link', '투표 링크 보내기') + '</button>' +
       (lateN ? '' : '<button type="button" class="ivgo" data-ivgo="team">' + L('Team Vote', '팀 투표') + ' <span aria-hidden="true">→</span></button>') + '</div>' +
       (lateN ? '<div class="ivnowb"><span class="ivnbi">' + CLKI + '</span><div class="ivnbt"><b>' + L('Vote Now — ' + lateN + (lateN === 1 ? ' card needs' : ' cards need') + ' you', '지금 투표 — ' + lateN + '장이 내 투표를 기다립니다') + '</b><span>' + L('They have waited 3 hours or more. The team can’t decide without you.', '3시간 이상 기다렸습니다. 내 투표가 있어야 팀이 정할 수 있습니다.') + '</span></div><div class="ivnbb"><button type="button" data-ivset="tf=now">' + L('Show them', '보기') + '</button><button type="button" data-ivgo="team">' + L('Go to Team Vote', '팀 투표로 가기') + ' <span aria-hidden="true">→</span></button></div></div>' : '') +
       (tab === 'done' ? doneH : tab === 'appr' ? apprH : tab === 'cxl' ? cxlH : (all.length ? '<div class="ivtbar"><div class="ivtfs">' + chip('all', L('All', '전체')) + chip('now', L('Vote Now', '지금 투표')) + chip('today', L('Today', '오늘')) + chip('week', L('This week', '이번 주')) + chip('older', L('Older', '이전')) + '</div><span class="ivsp"></span>' +
@@ -2849,6 +2855,7 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 span.pnagl{color:var(--ink2,var(--ink));cursor:default}
 .pn2 .pnmom{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--acc);background:var(--wash,#EDE3EE);border-radius:4px;padding:1px 6px}
 .pn2 .pnmeta{margin:3px 0 0;font-size:12px;color:var(--mut)}
+.pn2 .pnhbtns{display:flex;flex-direction:column;gap:6px}
 .pn2 .pnfav{position:static;width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--surf,#fff);display:grid;place-items:center;cursor:pointer;color:var(--mut);padding:0}
 .pn2 .pnfav svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8}
 .pn2 .pnfav.on{color:#E5484D;border-color:#F0AEB4}.pn2 .pnfav.on svg{fill:currentColor}

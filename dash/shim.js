@@ -21,7 +21,7 @@ const ME = (DIR && DIR.me) || '';
 try { if (ME) localStorage.setItem('illum.me', ME); } catch (e) {}
 
 let SESSION = null;
-const gate = () => { try { location.replace('../index.html'); } catch (e) {} };
+const gate = () => { try { location.replace('../index.html' + (/^#cards=[a-z0-9]+$/i.test(location.hash || '') ? location.hash : '')); } catch (e) {} };   /* 1.2.261: keep a "cards sent to you" link through the sign-in */
 sb.auth.onAuthStateChange((ev, s) => {
   SESSION = s;
   if (s && window.illu && window.illu.setToken) window.illu.setToken(s.access_token);
