@@ -2202,6 +2202,9 @@
       tip = (r ? (r[1] === 'appr' ? 'Approved ' : 'Cancelled ') + r[2] + ' → ' : '') + lab + (who ? ' · ' + who : '');
       if(stage) body += '<span class="wd2"> · ' + esc(stage) + '</span>';
     }
+    /* 1.2.250 (user, 18 Nov 2026: "this is also overlapping" - "Send to Team Vote" under the "(P) Booking" pill): with a status
+       pill on the footer the Send to Team Vote button is left out (it stays on her opened card, under Status) */
+    lm = lm.replace(/<button type="button" class="ivsend"[\s\S]*?<\/button>/, '');
     return (r ? lm.replace(r[0], '') : lm) + '<span class="ucst ' + cls + '" title="' + esc(tip) + '" aria-label="' + esc(tip) + '">' + face + '<span class="tx">' + body + '</span></span>';
   }
   /* 1.2.220 (user, 17 Nov 2026: "I want to know somehow that this is the Mother Agency for this model"): a card at her

@@ -1520,7 +1520,7 @@
          one status pill (.ucst - "✓ Approved 4–0", see footJoin in illu-dir2.js) got the vote's own "✓ Approved 4–0" back when
          the footer was repainted. The pill keeps the result; an open vote shows its own buttons only, as when the card is drawn. */
       const st = b.parentElement && b.parentElement.querySelector(':scope > .ucst');
-      if(st){ if(nb.querySelector('.ivl')) st.remove(); else nb.querySelectorAll('.ivres').forEach(x => x.remove()); }
+      if(st){ if(nb.querySelector('.ivl')) st.remove(); else nb.querySelectorAll('.ivres, .ivsend').forEach(x => x.remove()); }
       if(nb.outerHTML !== b.outerHTML) b.replaceWith(nb); });
   }
   function repaintAll(){ document.querySelectorAll('.vmk[data-mk]').forEach(b => repaint(b.dataset.mk)); }

@@ -63,18 +63,19 @@
     }
     return [...out.values()].map(m => ({key: m.key, nm: m.nm}));
   }
-  async function hwLoad(dom){
-    if(!dom || BUSY.has(dom) || !dbOk()) return; BUSY.add(dom);
+  /* 1.2.251: force = the Booking Emails board's "Update from Hiworks" (no 15-minute wait); returns true when Hiworks was read */
+  async function hwLoad(dom, force){
+    if(!dom || BUSY.has(dom) || !dbOk()) return false; BUSY.add(dom);
     try{
       let d = HW.get(dom);
       if(!d){ try{ const g = await DB.doc('aghist/' + dom).get(); d = g && g.exists ? g.data() : null; }catch(e){} d = d || {s: [], i: [], at: ''}; HW.set(dom, d); soon(); }
       const can = window.illu && window.illu.hiworksAgency && !window.illu.web;
-      if(!can || (d.at && Date.now() - Date.parse(d.at) < 15 * 60e3) || Date.now() - (TRIED.get(dom) || 0) < 15 * 60e3) return;
+      if(!can || (!force && ((d.at && Date.now() - Date.parse(d.at) < 15 * 60e3) || Date.now() - (TRIED.get(dom) || 0) < 15 * 60e3))) return false;
       TRIED.set(dom, Date.now());
       const addrs = contactsOf(dom).map(c => lc(c.e)).filter(a => !MINE.test(a)), D = doms(dom);
       const have = (d.s || []).filter(x => x.read).map(x => String(x.no));
       const r = await window.illu.hiworksAgency(addrs, D, ME, have);
-      if(!r || !r.ok) return;
+      if(!r || !r.ok) return false;
       const old = new Map((d.s || []).map(x => [String(x.no), x]));
       const s = r.sent.map(e => {
         const o = old.get(String(e.no));
@@ -85,7 +86,8 @@
       d = {s, i: r.ins.map(x => ({no: x.no, dt: x.dt, from: x.from, subject: x.subject})), at: r.at, by: ME};
       HW.set(dom, d); soon();
       try{ await DB.doc('aghist/' + dom).set(d); }catch(e){ console.error('aghist save', e); }
-    }catch(e){ console.error('aghist', e); }
+      return true;
+    }catch(e){ console.error('aghist', e); return false; }
     finally{ BUSY.delete(dom); }
   }
   window.__illuAgHwLoad = hwLoad;

@@ -18,6 +18,8 @@
   const view = () => { try{ return typeof VIEW !== 'undefined' ? VIEW : ''; }catch(e){ return ''; } };
   const LAYERS = [
     ['newcard', () => vis(document.getElementById('ncm')), () => click('#ncm [data-ncx]')],
+    ['emkpop', () => !!document.querySelector('.emkpop'), () => { try{ window.__illuEmkClose && window.__illuEmkClose(); }catch(e){} return true; }],   // 1.2.251 ✉ marker on a card
+    ['bempick', () => !!document.querySelector('.bempick'), () => { try{ window.__illuBEmailPickClose && window.__illuBEmailPickClose(); }catch(e){} return true; }],   // 1.2.248 Booking Emails: "Which card?"
     ['idwin', () => { const m = document.getElementById('idmodal'); return !!m && m.dataset.on === '1'; }, esc],
     ['about', () => { const b = document.getElementById('ababout'); return !!b && b.getAttribute('aria-expanded') === 'true'; }, () => click('#ababout')],
     ['info', () => !!document.querySelector('.shinfop'), () => click('[data-shinfo]')],

@@ -12,7 +12,7 @@
   const nk = k => { try{ return normKey(k); }catch(e){ return k; } };
   const hsh = s => { let h = 2166136261; for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-  const ko = () => { try{ return typeof isKo === 'function' && isKo(); }catch(e){ return false; } };
+  const ko = () => { try{ return LANG === 'ko'; }catch(e){ return false; } };      // 1.2.248: isKo is not global - LANG is
   const L = (en, k) => ko() ? k : en;
   let lastV = -1;
   /* the chosen names onto the Directory's own lists (AG boards), and the board's name back where a choice was cleared */
