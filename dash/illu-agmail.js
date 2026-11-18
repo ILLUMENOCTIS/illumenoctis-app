@@ -54,6 +54,8 @@
     const byKey = new Map(all.map(m => [m.key, m]));
     const out = new Map();
     for(const u of e.links || []){ const m = byKey.get(nk(u)); if(m) out.set(m.key, m); }
+    /* 1.2.253: the name written over a link ("Gosia Z" + a package link) - see illu-ext.js nameLinks */
+    try{ if(window.__illuNameLinks) for(const m of window.__illuNameLinks(e.text, [dom].concat((e.to || []).map(a => String(a).split('@').pop())))) if(!out.has(m.key)) out.set(m.key, {key: m.key, nm: m.nm}); }catch(er){}
     const txt = ' ' + String(e.subject || '') + '\n' + String(e.text || '') + ' ';
     const keysOf = new Map(); for(const m of all){ const n = lc(m.nm).replace(/\s+/g, ' '); if(!keysOf.has(n)) keysOf.set(n, new Set()); keysOf.get(n).add(m.key); }
     for(const m of all){
@@ -73,7 +75,7 @@
       if(!can || (!force && ((d.at && Date.now() - Date.parse(d.at) < 15 * 60e3) || Date.now() - (TRIED.get(dom) || 0) < 15 * 60e3))) return false;
       TRIED.set(dom, Date.now());
       const addrs = contactsOf(dom).map(c => lc(c.e)).filter(a => !MINE.test(a)), D = doms(dom);
-      const have = (d.s || []).filter(x => x.read).map(x => String(x.no));
+      const have = (d.s || []).filter(x => x.read && x.msv === 2).map(x => String(x.no));   // 1.2.253: read once more with the name rule
       const r = await window.illu.hiworksAgency(addrs, D, ME, have);
       if(!r || !r.ok) return false;
       const old = new Map((d.s || []).map(x => [String(x.no), x]));
@@ -81,7 +83,7 @@
         const o = old.get(String(e.no));
         if(o && o.read && !e.read) return o;
         const m = String(e.name || '').match(/\(([^)]{1,30})\)\s*$/);
-        return {no: e.no, dt: e.dt, to: e.to.concat(e.cc || []).filter(a => !MINE.test(a)), subject: e.subject, ms: e.read ? modelsIn(e, dom) : (o ? o.ms : []), who: m ? m[1].trim() : '', read: e.read ? 1 : 0};
+        return {no: e.no, dt: e.dt, to: e.to.concat(e.cc || []).filter(a => !MINE.test(a)), subject: e.subject, ms: e.read ? modelsIn(e, dom) : (o ? o.ms : []), who: m ? m[1].trim() : '', read: e.read ? 1 : 0, msv: e.read ? 2 : (o && o.msv) || 0};
       });
       d = {s, i: r.ins.map(x => ({no: x.no, dt: x.dt, from: x.from, subject: x.subject})), at: r.at, by: ME};
       HW.set(dom, d); soon();

@@ -236,16 +236,52 @@ document.head.appendChild(st);
      starts, right after an email is sent from the program's Hiworks window, and Collect from Hiworks brings them in for her. */
   const MINE_MAX_LINKS = 8;
   const mineKey = () => { try { return 'illu.hwmine.' + (ME || ''); } catch (e) { return 'illu.hwmine.'; } };
-  const mineState = () => { try { const v = JSON.parse(localStorage.getItem(mineKey()) || 'null'); if (v && v.since) return { since: v.since, done: Array.isArray(v.done) ? v.done : [] }; } catch (e) {} return { since: new Date(Date.now() - 3 * 864e5).toISOString(), done: [] }; };
-  const mineSave = st => { try { localStorage.setItem(mineKey(), JSON.stringify({ since: st.since, done: st.done.slice(-500) })); } catch (e) {} };
+  const mineState = () => { try { const v = JSON.parse(localStorage.getItem(mineKey()) || 'null'); if (v && v.since) return { since: v.since, done: Array.isArray(v.done) ? v.done : [], nm: v.nm || 0 }; } catch (e) {} return { since: new Date(Date.now() - 3 * 864e5).toISOString(), done: [], nm: 1 }; };
+  const mineSave = st => { try { localStorage.setItem(mineKey(), JSON.stringify({ since: st.since, done: st.done.slice(-500), nm: st.nm || 0 })); } catch (e) {} };
   /* the text I wrote, without the earlier email quoted under it */
   function ownPart(body) {
     const t = '\n' + String(body || '');
     const m = t.search(/\n\s*(-{2,}\s*Original Message\s*-{2,}|-{2,}\s*원본 메일\s*-{2,}|On .{4,120}wrote:|From:\s.+\n|보낸 사람\s*:|>\s)/i);
     return m >= 0 ? t.slice(0, m) : t;
   }
-  function modelsIn(e) {
-    const urls = [...new Set((ownPart(e.body).match(/https?:\/\/[^\s<>"')\]]+/g) || []).map(u => u.replace(/[.,;:!?]+$/, '')))];
+  /* 1.2.253 (user, 18 Nov 2026 - a reply to United for Models' own email: "Gosia Z" / "Kinga S", each over a mediaslide
+     package link, models the user had liked): a model is also found by the name written right above a link (or before it
+     on the same line) in my own part of the email - "First L" / "First Lastname" against the models of the agency the
+     email went to. Accents count as plain letters (Ż = Z, Ł = L). More than one model fits -> the one I liked; still more
+     than one, or none -> left out (never a guess). The email quoted under mine (e.g. the agency's list) does not count. */
+  const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[łŁ]/g, 'l').replace(/[øØ]/g, 'o').replace(/[đĐ]/g, 'd').replace(/ß/g, 'ss').replace(/[æÆ]/g, 'ae').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const liked = m => { try { return !!(window.__illuFavHas && (window.__illuFavHas(m.key) || window.__illuFavHas(m.url))); } catch (e) { return false; } };
+  function nameLinks(text, doms, own) {
+    const D = [...new Set((doms || []).map(d => String(d || '').toLowerCase().replace(/^www\./, '')).filter(d => d && !/(^|\.)mdient\.com$/.test(d)))];
+    if (!D.length) return [];
+    let ms = []; for (const d of D) { try { ms = ms.concat(agModels(d)); } catch (e) {} }
+    if (!ms.length) return [];
+    const lines = (own === false ? String(text || '') : ownPart(text)).replace(/\r/g, '').split('\n').map(l => l.trim());
+    const out = new Map();
+    const tryName = nm => {
+      if (!nm || nm.length > 40 || /https?:|@/.test(nm)) return;
+      const tk = fold(nm).split(' ').filter(Boolean); if (tk.length < 2 || tk.length > 4) return;
+      const rest = tk.slice(1).join(' ');
+      const cand = ms.filter(m => { const mt = fold(m.nm).split(' ').filter(Boolean); return mt.length >= 2 && mt[0] === tk[0] && mt.slice(1).join(' ').startsWith(rest); });
+      const uniq = [...new Map(cand.map(m => [m.key, m])).values()];
+      let pick = uniq.length === 1 ? uniq[0] : null;
+      if (!pick && uniq.length > 1) { const l = uniq.filter(liked); if (l.length === 1) pick = l[0]; }
+      if (pick) out.set(pick.key, pick);
+    };
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i]; if (!/https?:\/\//i.test(l)) continue;
+      const same = l.match(/^(.{3,40}?)\s*[-–:|]?\s*https?:\/\/\S+\s*$/i);
+      if (same) { tryName(same[1].trim()); continue; }
+      if (!/^https?:\/\/\S+$/i.test(l)) continue;
+      let j = i - 1; while (j >= 0 && !lines[j]) j--;
+      if (j >= 0) tryName(lines[j]);
+    }
+    return [...out.values()].map(m => ({ key: m.key, nm: m.nm, url: m.url }));
+  }
+  window.__illuNameLinks = nameLinks;
+  const domsOf = e => [].concat(e.to || [], e.cc || []).map(a => { const s = String(a || ''); const at = s.lastIndexOf('@'); return at >= 0 ? s.slice(at + 1).replace(/[>\s].*$/, '').toLowerCase() : ''; }).filter(Boolean);
+  function modelsIn(e, namesOnly) {
+    const urls = namesOnly ? [] : [...new Set((ownPart(e.body).match(/https?:\/\/[^\s<>"')\]]+/g) || []).map(u => u.replace(/[.,;:!?]+$/, '')))];
     const out = [], seen = new Set();
     for (const u of urls) {
       let k = ''; try { k = normKey(u); } catch (er) {}
@@ -256,6 +292,13 @@ document.head.appendChild(st);
       try { if (window.__illuHidK && window.__illuHidK(k)) continue; } catch (er) {}
       seen.add(k); out.push({ k, nm: (hit && hit.nm) || (c && c.nm) || '', ag: (hit && hit.ag) || (c && c.ag) || '' });
     }
+    for (const m of nameLinks(e.body, domsOf(e))) {
+      if (seen.has(m.key)) continue;
+      try { if (window.__illuHidK && window.__illuHidK(m.key)) continue; } catch (er) {}
+      const hit = index().get(m.key);
+      seen.add(m.key); out.push({ k: m.key, nm: (hit && hit.nm) || m.nm || '', ag: (hit && hit.ag) || '', byName: true });
+    }
+    if (namesOnly) return out.filter(m => m.byName);
     return out;
   }
   let MINEBUSY = false;
@@ -268,12 +311,17 @@ document.head.appendChild(st);
       const r = await window.illu.hiworksMine(ME, st.since, { skip: st.done, max: 40 });
       if (!r || !r.ok) return Object.assign(res, { why: r && (r.need || r.why) });
       const emails = (r.emails || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));   // oldest first
-      for (const raw of emails) {
+      /* 1.2.253: once, the emails of the last 7 days that were already looked at are read again for models named over a
+         link (the new rule above) - only those models are added */
+      let again = [];
+      if (!st.nm) { try { const r2 = await window.illu.hiworksMine(ME, new Date(Date.now() - 7 * 864e5).toISOString(), { skip: [], max: 40 }); if (r2 && r2.ok) again = (r2.emails || []).filter(x => st.done.includes(String(x.no))).sort((a, b) => String(a.date).localeCompare(String(b.date))); if (r2 && r2.ok) st.nm = 1; } catch (e) {} }
+      const work = again.map(x => [x, true]).concat(emails.map(x => [x, false]));
+      for (const [raw, namesOnly] of work) {
         res.read++;
-        st.done.push(String(raw.no));
+        if (!namesOnly) st.done.push(String(raw.no));
         const outside = [].concat(raw.to || [], raw.cc || []).some(a => /@/.test(a) && !/@mdient\.com$/i.test(a));
         if (!outside) continue;
-        const ms = modelsIn(raw);
+        const ms = modelsIn(raw, namesOnly);
         if (!ms.length || ms.length > MINE_MAX_LINKS) continue;
         for (const m of ms) {
           let c = null; try { c = bkForKey(m.k); } catch (e) {}
