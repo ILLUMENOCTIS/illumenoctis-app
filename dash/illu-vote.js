@@ -1034,6 +1034,8 @@
       '<div class="pnhbtns"><button type="button" class="pnfav' + (fav ? ' on' : '') + '" data-pnfav aria-pressed="' + fav + '" title="' + H(fav ? L('In My Favorites — click to remove', '내 즐겨찾기 — 누르면 뺍니다') : L('Add to My Favorites', '내 즐겨찾기에 추가')) + '">' + HEART + '</button>' +
       /* 1.2.261: send her card to a user (illu-cardsend.js) */
       (window.__illuSendBtn ? window.__illuSendBtn(k) : '') + '</div></div>' +
+      /* 1.2.262 (user: "I would actually prefer it to be somewhere on the sidepanel of the card"): choose her for sending */
+      (window.__illuSendRow ? window.__illuSendRow(k) : '') +
       (a.readNote || '');
   }
   function pnMeas(k, a, c){

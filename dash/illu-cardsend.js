@@ -4,9 +4,8 @@
    Send model cards to a user (someone on the team with a program sign-in).
    - One card: the ✈ button on her card's side panel (next to ♥), wherever the card opens (Directory, boards, Team Vote,
      booking card photo view).
-   - Several: "Send cards" (next to "Share vote link") turns on choosing - tap any card on any board or in the Directory
-     to tick it (tap again to untick); the bar at the bottom counts them; "Send to…" opens the same window. "Add more
-     cards" in the window goes back to choosing.
+   - Several (1.2.262): "Add to send list" in each card's side panel; the bar at the bottom / "Send N cards…" in the
+     panel / "Send cards" next to "Share vote link" open the same window with the list.
    - The window: the cards (× to take one out), who it is for (ticks), an optional note, Send. Copy link / Copy
      message + link for KakaoTalk or anywhere else.
    - Saved as docs cshare/<id> {by, at, to:[ids], k:[keys], m:[{k, nm, ag}], note}. The people it is for get it in the
@@ -40,55 +39,46 @@
   }
   const keyOfCard = a => a ? (a.dataset.uck || a.dataset.ivk || a.dataset.cbkey || '') : '';
 
-  /* ---------- choosing cards ---------- */
-  let MODE = false, SEL = [];
-  window.__illuSendBtn = k => '<button type="button" class="pnfav pnsend" data-cssend="' + E(k) + '" title="' + E(L('Send her card to a user', '이 카드를 사용자에게 보내기')) + '" aria-label="' + E(L('Send her card to a user', '이 카드를 사용자에게 보내기')) + '">' + SENDI + '</button>';
-  window.__illuSendSelBtn = () => '<button type="button" class="ivbtn ivshare csselb' + (MODE ? ' on' : '') + '" data-csmode aria-pressed="' + MODE + '">' + SENDI + L('Send cards', '카드 보내기') + '</button>';
-  function mark(){
-    document.querySelectorAll('article.uc').forEach(a => {
-      const k = keyOfCard(a); if(!k) return;
-      let ck = a.querySelector(':scope > .csck');
-      if(MODE){
-        if(!ck){ ck = document.createElement('span'); ck.className = 'csck'; ck.setAttribute('aria-hidden', 'true'); ck.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'; a.prepend(ck); }
-        a.classList.toggle('cson', SEL.includes(k));
-      } else { if(ck) ck.remove(); a.classList.remove('cson'); }
-    });
-    document.querySelectorAll('[data-csmode]').forEach(b => { b.classList.toggle('on', MODE); b.setAttribute('aria-pressed', String(MODE)); });
+  /* ---------- the send list (1.2.262, user: "I would actually prefer it to be somewhere on the sidepanel of the card") ----------
+     No ticks on the cards themselves (they already carry the date, timer, email sign, arrows and name). Her side panel has
+     "Add to send list" (tick box) under her name; the list is kept on this computer until it is sent or cleared. While it
+     has cards, a bar at the bottom says how many (hidden while a full card view is open - the panel says it there) with
+     Send to… / Clear, and the panel has "Send N cards…". "Send cards" next to Share vote link opens the list. */
+  let SEL = [];
+  try{ const v = JSON.parse(localStorage.getItem('illu.csend.list') || '[]'); if(Array.isArray(v)) SEL = v.filter(x => typeof x === 'string').slice(0, 60); }catch(e){}
+  const keepSel = () => { try{ localStorage.setItem('illu.csend.list', JSON.stringify(SEL.slice(0, 60))); }catch(e){} };
+  const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  let HINT = 0;
+  window.__illuSendBtn = k => '<button type="button" class="pnfav pnsend" data-cssend="' + E(k) + '" title="' + E(L('Send only her card to a user', '이 카드만 사용자에게 보내기')) + '" aria-label="' + E(L('Send only her card to a user', '이 카드만 사용자에게 보내기')) + '">' + SENDI + '</button>';
+  const rowInner = k => { const on = SEL.includes(k), n = SEL.length;
+    return '<button type="button" class="cspick' + (on ? ' on' : '') + '" data-cspick="' + E(k) + '" aria-pressed="' + on + '"><span class="csbox">' + CHECK + '</span>' + E(on ? L('On the send list', '보낼 목록에 있음') : L('Add to send list', '보낼 목록에 추가')) + '</button>' +
+      (n ? '<button type="button" class="cslist" data-csgo>' + SENDI + E(L('Send ' + n + (n === 1 ? ' card' : ' cards') + '…', n + '장 보내기…')) + '</button>' : ''); };
+  window.__illuSendRow = k => '<div class="pnsendrow" data-csrow="' + E(k) + '">' + rowInner(k) + '</div>';
+  const selBtnInner = () => SENDI + E(L('Send cards', '카드 보내기')) + (SEL.length ? ' <s class="csn">' + SEL.length + '</s>' : '');
+  window.__illuSendSelBtn = () => '<button type="button" class="ivbtn ivshare csselb' + (SEL.length ? ' on' : '') + '" data-csmode title="' + E(L('The cards on your send list (add a card from its side panel)', '보낼 목록의 카드 (카드 옆 패널에서 추가)')) + '">' + selBtnInner() + '</button>';
+  function sync(){
+    document.querySelectorAll('[data-csrow]').forEach(r => { r.innerHTML = rowInner(r.dataset.csrow); });
+    document.querySelectorAll('[data-csmode]').forEach(b => { b.innerHTML = selBtnInner(); b.classList.toggle('on', !!SEL.length); });
+    tray();
   }
-  let RAF = 0;
-  new MutationObserver(() => { if(!MODE || RAF) return; RAF = requestAnimationFrame(() => { RAF = 0; mark(); }); }).observe(document.documentElement, {childList: true, subtree: true});
-  function setMode(on){
-    MODE = !!on; document.body.classList.toggle('csmode', MODE);
-    if(!MODE) SEL = [];
-    mark(); tray();
-  }
+  function toggle(k){ const i = SEL.indexOf(k); if(i >= 0) SEL.splice(i, 1); else SEL.push(k); keepSel(); sync(); }
   function tray(){
     let t = document.getElementById('cstray');
-    if(!MODE){ if(t) t.remove(); return; }
-    if(!t){ t = document.createElement('div'); t.id = 'cstray'; t.setAttribute('role', 'region'); t.setAttribute('aria-label', L('Choosing cards to send', '보낼 카드 고르기')); document.body.appendChild(t); }
+    const hint = Date.now() < HINT;
+    if(!SEL.length && !hint){ if(t) t.remove(); return; }
+    if(!t){ t = document.createElement('div'); t.id = 'cstray'; t.setAttribute('role', 'region'); t.setAttribute('aria-label', L('Send list', '보낼 목록')); document.body.appendChild(t); }
     const n = SEL.length;
-    t.innerHTML = '<span class="csti">' + SENDI + '</span><span class="cstt"><b>' + (n ? E(L(n + (n === 1 ? ' card' : ' cards') + ' chosen', n + '장 선택')) : E(L('Tap the cards to send', '보낼 카드를 누르세요'))) + '</b><small>' + E(L('Any board or the Directory · tap again to untick', '어느 보드나 디렉터리에서 · 다시 누르면 해제')) + '</small></span>' +
-      '<button type="button" class="csb pri" data-csgo' + (n ? '' : ' disabled') + '>' + E(L('Send to…', '보내기…')) + '</button><button type="button" class="csb" data-csoff>' + E(L('Cancel', '취소')) + '</button>';
+    t.innerHTML = '<span class="csti">' + SENDI + '</span><span class="cstt"><b>' + (n ? E(L(n + (n === 1 ? ' card' : ' cards') + ' on the send list', '보낼 목록 ' + n + '장')) : E(L('Your send list is empty', '보낼 목록이 비어 있습니다'))) + '</b><small>' + E(L('Open a card and press “Add to send list” in its side panel', '카드를 열고 옆 패널에서 “보낼 목록에 추가”를 누르세요')) + '</small></span>' +
+      (n ? '<button type="button" class="csb pri" data-csgo>' + E(L('Send to…', '보내기…')) + '</button><button type="button" class="csb" data-csclear>' + E(L('Clear', '비우기')) + '</button>' : '<button type="button" class="csb" data-cshintx>' + E(L('OK', '확인')) + '</button>');
   }
-  /* while choosing, a tap on a card ticks it (nothing else on the card reacts) */
+  setTimeout(sync, 1500);
   const inUi = t => t.closest && t.closest('#cstray,#csdlg,#csview');
-  /* the listeners are in illu-csgate.js, the first script on the page, so nothing else on the card sees the tap */
-  window.__illuCSendGate = e => {
-    if(!MODE || !e.target || !e.target.closest || inUi(e.target)) return;
-    const a = e.target.closest('article.uc'); const k = keyOfCard(a); if(!k) return;
-    if(!/^touch/.test(e.type)) e.preventDefault();      // a touch must still become a click
-    e.stopPropagation(); e.stopImmediatePropagation();
-    if(e.type !== 'click') return;
-    const i = SEL.indexOf(k); if(i >= 0) SEL.splice(i, 1); else SEL.push(k);
-    mark(); tray();
-  };
 
   /* ---------- the Send window ---------- */
   let DLG = null;
   function openDlg(keys){
     if(!signed()){ try{ nudgeSignIn(); }catch(e){} return; }
-    DLG = {keys: [...new Set(keys)], to: new Set(), note: '', id: '', sent: null, busy: false, msg: ''};
-    MODE = false; document.body.classList.remove('csmode'); mark(); tray();
+    DLG = {keys: [...new Set(keys)], to: new Set(), note: '', id: '', sent: null, busy: false, msg: '', list: keys.length > 1 || (keys.length === 1 && SEL.includes(keys[0]))};
     drawDlg();
   }
   function drawDlg(){
@@ -136,6 +126,7 @@
     try{
       const v = await save();
       DLG.sent = v;
+      if(DLG.list){ SEL = SEL.filter(k => !DLG.keys.includes(k)); keepSel(); sync(); }   /* sent: off the send list */
       try{ const sb = window.__illuSb; if(sb && sb.functions) sb.functions.invoke('illu-push', {body: {kind: 'share', id: DLG.id}}).catch(() => {}); }catch(e){}
     }catch(e){ DLG.msg = L('Could not send: ', '보내지 못했습니다: ') + String(e && e.message || e); }
     DLG.busy = false; drawDlg();
@@ -155,16 +146,18 @@
   document.addEventListener('click', async e => {
     const t = e.target; if(!t.closest) return;
     const one = t.closest('[data-cssend]'); if(one){ e.preventDefault(); e.stopPropagation(); openDlg([one.dataset.cssend]); return; }
-    const md = t.closest('[data-csmode]'); if(md){ e.preventDefault(); e.stopPropagation(); if(!signed()){ try{ nudgeSignIn(); }catch(err){} return; } setMode(!MODE); return; }
+    const md = t.closest('[data-csmode]'); if(md){ e.preventDefault(); e.stopPropagation(); if(!signed()){ try{ nudgeSignIn(); }catch(err){} return; } if(SEL.length) openDlg(SEL.slice()); else { HINT = Date.now() + 8000; tray(); setTimeout(tray, 8100); } return; }
+    const pk = t.closest('[data-cspick]'); if(pk){ e.preventDefault(); e.stopPropagation(); toggle(pk.dataset.cspick); return; }
+    const go = t.closest('[data-csgo]'); if(go && !t.closest('#csdlg')){ e.preventDefault(); e.stopPropagation(); if(SEL.length) openDlg(SEL.slice()); return; }
     if(t.closest('#cstray')){
-      if(t.closest('[data-csoff]')){ setMode(false); return; }
-      if(t.closest('[data-csgo]') && SEL.length){ openDlg(SEL); return; }
+      if(t.closest('[data-csclear]')){ SEL = []; keepSel(); sync(); return; }
+      if(t.closest('[data-cshintx]')){ HINT = 0; tray(); return; }
       return;
     }
     const m = t.closest('#csdlg'); if(!m || !DLG) return;
     if(t === m || t.closest('[data-csclose]')){ DLG = null; drawDlg(); return; }
-    const rm = t.closest('[data-csrm]'); if(rm){ DLG.keys = DLG.keys.filter(k => k !== rm.dataset.csrm); if(!DLG.keys.length){ DLG = null; } drawDlg(); return; }
-    if(t.closest('[data-csmore]')){ const keys = DLG.keys.slice(); DLG = null; drawDlg(); closeView(); try{ const fx = document.querySelector('#illufv .fvx'); if(fx && document.getElementById('illufv').offsetParent !== null) fx.click(); }catch(err){} SEL = keys; setMode(true); return; }   /* back to the boards to choose more */
+    const rm = t.closest('[data-csrm]'); if(rm){ DLG.keys = DLG.keys.filter(k => k !== rm.dataset.csrm); if(DLG.list){ SEL = SEL.filter(k => k !== rm.dataset.csrm); keepSel(); sync(); } if(!DLG.keys.length){ DLG = null; } drawDlg(); return; }
+    if(t.closest('[data-csmore]')){ for(const k of DLG.keys) if(!SEL.includes(k)) SEL.push(k); keepSel(); DLG = null; drawDlg(); closeView(); HINT = Date.now() + 8000; sync(); setTimeout(tray, 8100); return; }   /* keep these on the send list; add more from other cards' side panels */
     const cb = t.closest('input[data-csp]'); if(cb){ cb.checked ? DLG.to.add(cb.dataset.csp) : DLG.to.delete(cb.dataset.csp); drawDlg(); return; }
     if(t.closest('[data-csall]')){ const ppl = people().filter(p => p !== me()); if(ppl.every(p => DLG.to.has(p))) DLG.to = new Set(); else DLG.to = new Set(ppl); drawDlg(); return; }
     if(t.closest('[data-cssendgo]')){ send(); return; }
@@ -185,7 +178,6 @@
     if(e.key !== 'Escape') return;
     if(document.getElementById('csview')){ closeView(); return; }
     if(DLG){ DLG = null; drawDlg(); return; }
-    if(MODE) setMode(false);
   });
 
   /* ---------- what was sent: the bell, a pop-up, and "Cards from …" ---------- */
@@ -266,7 +258,7 @@
   }
   addEventListener('hashchange', route);
   setTimeout(route, 1500); setInterval(() => { if(WANT) route(); }, 3000);
-  window.__illuCardSend = {openDlg, setMode, view, state: () => ({MODE, SEL: SEL.slice(), DLG, n: ALL.size})};
+  window.__illuCardSend = {openDlg, toggle, view, state: () => ({SEL: SEL.slice(), DLG, n: ALL.size})};
 
   /* ---------- looks ---------- */
   const css = document.createElement('style');
@@ -275,12 +267,17 @@
 .pn2 .pnsend:hover{color:var(--acc,#5A2C57);border-color:var(--acc,#5A2C57)}
 .csselb svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
 .csselb.on{background:var(--acc,#5A2C57);border-color:var(--acc,#5A2C57);color:#fff}
-body.csmode article.uc{cursor:pointer;position:relative}
-body.csmode article.uc>.csck{position:absolute;z-index:6;top:44px;left:10px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.92);border:2px solid rgba(90,44,87,.55);display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.25);pointer-events:none}
-body.csmode article.uc>.csck svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:0}
-body.csmode article.uc.cson{outline:3px solid var(--acc,#5A2C57);outline-offset:2px}
-body.csmode article.uc.cson>.csck{background:var(--acc,#5A2C57);border-color:#fff}
-body.csmode article.uc.cson>.csck svg{opacity:1}
+body.illufvon #cstray,body.d2carding #cstray,body.d2fullcard #cstray{display:none}   /* a card is open: its side panel shows the list there */
+.pnsendrow{display:flex;flex-wrap:wrap;gap:6px;margin:-4px 0 12px}
+.cspick{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line,#e6e0ea);background:var(--surf,#fff);color:var(--ink,#1b1724);border-radius:10px;padding:6px 11px 6px 8px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;min-height:34px}
+.cspick .csbox{width:18px;height:18px;border-radius:5px;border:2px solid var(--line,#cfc4d6);display:grid;place-items:center;flex:none}
+.cspick .csbox svg{width:13px;height:13px;fill:none;stroke:#fff;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;opacity:0}
+.cspick.on{border-color:var(--acc,#5A2C57);background:var(--wash,#f3e8f2);color:var(--acc,#5A2C57)}
+.cspick.on .csbox{background:var(--acc,#5A2C57);border-color:var(--acc,#5A2C57)}.cspick.on .csbox svg{opacity:1}
+.cslist{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--acc,#5A2C57);background:var(--acc,#5A2C57);color:#fff;border-radius:10px;padding:6px 11px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;min-height:34px}
+.cslist svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linejoin:round}
+.csselb .csn{text-decoration:none;font-size:11px;background:#fff;color:var(--acc,#5A2C57);border-radius:9px;padding:0 6px;margin-left:2px}
+@media (pointer:coarse){.cspick,.cslist{min-height:44px}}
 #cstray{position:fixed;z-index:8500;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:10px;background:var(--surf,#fff);color:var(--ink,#1b1724);border:1px solid var(--line,#e6e0ea);border-radius:14px;padding:10px 12px;box-shadow:0 16px 40px rgba(20,10,30,.28);max-width:calc(100vw - 24px)}
 #cstray .csti{width:34px;height:34px;border-radius:10px;background:var(--wash,#f3e8f2);color:var(--acc,#5A2C57);display:grid;place-items:center;flex:none}
 #cstray .csti svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linejoin:round}
@@ -328,7 +325,6 @@ body.csmode article.uc.cson>.csck svg{opacity:1}
   .csp{width:100%;max-height:92vh;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))}
   .csvp{max-height:96vh}
   .csb{min-height:44px}
-  body.csmode article.uc>.csck{top:40px;left:8px}
 }
 `;
   document.head.appendChild(css);
