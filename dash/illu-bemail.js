@@ -40,6 +40,15 @@
   try{ const s = JSON.parse(localStorage.getItem('illu.bemail') || '{}') || {}; if(s.v === 'mail') ST.v = 'mail'; if(s.who === 'all') ST.who = 'all'; }catch(e){}
   const keep = () => { try{ localStorage.setItem('illu.bemail', JSON.stringify({v: ST.v, who: ST.who})); }catch(e){} };
   const me = () => { try{ return ME || ''; }catch(e){ return ''; } };
+  const isGetU = u => { try{ return !!(window.__illuIsGet && window.__illuIsGet(u)); }catch(e){ return false; } };
+  /* 1.2.260 (user: "a clear indication/notification somewhere to show that a new email has arrived"): a row whose newest
+     received email came after this person last opened the row shows "New email"; opening the row clears it */
+  const SEENK = 'illu.bemail.seen';
+  let SEEN = null;
+  try{ SEEN = JSON.parse(localStorage.getItem(SEENK) || 'null'); }catch(e){}
+  if(!SEEN || typeof SEEN !== 'object' || !SEEN.base){ SEEN = {base: Date.now() - 864e5, r: {}}; try{ localStorage.setItem(SEENK, JSON.stringify(SEEN)); }catch(e){} }
+  const newMail = r => !!(r.lastIn && r.lastIn > Math.max(SEEN.base, SEEN.r[r.key] || 0));
+  function seenRow(r){ if(!r || !newMail(r)) return; SEEN.r[r.key] = Date.now(); const ks = Object.keys(SEEN.r); if(ks.length > 600) delete SEEN.r[ks[0]]; try{ localStorage.setItem(SEENK, JSON.stringify(SEEN)); }catch(e){} }
   const pname = p => { try{ const r = PEOPLE.get(p); return r && r.n ? r.n : ''; }catch(e){ return ''; } };
 
   /* ---------- the agencies ---------- */
@@ -135,8 +144,10 @@
           if(out) r.models.get(mk).sent = true;
           const ek = x.k || (x.dt + '|' + x.dir + '|' + (x.subject || ''));
           let m = r.msgs.get(ek);
-          if(!m){ m = {t, d: out ? 'out' : 'in', s: (ko() && x.summary_ko) || x.summary || x.subject || '', subj: x.subject || '', f: Array.isArray(x.files) ? x.files.length : 0, hw: x.hw || '', ms: new Set()}; r.msgs.set(ek, m); }
+          if(!m){ m = {t, d: out ? 'out' : 'in', s: (ko() && x.summary_ko) || x.summary || x.subject || '', subj: x.subject || '', f: Array.isArray(x.files) ? x.files.length : 0, hw: x.hw || '', ms: new Set(), lk: [], cid: c.id}; r.msgs.set(ek, m); }
           m.ms.add(mk);
+          /* 1.2.260: the material links in an agency's email (Get files / what the automatic pickup saved) */
+          if(!out && m.lk) for(const f of (Array.isArray(x.files) ? x.files : [])) if(f && f.url && isGetU(f.url) && !m.lk.some(l => l.u === f.url)) m.lk.push({u: f.url, cid: c.id});
         }
       }
     }catch(e){ console.warn('booking emails', e); }
@@ -224,6 +235,7 @@
       r.at = Math.max(r.last ? +r.last.t : 0, lastO && !ms.length ? +lastO : 0);
       r.first = ms.length ? ms[0].t : lastO;
       r.isNew = !!(r.first && r.first >= today);
+      { const li = ms.filter(m => m.d === 'in').pop(); r.lastIn = li ? +li.t : 0; r.newIn = ms.filter(m => m.d === 'in' && +m.t > Math.max(SEEN.base, SEEN.r[r.key] || 0)).length; }
       const lo = ms.filter(m => m.d === 'out').pop();
       r.days = lo ? Math.floor((now - lo.t) / 864e5) : 0;
       r.st = !ms.length ? 'opened' : r.last.d === 'in' ? 'replied' : r.recv ? 'waiting' : 'none';
@@ -284,8 +296,28 @@
       (r.opened.length && !r.list.length ? '<p class="bemop">' + L('Opened in Hiworks from the program on ', '프로그램에서 Hiworks 작성 창을 연 날: ') + E(r.opened.map(t => day(t) + ' ' + hm(t)).slice(-3).join(', ')) + L(' — no sent email is on record yet. When it is sent, it shows here.', ' — 아직 보낸 메일 기록이 없습니다. 보내면 여기에 표시됩니다.') + '</p>' : '') +
       (ms.length ? '<div class="bemmsgs">' + ms.map(m => '<div class="bemmsg ' + m.d + '"><span class="bemdir">' + (m.d === 'in' ? I.in + L('Received', '받음') : I.out + L('Sent', '보냄')) + '</span>' +
           '<span class="bemwhen">' + E(day(m.t)) + ' · ' + hm(m.t) + '</span><span class="bemtxt">' + E(m.s || L('(no summary yet)', '(요약 없음)')) + '</span>' +
-          '<span class="bematt">' + (m.f ? I.clip + m.f : '') + '</span></div>').join('') + '</div>'
+          '<span class="bematt">' + (m.f ? I.clip + m.f : '') + '</span>' + (m.lk && m.lk.length ? '<span class="bemlks">' + m.lk.map(lkChip).join('') + '</span>' : '') + '</div>').join('') + '</div>'
         : r.list.length ? '<div class="bemempty">' + (v === 'in' ? L('Nothing received from this agency yet.', '이 에이전시에서 받은 메일이 아직 없습니다.') : L('Nothing sent yet.', '보낸 메일이 아직 없습니다.')) + '</div>' : '');
+  }
+  /* 1.2.260: one material link - what the automatic pickup did with it, or Get files */
+  function lkChip(l){
+    let c = null; try{ c = BOOK.get(l.cid); }catch(e){}
+    const g = c && c.gf && c.gf[l.u];
+    const host = (() => { try{ return new URL(l.u).hostname.replace(/^www\./, ''); }catch(e){ return ''; } })();
+    const nm = /drive\.google/.test(host) ? 'Google Drive' : /mediaslide/.test(host) ? 'Mediaslide' : /wetransfer|we\.tl/.test(host) ? 'WeTransfer' : host;
+    const pc = !!(window.illu && window.illu.getFilesPlan && !window.illu.web);
+    let st = '', cls = '';
+    if(g && g.st === 'ok'){ cls = 'ok'; st = L('Saved ' + (g.saved || 0) + ' new' + (g.same ? ' · ' + g.same + ' already there' : '') + (g.failed ? ' · ' + g.failed + ' not saved' : '') + ' → ' + (g.folder || ''), '저장 ' + (g.saved || 0) + '개' + (g.same ? ' · 이미 있음 ' + g.same : '') + (g.failed ? ' · 저장 못 함 ' + g.failed : '') + ' → ' + (g.folder || '')); }
+    else if(g && g.st === 'other') { cls = 'ok'; st = L('Saved for ' + (g.nm || ''), (g.nm || '') + ' 폴더에 저장됨'); }
+    else if(g && g.st === 'which'){ cls = 'ask'; st = L('Which model? Choose who it is for', '어느 모델인가요? 받을 모델을 고르세요'); }
+    else if(g && g.st === 'fail'){ cls = 'bad'; st = L('Not saved', '저장 못 함') + (g.why ? ' · ' + g.why : ''); }
+    else if(c && (c.st === 'canc' || c.del)) st = L('Card cancelled — not picked up', '취소된 카드 — 받지 않음');
+    else st = L('Not picked up yet', '아직 받지 않음');
+    const when = g && g.at ? (() => { const t = new Date(g.at); return isNaN(t) ? '' : ' · ' + day(t) + ' ' + hm(t); })() : '';
+    return '<span class="bemlk ' + cls + '" title="' + E(l.u) + '"><b>📥 ' + E(nm) + '</b><span class="bemlkst">' + E(st + when) + '</span>' +
+      (!pc || !c ? '' : g && g.st === 'which' && Array.isArray(g.with) ? g.with.map(id => { let x = null; try{ x = BOOK.get(id); }catch(e){} return x ? '<button type="button" class="bembtn" data-bemget="' + E(l.u) + '" data-bemcid="' + E(id) + '">' + E(L('Get for ', '받기: ') + String(x.nm || '').split(/\s+/)[0]) + '</button>' : ''; }).join('')
+        : '<button type="button" class="bembtn" data-bemget="' + E(l.u) + '" data-bemcid="' + E(g && g.st === 'other' && g.to ? g.to : l.cid) + '">' + (g && (g.st === 'ok' || g.st === 'other') ? L('Get again', '다시 받기') : L('Get files', '파일 받기')) + '</button>') +
+      '<a class="bembtn" href="' + E(l.u) + '" target="_blank" rel="noopener">' + L('Open', '열기') + ' ↗</a></span>';
   }
   /* 1.2.251: her photo - the same one her cards show (booking card photo, else her agency photo), small */
   function photoOf(m){
@@ -317,8 +349,8 @@
     return '<div class="bemlh"><span>' + L('Agency', '에이전시') + '</span><span>' + L('Models inquired', '문의한 모델') + '</span><span class="r">' + L('Sent', '보냄') + '</span><span class="r">' + L('Received', '받음') + '</span><span>' + L('Last email', '마지막 메일') + '</span><span>' + L('Status', '상태') + '</span><span></span></div>' +
       rs.map(r => {
         const op = ST.open.has(r.key), by = [...r.by].map(pname).filter(Boolean);
-        return '<div class="bemit' + (op ? ' open' : '') + '" data-bemrow="' + E(r.key) + '"><div class="bemrw" role="button" tabindex="0" aria-expanded="' + op + '">' +
-          '<div class="bemagc"><div class="bemagn"><span>' + E(r.ag) + '</span>' + (r.isNew ? '<em class="bemnew">' + L('NEW', '신규') + '</em>' : '') + '</div>' +
+        return '<div class="bemit' + (op ? ' open' : '') + (newMail(r) ? ' hasnew' : '') + '" data-bemrow="' + E(r.key) + '"><div class="bemrw" role="button" tabindex="0" aria-expanded="' + op + '">' +
+          '<div class="bemagc"><div class="bemagn"><span>' + E(r.ag) + '</span>' + (r.isNew ? '<em class="bemnew">' + L('NEW', '신규') + '</em>' : '') + '</div>' + (newMail(r) ? '<div class="bemnewl"><em class="bemnewm" title="' + E(L('A new email from them since you last opened this', '마지막으로 연 뒤 새 메일이 왔습니다')) + '">' + I.mail + (r.newIn > 1 ? r.newIn + L(' new emails', '통 새 메일') : L('New email', '새 메일')) + '</em></div>' : '') +
             '<div class="bemags">' + by.map(n => '<span class="bemwho" title="' + E(L('Sent by ', '보낸 사람: ') + n) + '">' + E(n[0]) + '</span>').join('') + '<span class="bemaddr">' + E(r.to || r.dom) + '</span></div>' +
             (r.note ? '<div class="bemnote">' + E(r.note) + '</div>' : '') + '</div>' +
           '<div class="bemmodels">' + [...r.models.entries()].map(([mk, m]) => chip(r, m, mk)).join('') + '</div>' +
@@ -353,10 +385,10 @@
           '<button type="button" class="bembtn" data-bemrestore="' + E(h.id) + '">' + L('Put back', '되돌리기') + '</button></div>'; }).join('') + '</div></details>';
   }
   function tabs(){
-    const n = ROWS.length, rep = ROWS.some(r => r.mine && r.st === 'replied');
+    const n = ROWS.length, rep = ROWS.some(r => r.mine && r.st === 'replied'), nn = ROWS.filter(newMail).length;
     return '<div class="bemsw" role="tablist" aria-label="' + E(L('Today’s Board', '오늘의 보드')) + '">' +
       '<button type="button" role="tab" data-bemv="vote" aria-selected="' + (ST.v === 'vote') + '">' + L('Team Vote', '팀 투표') + '</button>' +
-      '<button type="button" role="tab" data-bemv="mail" aria-selected="' + (ST.v === 'mail') + '">' + I.mail + L('Booking Emails', '부킹 이메일') + ' <s>' + n + '</s>' + (rep ? '<i class="bemdot" title="' + E(L('A reply came in', '답장이 왔습니다')) + '"></i>' : '') + '</button></div>';
+      '<button type="button" role="tab" data-bemv="mail" aria-selected="' + (ST.v === 'mail') + '">' + I.mail + L('Booking Emails', '부킹 이메일') + ' <s>' + n + '</s>' + (nn ? '<b class="bemnewn" title="' + E(L(nn + (nn === 1 ? ' agency has' : ' agencies have') + ' a new email', '새 메일이 온 에이전시 ' + nn + '곳')) + '">' + nn + ' ' + L('new', '새 메일') + '</b>' : rep ? '<i class="bemdot" title="' + E(L('A reply came in', '답장이 왔습니다')) + '"></i>' : '') + '</button></div>';
   }
   /* Today's main column: the tabs, then Team Vote as it was or the Booking Emails board */
   function wrap(){
@@ -374,6 +406,7 @@
   wrap();
   function draw(){ try{ window.__illuTodayRender && window.__illuTodayRender(); }catch(e){} }
   /* the list only (typing in the search box keeps its place) */
+  window.__illuBEmailRedraw = () => { if(document.getElementById('bemlist')) drawList(); };
   function drawList(){ const l = document.getElementById('bemlist'); if(!l){ draw(); return; } ROWS = build(); l.innerHTML = list(); const t = document.querySelector('#bem .bemtot'); if(t) t.innerHTML = totals(); const rp = document.getElementById('bemrem'); if(rp) rp.innerHTML = remPanel(); }
   window.__illuBEmailRows = () => { ROWS = build(); return ROWS; };
 
@@ -432,9 +465,10 @@
   }
   function updPaint(){ const b = document.querySelector('#bem [data-bemupd]'); if(b) b.outerHTML = updBtn(); const m = document.getElementById('bemupdmsg'); if(m) m.innerHTML = updMsg(); }
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  async function update(){
-    if(UPD){ UPD.stop = true; return; }
-    if(!canHw()) return;
+  async function update(opt){
+    const auto = !!(opt && opt.auto);
+    if(UPD){ if(!auto) UPD.stop = true; return false; }
+    if(!canHw()) return false;
     const EM = window.__illuEmail;
     ROWS = build();
     const count = () => { let s = 0, r = 0; for(const x of build()) { s += x.sent; r += x.recv; } return [s, r]; };
@@ -442,7 +476,9 @@
     const hid = k => { try{ return !!(window.__illuHidK && window.__illuHidK(k)); }catch(e){ return false; } };
     const ids = new Set();
     for(const r of ROWS) for(const m of r.models.values()) if(m.bid) ids.add(m.bid);
-    try{ for(const c of BOOK.values()) if(c && c.id && c.st === 'proc' && !c.del && !(c.k && hid(c.k))) ids.add(c.id); }catch(e){}
+    /* 1.2.260 ("Any model with a booking card"): every booking card that is not cancelled, deleted or hidden */
+    try{ for(const c of BOOK.values()) if(c && c.id && c.st !== 'canc' && !c.del && !(c.k && hid(c.k))) ids.add(c.id); }catch(e){}
+    for(const id of [...ids]){ try{ const c = BOOK.get(id); if(!c || c.st === 'canc' || c.del) ids.delete(id); }catch(e){} }
     const doms = new Set();
     for(const r of ROWS){ const d = String(r.dom || '').toLowerCase(); if(d && d.indexOf(':') < 0 && !FREE.test(d) && !OWN.test(d)) doms.add(d); }
     UPD = {i: 0, n: ids.size + doms.size, stop: false, now: ''}; updPaint();
@@ -455,7 +491,8 @@
       if(!c){ continue; }
       UPD.now = (c.nm || '') + (c.ag ? ' · ' + c.ag : ''); updPaint();
       for(let w = 0; w < 120 && EM.busy && EM.busy(); w++) await sleep(500);      // a Collect someone started by hand
-      let r = null; try{ r = await EM.collect(c, true); }catch(e){ r = {ok: false}; }
+      /* 1.2.260 (user: "read only emails pertaining to the model cards and leave it read"): an unread email about her is opened (so its links can be read) and stays read */
+      let r = null; try{ r = await EM.collect(c, true, {readNew: true}); }catch(e){ r = {ok: false}; }
       if(r && r.need === 'signin'){ signin = true; break; }
       if(r && r.ok) cardsDone++; else fails++;
     }
@@ -464,6 +501,9 @@
       UPD.i++; UPD.now = d; updPaint();
       try{ if(window.__illuAgHwLoad && await window.__illuAgHwLoad(d, true)) agDone++; }catch(e){ fails++; }
     }
+    /* 1.2.260: then the material in the emails is picked up */
+    let af = null;
+    if(!signin && !UPD.stop && window.__illuAutoFiles){ UPD.now = L('material links', '자료 링크'); updPaint(); for(let w = 0; w < 240 && window.__illuAutoFilesBusy && window.__illuAutoFilesBusy(); w++) await sleep(1000); try{ af = await window.__illuAutoFiles(null, auto ? 'morning' : 'update'); }catch(e){} }
     UPD.now = ''; updPaint();
     await loadHw(true);
     const [s1, r1] = count();
@@ -471,8 +511,10 @@
     UPD = null;
     const msg = signin ? L('Hiworks needs you to sign in once in the program.', 'Hiworks 로그인이 한 번 필요합니다.')
       : (stopped ? L('Stopped · ', '중지됨 · ') : '') + (booked ? L(booked + ' new booking ' + (booked === 1 ? 'card' : 'cards') + ' · ', '새 부킹 카드 ' + booked + '개 · ') : '') + L(cardsDone + ' cards and ' + agDone + ' agencies read · ' + Math.max(0, s1 - s0) + ' new sent · ' + Math.max(0, r1 - r0) + ' new received', '카드 ' + cardsDone + '개, 에이전시 ' + agDone + '곳 확인 · 새로 보낸 메일 ' + Math.max(0, s1 - s0) + ' · 새로 받은 메일 ' + Math.max(0, r1 - r0)) + (fails ? L(' · ' + fails + ' could not be read', ' · ' + fails + '개 읽지 못함') : '');
-    UPDLAST = {at: new Date().toISOString(), msg, signin}; try{ localStorage.setItem('illu.bemail.upd', JSON.stringify(UPDLAST)); }catch(e){}
+    const afMsg = af && (af.done || af.which || af.failed) ? ' · ' + L('material: ' + af.done + ' saved' + (af.which ? ', ' + af.which + ' need you' : '') + (af.failed ? ', ' + af.failed + ' failed' : ''), '자료: 저장 ' + af.done + (af.which ? ', 확인 필요 ' + af.which : '') + (af.failed ? ', 실패 ' + af.failed : '')) : '';
+    UPDLAST = {at: new Date().toISOString(), msg: (auto ? L('Morning run · ', '아침 자동 실행 · ') : '') + msg + afMsg, signin}; try{ localStorage.setItem('illu.bemail.upd', JSON.stringify(UPDLAST)); }catch(e){}
     draw();
+    return !signin;
   }
   window.__illuBEmailUpdate = update;
 
@@ -552,6 +594,7 @@
     if(!t.closest('#bem')) return;
     if(t.closest('.ctmail')) return;                          // Ask about another model: the program's own ✉ template window
     if(t.closest('a[href]')) return;                          // Reply in Hiworks (opens in the browser)
+    const gb = t.closest('[data-bemget]'); if(gb){ e.preventDefault(); e.stopPropagation(); try{ window.__illuGetFiles && window.__illuGetFiles(gb.dataset.bemget, gb.dataset.bemcid); }catch(err){} return; }
     const up = t.closest('[data-bemupd]'); if(up){ e.preventDefault(); e.stopPropagation(); update(); return; }
     const dl = t.closest('[data-bemdel]'); if(dl){ e.preventDefault(); e.stopPropagation(); const mc = dl.closest('[data-bemmc]'); const r = mc && ROWS.find(x => x.key === mc.dataset.bemmc); if(r) remove(r, mc.dataset.bemmk); return; }
     const dr = t.closest('[data-bemdelrow]'); if(dr){ e.preventDefault(); e.stopPropagation(); const it = dr.closest('[data-bemrow]'); const r = it && ROWS.find(x => x.key === it.dataset.bemrow); if(r) remove(r, ''); return; }
@@ -562,7 +605,7 @@
     const f = t.closest('[data-bemf]'); if(f){ e.stopPropagation(); ST.f = f.dataset.bemf; draw(); return; }
     const tv = t.closest('[data-bemtv]'); if(tv){ e.stopPropagation(); const it = tv.closest('[data-bemrow]'); if(it){ ST.tv[it.dataset.bemrow] = tv.dataset.bemtv; drawList(); } return; }
     if(t.closest('.bemthread')) return;
-    const it = t.closest('[data-bemrow]'); if(it && t.closest('.bemrw')){ e.stopPropagation(); const k = it.dataset.bemrow; if(ST.open.has(k)) ST.open.delete(k); else ST.open.add(k); drawList(); }
+    const it = t.closest('[data-bemrow]'); if(it && t.closest('.bemrw')){ e.stopPropagation(); const k = it.dataset.bemrow; if(ST.open.has(k)) ST.open.delete(k); else { ST.open.add(k); seenRow(ROWS.find(x => x.key === k)); try{ const tb = document.querySelector('.bemwrap [data-bemv="mail"]'); if(tb){ const w = document.createElement('div'); w.innerHTML = tabs(); const nb = w.querySelector('[data-bemv="mail"]'); if(nb) tb.innerHTML = nb.innerHTML; } }catch(err){} } drawList(); }
   }, true);
   document.addEventListener('keydown', e => { if((e.key === 'Enter' || e.key === ' ') && e.target.classList && (e.target.classList.contains('bemrw') || e.target.classList.contains('bemdel'))){ e.preventDefault(); e.stopPropagation(); e.target.click(); } }, true);
   /* a photo that does not load leaves her initials (the page's rules do not allow onerror= in the HTML) */
@@ -686,6 +729,19 @@
 .bemtxt{min-width:0;line-height:1.45;overflow-wrap:anywhere}
 .bematt{color:var(--dim);font-size:11.5px;white-space:nowrap;display:flex;align-items:center;gap:4px}
 .bematt svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2}
+.bemlks{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px}
+.bemlk{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;border:1px solid var(--line);border-radius:8px;padding:5px 6px 5px 9px;font-size:12px;background:var(--bg2,rgba(0,0,0,.02));max-width:100%}
+.bemlk b{font-weight:700;white-space:nowrap}
+.bemlkst{color:var(--dim);min-width:0;overflow-wrap:anywhere}
+.bemlk.ok{border-color:rgba(46,139,87,.45)}.bemlk.ok .bemlkst{color:#2e8b57}
+.bemlk.ask{border-color:rgba(194,120,3,.5)}.bemlk.ask .bemlkst{color:#b26b00}
+.bemlk.bad{border-color:rgba(192,57,43,.45)}.bemlk.bad .bemlkst{color:#c0392b}
+.bemlk .bembtn{padding:3px 9px;font-size:11.5px}
+.bemnewl{margin:3px 0 2px}
+.bemnewm{font-style:normal;display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;color:#fff;background:#c2410c;border-radius:9px;padding:2px 8px;flex:none;white-space:nowrap}
+.bemnewm svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.2}
+.bemit.hasnew>.bemrw{box-shadow:inset 3px 0 0 #c2410c}
+.bemsw .bemnewn{font-weight:800;font-size:10.5px;color:#fff;background:#c2410c;border-radius:9px;padding:1px 7px;margin-left:2px}
 .bemempty{padding:30px 16px;color:var(--dim);text-align:center}
 .bempickbg{position:fixed;inset:0;z-index:9998}
 .bempick{position:fixed;z-index:9999;width:300px;background:var(--surf,#fff);color:var(--ink,inherit);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px rgba(30,10,30,.18);padding:12px}
@@ -715,8 +771,8 @@
   .bemsearch{flex:1 1 100%;min-width:0}
   .bemtools .bemsp{display:none}
   .bemtot{width:100%;flex-wrap:wrap;gap:4px 14px}
-  .bemmsg{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"dir when" "txt txt" "att att";gap:4px 10px}
-  .bemdir{grid-area:dir}.bemwhen{grid-area:when;text-align:right}.bemtxt{grid-area:txt}.bematt{grid-area:att}
+  .bemmsg{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"dir when" "txt txt" "att att" "lk lk";gap:4px 10px}
+  .bemdir{grid-area:dir}.bemwhen{grid-area:when;text-align:right}.bemtxt{grid-area:txt}.bematt{grid-area:att}.bemlks{grid-area:lk}
   .bemthread{padding:4px 10px 12px}
 }
 @media (max-width:760px){

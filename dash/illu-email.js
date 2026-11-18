@@ -383,7 +383,7 @@
     const groups = [];
     for(const g of P.groups){
       const by = new Map();
-      for(const f of g.files){ if(f.off) continue; const t = f.tab2 || g.tab; if(!t) continue; if(!by.has(t)) by.set(t, []); by.get(t).push({how: f.how, id: f.id, url: f.url, name: f.name, sub: f.sub}); }
+      for(const f of g.files){ if(f.off) continue; const t = f.tab2 || g.tab; if(!t) continue; if(!by.has(t)) by.set(t, []); const o = Object.assign({}, f); delete o.off; delete o.tab2; by.get(t).push(o); }   /* 1.2.260: every field of the file (a WeTransfer needs its hash) */
       for(const [t, files] of by) groups.push({name: g.name, tab: t, main: g.main, files});
     }
     if(!groups.length) return;

@@ -311,8 +311,11 @@
         try{ window.__illuNotifRepaint && window.__illuNotifRepaint(); }catch(e){}
         /* put the new emails on her card (unread ones as a line; nothing is opened) */
         const done = new Set();
-        for(const x of fresh){ if(done.has(x.c.id)) continue; done.add(x.c.id); try{ await EM().collect(x.c, true); }catch(e){} }
+        /* 1.2.260: the new email is opened (it stays read) so its material links can be read, then the material is picked up */
+        for(const x of fresh){ if(done.has(x.c.id)) continue; done.add(x.c.id); try{ await EM().collect(x.c, true, {readNew: true}); }catch(e){} }
         window.__illuMailRedraw();
+        try{ if(window.__illuAutoFiles){ const cs = [...done].map(id => BOOK.get(id)).filter(Boolean); for(let w = 0; w < 300 && window.__illuAutoFilesBusy && window.__illuAutoFilesBusy(); w++) await new Promise(r => setTimeout(r, 1000)); await window.__illuAutoFiles(cs, 'new email'); } }catch(e){}
+        try{ window.__illuBEmailRedraw && window.__illuBEmailRedraw(); }catch(e){}
       }
     } finally { WS.busy = false; }
   }
