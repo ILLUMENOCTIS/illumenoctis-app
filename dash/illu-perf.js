@@ -54,6 +54,9 @@
         mainLag: SYS && SYS.main ? SYS.main : null, errs: ERRS.slice(-6),
         heapMB: mem, nodes: document.getElementsByTagName('*').length, lite: B.contains('illulite') ? why : '',
         cores: navigator.hardwareConcurrency || null, dpr: devicePixelRatio, win: innerWidth + 'x' + innerHeight, sys: SYS || null,
+        /* 1.2.216: the live connection's restarts and catch-ups, and this computer's downloads */
+        live: (() => { try{ const l = window.__illuLive && window.__illuLive.stats ? window.__illuLive.stats() : null; return l ? {up: l.up, restarts: l.restarts, reasons: l.reasons, catchups: l.catchups, events: l.events, fetched: l.fetched, full: l.full, fromCache: l.fromCache, kept: l.kept} : null; }catch(e){ return null; } })(),
+        net: (() => { try{ const n = window.IlluNet ? window.IlluNet.stats() : null; return n ? {month: n.month, bytes: n.bytes, day: n.dayBytes, hour: n.hourBytes, braked: n.braked, saver: n.saver} : null; }catch(e){ return null; } })(),
         boot: (() => { try{ const n = performance.getEntriesByType('navigation')[0]; return n ? Math.round(n.loadEventEnd || n.domContentLoadedEventEnd) : null; }catch(e){ return null; } })()};
       await DB.doc('perf/' + ME).set(doc); sent++;
       LT.n = 0; LT.ms = 0; LT.worst = 0; LT.since = Date.now(); ERRS.length = 0;

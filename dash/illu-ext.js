@@ -399,10 +399,12 @@ document.head.appendChild(st);
         if (c && c.id) t.push(['wk', c.st === 'done' ? 'Booked' : c.st === 'canc' ? 'Booking cancelled' : 'Booking']);
         else if (vs === 'open' || vs === 'tie') t.push(['wk', 'Team Vote']);
         else if (vs === 'appr') t.push(['wk', 'Approved']);
+        try { const x = window.__illuCardMarks ? window.__illuCardMarks(m.key) : null; if (x && x.fav) t.push(['lk', '♥ Liked']); if (x && x.note) t.push(['nt', 'Notes']); } catch (e) {}
         const r = H && H.byModel.get(m.key);
         if (r) t.push(['em', 'Emailed ' + day(r.dt) + (r.rep ? ' · replied' : '')]);
         return t;
       };
+      const wkT = m => tagsOf(m).filter(([k]) => k === 'wk' || k === 'em');
       /* 1.2.205 (user, 16 Nov 2026: "from the previous design, there was a window that showed the model cards"): each model
          with her card photo, her name and board under it, as in the approved demo - the same photo her card shows */
       const thumb = m => {
@@ -415,7 +417,10 @@ document.head.appendChild(st);
             if (/^https?:/i.test(src) && window.illu && window.illu.modelPhotos && !window.illu.web && !window.__noVia) src = 'illuimg://p/' + encodeURIComponent(src) + (/^https?:/i.test(m.url || '') ? '?r=' + encodeURIComponent(m.url) : '');
           }
         } catch (e) { src = ''; }
-        return '<span class="tplth">' + (src ? '<img alt="" loading="lazy" decoding="async" src="' + escT(src) + '">' : '') + '</span>';
+        /* 1.2.235 (user, 18 Nov 2026: "I also want to be able to like a model card from the email selection page"): a heart on her photo */
+        let lk = false; try { lk = !!(window.__illuFavHas && window.__illuFavHas(m.key)); } catch (e) {}
+        const hrt = window.__illuFavToggle ? '<button type="button" class="tplhrt' + (lk ? ' on' : '') + '" data-tplfav="' + escT(m.key) + '" aria-pressed="' + lk + '" title="' + (lk ? 'In My Favorites — click to remove' : 'Add to My Favorites') + '" aria-label="' + (lk ? 'Remove from My Favorites' : 'Add to My Favorites') + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.5 2.8c0 5.7-7.5 10.3-7.5 10.3z"/></svg></button>' : '';
+        return '<span class="tplth">' + (src ? '<img alt="" loading="lazy" decoding="async" src="' + escT(src) + '">' : '') + hrt + '</span>';
       };
       const row = m => { const red = anyRed(m.key), tg = tagsOf(m);
         return '<label class="tplm' + (red ? ' red' : '') + (on.has(m.key) ? ' on' : '') + '" title="' + escT(m.nm + (m.bd ? ' · ' + m.bd : '')) + '"><input type="checkbox" data-tplm="' + escT(m.key) + '"' + (on.has(m.key) ? ' checked' : '') + (red ? ' disabled' : '') + ' aria-label="' + escT(m.nm) + '">' + thumb(m) + '<span class="tplmn"><b>' + escT(m.nm) + '</b><small>' + escT(m.bd) + '</small></span>' +
@@ -427,8 +432,8 @@ document.head.appendChild(st);
       const passF = m => {
         if (F.bd.length && !F.bd.includes(m.bd || '')) return false;
         if (F.g && sexOf(m) !== F.g) return false;
-        if (F.st === 'done' && !tagsOf(m).length) return false;
-        if (F.st === 'new' && tagsOf(m).length) return false;
+        if (F.st === 'done' && !wkT(m).length) return false;
+        if (F.st === 'new' && wkT(m).length) return false;
         const f = fx(m); return rng(f.ht, F.ht) && rng(f.bu, F.bu) && rng(f.wa, F.wa) && rng(f.hp, F.hp);
       };
       const fOn = F.bd.length || F.g || F.st || [F.ht, F.bu, F.wa, F.hp].some(r => r[0] !== '' || r[1] !== '');
@@ -450,12 +455,20 @@ document.head.appendChild(st);
           (fOn ? '<button type="button" class="tplfclr" data-tplfclr>Clear filters</button>' : '') + '</div>' +
         '<div class="tplfn">' + (fOn || q ? 'Showing <b>' + shown.length + '</b> of ' + all.length : all.length + ' models') + '</div></div>');
       const dk = m => { const r = H && H.byModel.get(m.key); return r ? r.d : ''; };
-      const worked = shown.filter(m => tagsOf(m).length).sort((a, b) => dk(b).localeCompare(dk(a))), rest = shown.filter(m => !tagsOf(m).length);
+      /* 1.2.219 (user, 17 Nov 2026: "liked models + any indication markers (such as sent to vote) = to show up on top of the list"):
+         first the models that are liked (in My Favorites), on a Team Vote, approved, in booking or with team notes; then the ones
+         already emailed; then everyone else */
+      const MK = new Map(); const mkOf = m => { let x = MK.get(m.key); if (!x) { try { x = window.__illuCardMarks ? window.__illuCardMarks(m.key) : {}; } catch (e) { x = {}; } MK.set(m.key, x); } return x; };
+      const marked = m => { const x = mkOf(m); if (x.fav || x.note || x.vote === 'open' || x.vote === 'tie' || x.vote === 'appr') return true; return tagsOf(m).some(([k, v]) => k === 'wk' && !/cancel/i.test(v)); };
+      const mrank = m => { const x = mkOf(m); return (x.vote === 'open' || x.vote === 'tie' || x.vote === 'appr' || tagsOf(m).some(([k, v]) => k === 'wk' && !/cancel/i.test(v))) ? 0 : x.fav ? 1 : 2; };
+      const top = shown.filter(marked).sort((a, b) => mrank(a) - mrank(b) || String(a.nm).localeCompare(String(b.nm), undefined, { sensitivity: 'base' }));
+      const worked = shown.filter(m => !marked(m) && wkT(m).length).sort((a, b) => dk(b).localeCompare(dk(a))), rest = shown.filter(m => !marked(m) && !wkT(m).length);
       const sec = '<div class="tplms"><div class="tplmsh"><b>Models in this email · ' + PK.ms.length + '</b><button type="button" data-tplmore>' + (PK.open ? 'Hide the list' : '+ Add models from ' + escT(PK.agName)) + '</button></div>' +
         (PK.ms.length ? '<div class="tplchips">' + PK.ms.map(m => '<span class="tplchip">' + escT(String(m.nm).toUpperCase()) + '<button type="button" data-tploff="' + escT(m.key) + '" aria-label="Remove">✕</button></span>').join('') + '</div>' : '<p class="tplnone">No model — the email goes without a model list.</p>') +
         (PK.open ? '<input class="tplq" data-tplq placeholder="Find one of their ' + all.length + ' models…" value="' + escT(PK.q) + '">' + filt + '<div class="tplml">' +
+          (top.length ? '<div class="tplgrp">♥ Liked · on a vote or in booking · with notes</div>' + top.map(row).join('') : '') +
           (worked.length ? '<div class="tplgrp">Already emailed or worked on</div>' + worked.map(row).join('') : '') +
-          (rest.length ? (worked.length ? '<div class="tplgrp">Everyone else</div>' : '') + rest.slice(0, 400).map(row).join('') : '') +
+          (rest.length ? (worked.length || top.length ? '<div class="tplgrp">Everyone else</div>' : '') + rest.slice(0, 400).map(row).join('') : '') +
           (!shown.length ? '<p class="tplnone">' + (q && !fOn ? 'No model called "' + escT(PK.q) + '".' : 'No model matches these filters.') + '</p>' : '') + '</div>' : '') + '</div>';
       const to = box.querySelector('.tplto'); if (to) to.insertAdjacentHTML('afterend', sec);
       if (PK.open && PK.focusQ) { const i = box.querySelector('[data-tplq]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
@@ -464,10 +477,11 @@ document.head.appendChild(st);
        contacts with an email, ticked ones go in CC */
     let cts = []; try { cts = ((typeof CONTACTS !== 'undefined' && CONTACTS.get(PK.dom)) || []).filter(c => c && c.e && /@/.test(c.e)); } catch (e) {}
     const seen = new Set([String(PK.addr).toLowerCase()]); cts = cts.filter(c => { const e = String(c.e).trim().toLowerCase(); if (seen.has(e)) return false; seen.add(e); return true; });
+    cts = cts.map((c, i) => [c, i]).sort((x, y) => (+!!y[0].s) - (+!!x[0].s) || x[1] - y[1]).map(x => x[0]);   /* 1.2.226: ★ main contacts first */
     if (cts.length) {
       const on = new Set(PK.cc.map(x => x.toLowerCase()));
       const cc = '<div class="tplcc"><div class="tplmsh"><b>CC · ' + PK.cc.length + '</b>' + (cts.length > 1 ? '<button type="button" data-tplccall>' + (PK.cc.length === cts.length ? 'Clear' : 'Tick all') + '</button>' : '') + '</div><div class="tplccl">' +
-        cts.map(c => '<label class="tplm"><input type="checkbox" data-tplcc="' + escT(String(c.e).trim()) + '"' + (on.has(String(c.e).trim().toLowerCase()) ? ' checked' : '') + '><span>' + escT(c.n || String(c.e).split('@')[0]) + '</span><small>' + escT(String(c.e).trim()) + (c.r ? ' · ' + escT(c.r) : '') + '</small></label>').join('') + '</div></div>';
+        cts.map(c => '<label class="tplm"><input type="checkbox" data-tplcc="' + escT(String(c.e).trim()) + '"' + (on.has(String(c.e).trim().toLowerCase()) ? ' checked' : '') + '><span>' + (c.s ? '<b class="tplstar" title="Main point of contact">★</b> ' : '') + escT(c.n || String(c.e).split('@')[0]) + '</span><small>' + escT(String(c.e).trim()) + (c.r ? ' · ' + escT(c.r) : '') + '</small></label>').join('') + '</div></div>';
       const anchor = box.querySelector('.tplms') || box.querySelector('.tplto'); if (anchor) anchor.insertAdjacentHTML('afterend', cc);
     }
   }
@@ -484,6 +498,17 @@ document.head.appendChild(st);
     const m = agModels(PK.dom).find(x => x.key === c.dataset.tplm); if (!m) return;
     if (c.checked) { if (!PK.ms.some(x => x.key === m.key)) PK.ms.push(m); } else PK.ms = PK.ms.filter(x => x.key !== m.key);
     const keepScroll = (document.querySelector('#illutpl .tplml') || {}).scrollTop || 0; paintPick(); const l = document.querySelector('#illutpl .tplml'); if (l) l.scrollTop = keepScroll; }, true);
+  /* 1.2.235: the heart likes / unlikes her without ticking her card (the card is a label) */
+  document.addEventListener('click', e => {
+    const h = e.target.closest && e.target.closest('#illutpl [data-tplfav]'); if (!h || !PK) return;
+    e.preventDefault(); e.stopPropagation();
+    const k = h.dataset.tplfav; const m = agModels(PK.dom).find(x => x.key === k) || { nm: '' };
+    let on = false; try { on = window.__illuFavToggle(k, { nm: m.nm, ag: PK.agName }); } catch (er) { return; }
+    h.classList.toggle('on', on); h.setAttribute('aria-pressed', on);
+    h.title = on ? 'In My Favorites — click to remove' : 'Add to My Favorites'; h.setAttribute('aria-label', on ? 'Remove from My Favorites' : 'Add to My Favorites');
+    const card = h.closest('.tplm'), tg = card && card.querySelector('.tpltags');
+    if (tg && !card.classList.contains('red')) { const x = tg.querySelector('.tpltag.lk'); if (on && !x) tg.insertAdjacentHTML('beforeend', '<i class="tpltag lk">♥ Liked</i>'); else if (!on && x) x.remove(); }
+  }, true);
   document.addEventListener('click', async e => {
     const box = document.getElementById('illutpl'); if (!box || box.hidden || !box.contains(e.target) || !PK) return;
     const b = e.target.closest('[data-tplftog],[data-tplmin],[data-tplfull],[data-tplfbd],[data-tplfg],[data-tplfst],[data-tplfclr],[data-tplx],[data-tpluse],[data-tpled],[data-tplnew],[data-tplback],[data-tplsave],[data-tpldel],[data-tplmore],[data-tploff],[data-tplccall]'); if (!b) return;
@@ -643,13 +668,14 @@ document.head.appendChild(st);
     '#illutpl .tplml .tplm{position:relative;display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:5px;border-radius:10px;border:2px solid transparent;cursor:pointer;min-width:0}' +
     '#illutpl .tplml .tplm:hover{background:var(--paper,#fff)}#illutpl .tplml .tplm.on{border-color:var(--acc);background:var(--accl,#F3ECF3)}' +
     '#illutpl .tplml .tplm input{position:absolute;top:11px;left:11px;z-index:2;width:19px;height:19px;margin:0;accent-color:var(--acc)}' +
+    '#illutpl .tplth{position:relative}#illutpl .tplhrt{position:absolute;top:6px;right:6px;z-index:3;width:28px;height:28px;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.88);box-shadow:0 1px 4px rgba(0,0,0,.18);display:flex;align-items:center;justify-content:center;cursor:pointer;color:#8a8a8a}#illutpl .tplhrt svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9}#illutpl .tplhrt:hover{color:#B4235A}#illutpl .tplhrt.on{color:#D2306B}#illutpl .tplhrt.on svg{fill:currentColor}' +
     '#illutpl .tplth{width:100%;aspect-ratio:3/4;height:auto;border-radius:8px;background:var(--surf2,#eee);overflow:hidden;display:block}#illutpl .tplth img{width:100%;height:100%;object-fit:cover;display:block}' +
     '#illutpl .tplmn{min-width:0;display:flex;flex-direction:column;gap:1px}#illutpl .tplmn b{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#illutpl .tplmn small{font-size:11px;color:var(--mut);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
     '#illutpl .tpltags{display:flex;flex-wrap:wrap;gap:3px}#illutpl .tpltags:empty{display:none}' +
     '#illutpl .tplm .tpltag{font-style:normal;font-size:10px;font-weight:600;border-radius:999px;padding:1px 7px;white-space:nowrap;margin:0}' +
     '#illutpl .tplm.red{cursor:not-allowed}#illutpl .tplm.red .tplth{opacity:.45}' +
     '@media (max-width:560px){#illutpl .tplml{grid-template-columns:repeat(2,minmax(0,1fr))}}' +
-    '#illutpl .tpltag.wk{background:var(--accl,#F3ECF3);color:var(--acc)}#illutpl .tpltag.em{background:#E3F4E8;color:#23794A}#illutpl .tpltag.red{background:var(--surf2,#eee);color:var(--faint)}#illutpl .tplm.red span{opacity:.55}' +
+    '#illutpl .tpltag.wk{background:var(--accl,#F3ECF3);color:var(--acc)}#illutpl .tpltag.em{background:#E3F4E8;color:#23794A}#illutpl .tplstar{color:#c9a24a}#illutpl .tpltag.lk{background:#FCE8EE;color:#B4235A}#illutpl .tpltag.nt{background:#FFF6D6;color:#8A6A00}#illutpl .tpltag.red{background:var(--surf2,#eee);color:var(--faint)}#illutpl .tplm.red span{opacity:.55}' +
     '#illutpl .tplhelp{margin:0;font-size:12px;color:var(--mut);line-height:1.5}#illutpl .tplhelp b{color:var(--ink)}' +
     '#illutpl .tplacts{display:flex;gap:8px;align-items:center}#illutpl .tplacts span{flex:1}#illutpl .tplacts button{border:1px solid var(--line);background:var(--surf,#fff);border-radius:20px;padding:7px 16px;cursor:pointer;color:var(--ink);font:500 13px var(--sans)}#illutpl .tplacts .tplgo{background:var(--acc);border-color:var(--acc);color:var(--on-acc,#fff)}#illutpl .tplacts .tpldel{color:#A3283F}' +
     /* 1.2.213: window buttons, full screen, folded bar, filters */

@@ -78,7 +78,8 @@
         : '<button type="button" class="fvmain" data-fvbkmain title="' + esc(L('Show this photo on her card, for everyone', '이 사진을 카드에 표시합니다 (모두에게)')) + '">★ ' + esc(L('Use as card photo', '카드 사진으로')) + '</button>';
     } else
     mw.innerHTML = !(PH && PH.setMain && S.key && !S.bid) ? '' : S.i > 0 && S.raw && S.raw[S.i] ? '<button type="button" class="fvmain" data-fvmain title="' + esc(L('Show this photo on the model’s card, for everyone (the photo is not saved — only which one to show)', '이 사진을 모델 카드에 표시합니다 (사진은 저장되지 않고, 어떤 사진을 보일지만 기록)')) + '">★ ' + esc(L('Use as card photo', '카드 사진으로 사용')) + '</button>'
-      : S.i === 0 && PH.PMAIN.has(S.key) ? '<button type="button" class="fvmain back" data-fvunmain>↺ ' + esc(L('Back to the original photo', '원래 사진으로')) + '</button>' : '';
+      : S.i === 0 && PH.PMAIN.has(S.key) ? '<span class="fvmain on">✓ ' + esc(L('Card photo', '카드 사진')) + '</span> <button type="button" class="fvmain back" data-fvunmain>↺ ' + esc(L('Back to the original photo', '원래 사진으로')) + '</button>'
+      : S.i === 0 && n > 1 ? '<span class="fvmain on" title="' + esc(L('This is the photo on her card. Go to another photo and press “Use as card photo” to change it.', '카드에 보이는 사진입니다. 다른 사진에서 “카드 사진으로”를 누르면 바뀝니다.')) + '">✓ ' + esc(L('Card photo', '카드 사진')) + '</span>' : '';
     /* 1.2.174 (user: wrong photos in the slideshow): a photo from her agency page can be hidden; a file from her own
        folder (Dropbox / this computer / Z:) can be deleted from there */
     const dw = box.querySelector('.fvdelw');
@@ -332,7 +333,11 @@
   }, true);
   function open(first, name, href, key, bid){
     const my = ++seq; narrowOn = false;
-    S = {photos: first ? [first] : [], raw: first ? [first] : [], i: 0, name, ref: href || '', bid: bid || '', key: key || (href && typeof normKey === 'function' ? normKey(href) : '')};
+    /* 1.2.227 (user, 17 Nov 2026: "what happened to the capability of hiding the photos, and also specifically choosing a photo
+       ... to use as the Main card photo?"): the first photo arrives as the card shows it - often through the program's photo
+       cache (illuimg://p/<her photo>?r=...) - so it was not seen as an agency photo and had no Hide / card-photo buttons */
+    const rawOf = u => { const m = String(u || '').match(/^illuimg:\/\/p\/([^?#]+)/); if(m){ try{ return decodeURIComponent(m[1]); }catch(e){} } return u; };
+    S = {photos: first ? [first] : [], raw: first ? [rawOf(first)] : [], i: 0, name, ref: href || '', bid: bid || '', key: key || (href && typeof normKey === 'function' ? normKey(href) : '')};
     strip.dataset.sig = '';
     box.hidden = false; document.body.classList.add('illufvon');
     box.querySelector('.fvmsg').textContent = '';
@@ -375,7 +380,7 @@
         const more = ((r && r.photos) || []).map(p => src(p.url || p, href));
         if(more.length){
           S.src.agency = first ? [first].concat(more) : more;
-          const raws = ((r && r.photos) || []).map(p => p.url || p); S.araw = first ? [first].concat(raws) : raws;
+          const raws = ((r && r.photos) || []).map(p => p.url || p); S.araw = first ? [rawOf(first)].concat(raws) : raws;
           if(S.tab === 'agency'){ const keep = S.photos[S.i]; S.photos = S.src.agency.slice(); S.raw = S.araw.slice(); S.i = Math.max(0, S.photos.indexOf(keep)); }
           draw();
         }
@@ -497,6 +502,14 @@
 #illufv .fvread{font-size:12px;color:var(--faint,#8a8090);margin:6px 0 0}#illufv .fvread.busy::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--acc,#5A2C57);margin-right:6px;animation:livepulse 1.2s ease-in-out infinite}
 #illufv .fvside{position:absolute;top:0;right:0;bottom:0;width:340px;box-sizing:border-box;padding:64px 24px 24px;overflow-y:auto;background:var(--surf,#fff);color:var(--ink,#1B1724);border-left:1px solid var(--line,#E3DEEA);transform:translateX(0);transition:transform .28s cubic-bezier(.22,1,.36,1)}
 #illufv.fvnoside .fvside{transform:translateX(100%)}
+/* 1.2.227 (user, 17 Nov 2026: "something wrong with the spacing ... after you changed the design from when the X was hovering over
+   the heart"): 1.2.222 narrowed the name column to keep the heart away from the X (her name broke in two, the agency was cut).
+   The header has its full width again; instead a plain band under the X stays at the top while the details scroll, so the
+   heart and the rest pass under it and never under the X. */
+@media (min-width:901px){
+  #illufv .fvside{padding-top:0}
+  #illufv .fvside::before{content:"";display:block;position:sticky;top:0;z-index:2;height:64px;margin:0 -24px;background:var(--surf,#fff)}
+}
 #illufv .fvsidet{position:absolute;z-index:2;top:50%;right:var(--fvside);transform:translateY(-50%);width:18px;padding:12px 0 10px;border:1px solid rgba(255,255,255,.18);border-right:0;border-radius:10px 0 0 10px;background:#2A2230;color:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:7px;font:inherit;transition:right .28s cubic-bezier(.22,1,.36,1),background .2s}
 #illufv:not(.fvnoside) .fvsidet{background:var(--surf,#fff);color:var(--acc,#5A2C57);border-color:var(--line,#E3DEEA)}
 #illufv .fvsidet:hover{background:var(--acc,#5A2C57);color:#fff}

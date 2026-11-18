@@ -224,7 +224,9 @@
       const I = infoOf(k), m = D.C.get(k) || new Map(), n = m.size, last = Math.max(0, ...[...m.values()].map(x => x.w.t));
       return '<div class="fgrow' + (k === S.sel ? ' on' : '') + '" data-fgk="' + H(k) + '" style="grid-template-columns:' + gridCols + '">' +
         (S.tab === 'mine' ? '<button type="button" class="fggrip" data-fggrip="' + i + '" aria-label="' + L('Drag to change the order', '끌어서 순서 바꾸기') + '" title="' + L('Drag to change the order', '끌어서 순서 바꾸기') + '">⋮⋮</button>' : '<span class="fgn">' + (i + 1) + '</span>') +
-        '<button type="button" class="fgag" data-fgsel="' + H(k) + '"><span><b' + (k.startsWith('name:') ? '' : ' class="fgagn" data-fgagdir="' + H(k) + '" title="' + H(L('Open this agency in the Directory', '디렉터리에서 이 에이전시 열기')) + '"') + '>' + H(I.name) + '</b>' + (n > 1 ? '<i class="fgsh">' + L(n + ' of us', n + '명') + '</i>' : '') + '</span><small>' + H(I.place) + '</small></button>' +
+        '<button type="button" class="fgag" data-fgsel="' + H(k) + '"><span><b' + (k.startsWith('name:') ? '' : ' class="fgagn" data-fgagdir="' + H(k) + '" title="' + H(L('Open this agency in the Directory', '디렉터리에서 이 에이전시 열기')) + '"') + '>' + H(I.name) + '</b>' + (n > 1 ? '<i class="fgsh">' + L(n + ' of us', n + '명') + '</i>' : '') + '</span><small>' + H(I.place) + '</small>' +
+          /* 1.2.219 (user, 17 Nov 2026: "how do I deselect an agency I liked into favorites?"): Remove, right on the row (press twice) */
+          (S.tab === 'mine' ? '<span class="fgrmv" role="button" tabindex="0" data-fgunfav="' + H(k) + '" title="' + H(L('Take this agency out of My favorites', '내 즐겨찾기에서 빼기')) + '">♥ ' + L('Remove', '빼기') + '</span>' : '') + '</button>' +
         P.map(p => cellHTML(m.get(p), p, modsOf(D, k, p), k)).join('') + '<span class="fglast">' + H(last ? when(new Date(last).toISOString()).s : '—') + '</span></div>';
     }).join('');
     const empty = S.tab === 'mine' ? L('No favorite agencies yet. Tap ★ on any agency in the Directory or on the Map and it comes here.', '즐겨찾는 에이전시가 없습니다. 디렉터리나 지도에서 ★를 누르면 여기에 들어옵니다.')
@@ -297,6 +299,10 @@
     const fm = e.target.closest('[data-fgmod]'); if(fm){ e.preventDefault(); e.stopPropagation(); const k = fm.dataset.fgmod; let i = {}; try{ i = (window.__illuModelInfo && window.__illuModelInfo(k)) || {}; }catch(er){} if(window.illuPhotoFull) window.illuPhotoFull('', i.nm || fm.innerText.split('\n')[0], i.href || k, k, ''); return; }
     if(drag && drag.moved) return;
     /* 1.2.151 (user, 12 Nov 2026): the agency's name opens it in the Directory */
+    const uf = e.target.closest('[data-fgunfav]'); if(uf){ e.preventDefault(); e.stopPropagation();
+      if(uf.dataset.armed !== '1'){ uf.dataset.armed = '1'; uf.classList.add('arm'); uf.textContent = L('Remove? Press again', '뺄까요? 한 번 더'); setTimeout(() => { if(uf.isConnected){ uf.dataset.armed = ''; uf.classList.remove('arm'); uf.textContent = '♥ ' + L('Remove', '빼기'); } }, 4000); return; }
+      try{ const d = ((window.ATLFAV && ATLFAV.list()) || []).find(x => lc(x) === uf.dataset.fgunfav); if(d) ATLFAV.toggle(d); }catch(er){}
+      render(); return; }
     const gn = e.target.closest('[data-fgagdir]'); if(gn){ e.preventDefault(); e.stopPropagation(); try{ if(window.__illuDirGoAg) window.__illuDirGoAg(gn.dataset.fgagdir); else if(window.__illuGo) window.__illuGo('dir'); }catch(er){} return; }
     const t = e.target.closest('button'); if(!t) return;
     const d = t.dataset;
@@ -390,6 +396,8 @@
 #pane-favag .fgag > span{display:flex;align-items:center;gap:6px;min-width:0}
 #pane-favag .fgag b{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #pane-favag .fgag small{font-size:11.5px;color:var(--mut)}
+#pane-favag .fgrmv{align-self:flex-start;font-size:11px;font-weight:600;color:var(--mut);border:1px solid var(--line,#e6dfe3);border-radius:999px;padding:1px 8px;margin-top:2px;opacity:.75;cursor:pointer}
+#pane-favag .fgrow:hover .fgrmv,#pane-favag .fgrmv:focus-visible{opacity:1}#pane-favag .fgrmv:hover{color:#B3261E;border-color:#B3261E}#pane-favag .fgrmv.arm{color:#fff;background:#B3261E;border-color:#B3261E;opacity:1}
 #pane-favag .fgsh{flex:none;font-style:normal;font-size:10.5px;font-weight:700;color:#8A5A00;background:#FFF1D6;border-radius:999px;padding:2px 7px}
 #pane-favag .fgcell{margin:6px 3px;border-radius:10px;padding:6px 8px;display:flex;flex-direction:column;gap:1px;justify-content:center;min-width:0;background:color-mix(in srgb,var(--pc) 40%,#fff);color:var(--pf);border:1px solid #EFEAF2}
 #pane-favag .fgcell.fresh{background:var(--pc);border-color:color-mix(in srgb,var(--pf) 20%,transparent)}

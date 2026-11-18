@@ -216,6 +216,9 @@
   window.__illuWhoHas = (pid, k) => { if(!pid || !k) return false; if((FAV.get(pid) || new Map()).has(k)) return true; const o = OPEN.get(hash(k)); return !!(o && o.by === pid && !o.off); };
   window.__illuWhoCounts = pid => ({fav: (FAV.get(pid) || new Map()).size, vote: allStates().filter(s => s.o.by === pid && (s.open || !s.o.off)).length});
   /* 1.2.129: + New card (illu-newcard.js) hands a new card to one of the three places */
+  /* 1.2.235: the heart on the email's model cards (illu-ext.js) adds / removes her from My Favorites */
+  window.__illuFavToggle = (k, a) => { toggleFav(k, a || {}); return myFav().has(k); };
+  window.__illuFavHas = k => { try{ return myFav().has(k); }catch(e){ return false; } };
   window.__illuVoteAct = {fav: (k, a) => { if(!myFav().has(k)) toggleFav(k, a); }, vote: (k, a) => sendVote(k, a), book: (k, a) => sendBook(k, a), on: k => !!onVote(k)};
   /* 1.2.149: for Favorite Agencies - each person's favourites, and the cards each person sent to the vote */
   window.__illuFavsOf = pid => [...(FAV.get(pid) || new Map())].map(([k, v]) => ({k, nm: (v && v.nm) || '', ag: (v && v.ag) || '', at: (v && v.at) || ''}));
@@ -624,7 +627,7 @@
     changed();
     return c;
   };
-  let MXASK = '', GFASK = '', MXAGE = '';
+  let MXASK = '', GFASK = '', MXAGE = '', MXMEAS = '';
   /* her age: the booking card's date of birth or age, else what was typed on her card before she was booked */
   function ageInfo(k, c){
     const p = c ? null : (preOf(k) || {});
@@ -636,6 +639,7 @@
   window.__illuSetAge = (k, age, dob) => { if(!k) return; age = String(age || '').replace(/[^\d]/g, '').slice(0, 3); dob = String(dob || '').trim(); if(!age && !dob) return;
     let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){} if(c){ c.age = age; c.dob = dob; saveBook(c.id, true); changed(); } else savePre(k, {age, dob}); };
   /* Enter in either box saves (the editor is a form; Save is its submit button) */
+  document.addEventListener('submit', e => { const f = e.target; if(!f || !f.matches || !f.matches('form[data-pnmxf]')) return; e.preventDefault(); const b = f.querySelector('[data-pnmxok]'); if(b) b.click(); }, true);
   document.addEventListener('submit', e => { const f = e.target; if(!f || !f.matches || !f.matches('form[data-pnagef]')) return; e.preventDefault(); const b = f.querySelector('[data-pnageok]'); if(b) b.click(); }, true);
   window.__illuAgeCell = k => { if(!k) return ''; let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){} const A = ageInfo(k, c), lock = !!A.dobTxt;
     return '<span class="mxc mxage" data-f="age"><i>' + L('AGE', '나이') + '</i><input class="mxi mxagei" type="text" inputmode="numeric" maxlength="3" data-agek="' + H(k) + '" value="' + H(A.age) + '" placeholder="–" aria-label="' + H(L('Age', '나이')) + '"' +
@@ -843,7 +847,71 @@
      the mother agency; her booking card takes the mother agency's name. Kept in mother/<hash> (shared). */
   const momOf = k => k ? MOM.get(hash(k)) || null : null;
   const lc = v => String(v || '').trim().toLowerCase();
-  window.__illuMother = (k, ag) => { const m = momOf(k); return !!(m && ag && lc(m.ag) === lc(ag)); };
+  /* ---------- 1.2.231 (user, 17 Nov 2026: "let's set up a cleaner more efficient method of resolving the Mother Agent case"):
+     ONE resolver for her mother agency. Every place that shows or uses it (side panel, card details, card tag, contact chip,
+     Directory card) asks motherInfo(k, agHere) and nothing else:
+       null when no mother agency is set for her, else
+       {ag, dom, site, page, here, rec, foundAg, foundPage}
+       ag / dom / site  the mother agency, its web domain (saved with the choice, else the Directory's) and https://dom
+       page             her own page at the mother agency (found on its boards by the name in the address), else ''
+       here             the card's own agency (agHere) is the mother agency
+       rec              the saved choice (mother/<hash>) - for this card, or for another card of the same person
+       foundAg/foundPage the agency and page this card comes from (the "also at" line)
+     The same person on two agencies = the same name at the end of the page address (olya_lade.html = 11947-olya-lade.web,
+     wave …/11491-adriana-casas = uniko …/adriana-casas), at least 6 letters so a short first name alone never matches.
+     Worked out once per change: the answers are kept until a mother agency is set or cleared or the Directory changes. */
+  const momCore = k => { try{ return window.__illuCoreOf ? window.__illuCoreOf(k) : ''; }catch(e){ return ''; } };
+  const longCore = c => !!c && c.replace(/[^a-z]/g, '').length >= 6;
+  const domOfU = u => { try{ return new URL(u).hostname.replace(/^www\./, '').toLowerCase(); }catch(e){ return ''; } };
+  const dnorm = d => String(d || '').trim().toLowerCase().replace(/^www\./, '');
+  const onDom = (u, dom) => { const h = domOfU(u); return !!h && !!dom && (h === dom || h.endsWith('.' + dom)); };
+  let MI = {v: '', ans: new Map(), byCore: null, pages: new Map()};
+  function miFresh(){
+    let nv = ''; try{ nv = (window.__illuAGv || 0) + ':' + (typeof AG !== 'undefined' ? AG.length : 0); }catch(e){}
+    const v = MOMV + '|' + nv;
+    if(MI.v !== v){ MI = {v, ans: new Map(), byCore: null, pages: new Map()}; }
+    if(!MI.byCore){ MI.byCore = new Map(); for(const m of MOM.values()){ if(!m || m.cleared || !m.ag || !/^https?:/i.test(m.k || '')) continue; const c = momCore(m.k); if(!longCore(c)) continue; if(!MI.byCore.has(c)) MI.byCore.set(c, []); MI.byCore.get(c).push(m); } }
+  }
+  function momDomOf(m){
+    let d = dnorm(m.dom); if(d) return d;
+    try{ const hit = AG.find(x => lc(x.name) === lc(m.ag)); return hit ? dnorm(hit.domain) : ''; }catch(e){ return ''; }
+  }
+  /* her pages on one agency's boards, by the name in the address (read once per agency) */
+  function pagesOn(dom){
+    if(MI.pages.has(dom)) return MI.pages.get(dom);
+    const out = new Map();
+    try{ for(const n of (window.__illuNets ? window.__illuNets() : [])){ if(dnorm(n.domain) !== dom) continue;
+      for(const b of n.boards) for(const m of (b.m || [])){ if(!Array.isArray(m) || !m[1]) continue; const h = m[1].charAt(0) === '|' ? m[1].slice(1) : (b.p || '') + m[1]; if(!/^https?:/i.test(h) || !onDom(h, dom)) continue; const c = momCore(h); if(longCore(c) && !out.has(c)) out.set(c, h); } } }catch(e){}
+    MI.pages.set(dom, out); return out;
+  }
+  function motherInfo(k, agHere){
+    if(!k) return null;
+    miFresh();
+    const ck = k + '\u0001' + lc(agHere);
+    if(MI.ans.has(ck)) return MI.ans.get(ck);
+    let rec = momOf(k);
+    if(rec && (rec.cleared || !rec.ag)) rec = null;
+    const kk = /^https?:/i.test(k) ? k : '';
+    const core = kk ? momCore(kk) : '';
+    /* another card of the same person: only where this card is at the agency that was chosen */
+    if(!rec && longCore(core) && agHere) rec = (MI.byCore.get(core) || []).find(m => m.k !== k && lc(m.ag) === lc(agHere)) || null;
+    let r = null;
+    if(rec){
+      const dom = momDomOf(rec);
+      let i = null; try{ i = info(k); }catch(e){}
+      const foundPage = (i && i.href) || kk;
+      let page = foundPage && onDom(foundPage, dom) ? foundPage : '';
+      if(!page && dom && longCore(core)) page = pagesOn(dom).get(core) || '';
+      let foundAg = agHere || (i && i.ag) || '';
+      if(lc(foundAg) === lc(rec.ag) && foundPage && dom && !onDom(foundPage, dom)){ const h = domOfU(foundPage); try{ const hit = AG.find(x => dnorm(x.domain) === h); foundAg = hit ? hit.name : h; }catch(e){ foundAg = h; } }
+      r = {ag: rec.ag, dom, site: dom ? 'https://' + dom : '', page, here: !!agHere && lc(agHere) === lc(rec.ag), rec,
+        foundAg: lc(foundAg) === lc(rec.ag) ? '' : foundAg, foundPage: lc(foundAg) === lc(rec.ag) ? '' : foundPage};
+    }
+    MI.ans.set(ck, r); return r;
+  }
+  const momFor = (k, ag) => { const r = motherInfo(k, ag); return r ? r.rec : null; };
+  window.__illuMotherInfo = motherInfo;
+  window.__illuMother = (k, ag) => { const r = motherInfo(k, ag); return !!(r && r.here); };
   window.__illuMotherOf = momOf;
   /* 1.2.211 (user, 16 Nov 2026: "When a USER sets the Mother Agency for a model, that agency will be the primary agency for
      that model. Move the card over to that Agency."): her card moves to her mother agency in the Directory (and in its
@@ -878,7 +946,7 @@
     try{ window.__illuUndo && window.__illuUndo.push(L('Mother agency', '마더 에이전시'), () => apply(prev)); }catch(e){}
   }
   function momBox(k, a){
-    const m = momOf(k), ag = a.ag || '', can = signedIn();
+    const ag = a.ag || '', m = momFor(k, ag), can = signedIn();
     const same = m && lc(m.ag) === lc(ag);
     if(!MOMED.has(k)){
       if(same) return can ? '<button type="button" class="pnlk pnmomset" data-momed>' + L('Change mother agency', '마더 에이전시 변경') + '</button>' : '';
@@ -898,7 +966,7 @@
     if(t.dataset.momed != null){ if(MOMED.has(k)) MOMED.delete(k); else MOMED.add(k); changed(); return; }
     if(t.dataset.momthis != null){ const i = info(k); const ag = ab.ag || i.ag || ''; let dom = ''; try{ const hit = AG.find(x => lc(x.name) === lc(ag)); dom = hit ? hit.domain || '' : ''; }catch(err){} MOMED.delete(k); setMom(k, ag, dom); return; }
     if(t.dataset.momsave != null){ const v = (box.querySelector('[data-mxin="mom-ag"]') || {}).value || ''; if(!v.trim()) return; let dom = ''; try{ const hit = AG.find(x => lc(x.name) === lc(v)); dom = hit ? hit.domain || '' : ''; }catch(err){} MOMED.delete(k); setMom(k, v.trim(), dom); return; }
-    if(t.dataset.momclr != null){ MOMED.delete(k); setMom(k, '', ''); }
+    if(t.dataset.momclr != null){ MOMED.delete(k); let src = k; try{ const m = momFor(k, ab.ag || info(k).ag || ''); if(m && m.k) src = m.k; }catch(err){} setMom(src, '', ''); }
   }, true);
   /* 1.2.168 (user, 13 Nov 2026): like the agency from the side panel -> it goes to Favorite Agencies (the same ★ list as the Directory / Atlas) */
   function agDomOf(a, ag, href){
@@ -941,25 +1009,27 @@
     let pic = ''; try{ const id = typeof PICS !== 'undefined' && PICS.get(k); let src = id ? picURL(id) : (F.photo || ''); if(src && window.__illuSmall && /^https?:/i.test(src)) src = window.__illuSmall(src, 300); if(src) pic = '<img src="' + H(src) + '" alt="" referrerpolicy="no-referrer" decoding="async" loading="lazy">'; }catch(e){}
     const href = a.href || i.href || '';
     const ag = a.ag || i.ag || '';
-    let agH = ag ? (href ? '<a class="pnagl" href="' + H(href) + '" target="_blank" rel="noopener" title="' + H(L('Her page on the agency’s site', '에이전시 사이트의 모델 페이지')) + '">' + H(ag) + ' ↗</a>'
+    /* 1.2.232 (user, 17 Nov 2026: "this is supposed to be to the agency main page link. not a direct link to the model on the
+       website. that's what the name is for."): the agency name opens the agency's main page; her name opens her page */
+    const agSite = (() => { let d = ''; try{ d = agDomOf(a, ag, href); }catch(e){} if(d) return 'https://' + d; try{ return href ? new URL(href).origin : ''; }catch(e){ return ''; } })();
+    let agH = ag ? (agSite ? '<a class="pnagl" href="' + H(agSite) + '" target="_blank" rel="noopener" title="' + H(L('The agency’s website', '에이전시 웹사이트')) + '">' + H(ag) + ' ↗</a>'
       : (a.agRef ? '<button type="button" class="pnagl" data-pnag="' + H(a.agRef) + '" title="' + H(L('Open this agency in the Directory', '디렉터리에서 이 에이전시 열기')) + '">' + H(ag) + ' ›</button>' : '<span class="pnagl">' + H(ag) + '</span>')) : '';
-    let mom = (() => { try{ return window.__illuMother && window.__illuMother(k, ag); }catch(e){ return false; } })();
-    /* 1.2.211: her mother agency is her primary agency - named first (opens it in the Directory, where her card now is);
-       the agency she was found at follows as "also at", with the link to her page there */
-    let also = '', momDom = '';
-    const mo0 = momOf(k);
-    if(mo0 && mo0.ag && !mo0.cleared && lc(mo0.ag) !== lc(ag)){
-      let md = ''; try{ md = (window.__illuMomMoves && window.__illuMomMoves().get(/^https?:/i.test(k) ? normKey(k) : mkeyOf(k, c))) || ''; }catch(e){}
-      momDom = md || mo0.dom || '';
-      agH = md ? '<button type="button" class="pnagl" data-pnag="' + H(md) + '" title="' + H(L('Her mother agency - open it in the Directory', '마더 에이전시 - 디렉터리에서 열기')) + '">' + H(mo0.ag) + ' ›</button>' : '<span class="pnagl">' + H(mo0.ag) + '</span>';
-      mom = true;
-      if(ag) also = '<p class="pnalso">' + L('also at ', '함께 소속: ') + (href ? '<a href="' + H(href) + '" target="_blank" rel="noopener">' + H(ag) + ' ↗</a>' : H(ag)) + '</p>';
+    /* 1.2.211 / 1.2.231: her mother agency is her primary agency - named first; its name (and her name) open her page there,
+       or its site when she isn't found on its boards; the agency she was found at follows as "also at", with her page there */
+    const MO = motherInfo(k, ag);
+    let mom = !!MO, also = '', pgM = '';
+    if(MO){
+      pgM = MO.page;
+      /* 1.2.232: the mother agency's name opens its main page; her name opens her page there (else the page she was found on) */
+      agH = MO.site ? '<a class="pnagl" href="' + H(MO.site) + '" target="_blank" rel="noopener" title="' + H(L('Her mother agency’s website', '마더 에이전시 웹사이트')) + '">' + H(MO.ag) + ' ↗</a>' : '<span class="pnagl">' + H(MO.ag) + '</span>';
+      if(MO.foundAg){ let fs = ''; try{ fs = MO.foundPage ? new URL(MO.foundPage).origin : ''; }catch(e){} try{ const h = MO.foundPage ? new URL(MO.foundPage).hostname.replace(/^www\./, '').toLowerCase() : ''; const hit = h && AG.find(x => String(x.domain || '').replace(/^www\./, '').toLowerCase() === h); if(hit) fs = 'https://' + hit.domain; }catch(e){}
+        also = '<p class="pnalso">' + L('also at ', '함께 소속: ') + (fs ? '<a href="' + H(fs) + '" target="_blank" rel="noopener">' + H(MO.foundAg) + ' ↗</a>' : H(MO.foundAg)) + '</p>'; }
     }
     /* 1.2.168 (user, 13 Nov 2026): her name opens her page on the agency's site */
-    const pg = href || (/^https?:\/\//i.test(k || '') && !/instagram\.com/i.test(k) ? k : '');
+    const pg = pgM || href || (/^https?:\/\//i.test(k || '') && !/instagram\.com/i.test(k) ? k : '');
     const nmTxt = H(a.nm || i.nm || '');
     return '<div class="pnhd"><div class="pnth">' + pic + '</div><div class="pnhm"><h2>' + (pg ? '<a class="pnnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(L('Open her page on the agency’s site', '에이전시 사이트에서 모델 페이지 열기')) + '">' + nmTxt + '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg></a>' : nmTxt) + '</h2>' +
-      '<div class="pnagr">' + agH + (also ? agFavBtn(Object.assign({}, a, {agRef: momDom}), mo0.ag, '') : agFavBtn(a, ag, href)) + (mom ? '<span class="pnmom">' + L('Mother', '마더') + '</span>' : '') + '</div>' + also +
+      '<div class="pnagr">' + agH + (MO ? agFavBtn(Object.assign({}, a, MO.dom ? {agRef: MO.dom} : {}), MO.ag, '') : agFavBtn(a, ag, href)) + (mom ? '<span class="pnmom">' + L('Mother', '마더') + '</span>' : '') + '</div>' + also +
       (meta ? '<p class="pnmeta">' + meta + '</p>' : '') + momBox(k, a) + '</div>' +
       '<button type="button" class="pnfav' + (fav ? ' on' : '') + '" data-pnfav aria-pressed="' + fav + '" title="' + H(fav ? L('In My Favorites — click to remove', '내 즐겨찾기 — 누르면 뺍니다') : L('Add to My Favorites', '내 즐겨찾기에 추가')) + '">' + HEART + '</button></div>' +
       (a.readNote || '');
@@ -968,7 +1038,11 @@
     const {f} = a.facts || factsOf(k);
     const F = Object.assign({}, f, a.f || {});
     const g = F.g || '';
-    const cell = (lab, v, u) => '<div' + (v == null ? ' class="no"' : '') + '><small>' + H(lab) + '</small><b>' + (v == null ? '–' : H(v)) + (v != null && u ? '<em>' + H(u) + '</em>' : '') + '</b></div>';
+    /* 1.2.235 (user, 18 Nov 2026: "not able to edit/input the measurements in myself"): tap a figure to type the measurements;
+       a typed figure is kept as a correction over what the agency published (the crawler never overwrites it) */
+    const canM = signedIn() && typeof mxSet === 'function' && /^https?:/i.test(k || '');
+    const cell = (lab, v, u) => (canM ? '<button type="button" class="pnmxc' + (v == null ? ' no' : '') + '" data-pnmx title="' + H(L('Tap to type the measurements', '눌러서 사이즈 입력')) + '">' : '<div' + (v == null ? ' class="no"' : '') + '>') +
+      '<small>' + H(lab) + '</small><b>' + (v == null ? '–' : H(v)) + (v != null && u ? '<em>' + H(u) + '</em>' : '') + '</b>' + (canM ? '</button>' : '</div>');
     /* 1.2.140 (user, 11 Nov 2026: "I need a part to input the age on the cards (not just on the booking cards)"): Age sits
        with the measurements on every card; tap it to type the age or the date of birth. With a booking card it is the
        booking card's own Age / Date of birth (the contract and visa read those); before that it is kept with her card
@@ -979,8 +1053,14 @@
       '<label><span>' + L('Date of birth', '생년월일') + '</span><input data-mxin="age-dob" placeholder="DD/MM/YYYY" value="' + H(A.dob) + '"></label>' +
       '<p>' + L('With a date of birth the age works itself out. The same age is on her booking card, contract and visa.', '생년월일을 넣으면 나이가 자동으로 계산됩니다. 부킹 카드·계약서·비자에도 같은 나이가 들어갑니다.') + '</p>' +
       '<div><button type="button" class="mxb" data-pnagex>' + L('Cancel', '취소') + '</button><button type="submit" class="mxb pri" data-pnageok>' + L('Save', '저장') + '</button></div></form>' : '';
+    const nv = v => v == null || v === '' || isNaN(+v) ? '' : String(Math.round(+v * 10) / 10);
+    const fld = (f, lab, v, ph) => '<label><span>' + lab + '</span><input data-mxin="mx-' + f + '" inputmode="decimal" placeholder="' + ph + '" value="' + H(nv(v)) + '"></label>';
+    const edM = MXMEAS === k && canM ? '<form class="pnaged pnmxed" data-pnmxf>' + fld('ht', L('Height', '신장'), F.ht, '178') + fld('bu', L('Bust', '가슴'), F.bu, '82') + fld('wa', L('Waist', '허리'), F.wa, '60') +
+      fld('hp', L('Hips', '엉덩이'), F.hp, '88') + fld('eu', L('Shoe', '신발'), F.eu, '39') +
+      '<p>' + L('Centimetres; shoe in EU size. What you type is kept over the agency’s figures; leave a box empty to use the agency’s figure.', '센티미터, 신발은 EU 사이즈. 입력한 값이 에이전시 수치보다 우선합니다. 비워 두면 에이전시 수치를 씁니다.') + '</p>' +
+      '<div><button type="button" class="mxb" data-pnmxx>' + L('Cancel', '취소') + '</button><button type="submit" class="mxb pri" data-pnmxok>' + L('Save', '저장') + '</button></div></form>' : '';
     return '<div class="pnmr pnmr6">' + cell(L('Height', '신장'), uLen(F.ht, true), uL(true)) + cell(L('Bust', '가슴'), uLen(F.bu), uL()) + cell(L('Waist', '허리'), uLen(F.wa), uL()) +
-      cell(L('Hips', '엉덩이'), uLen(F.hp), uL()) + cell(L('Shoe', '신발'), uShoe(F.eu, F.us, g), uS()) + ageCell + '</div>' + ed;
+      cell(L('Hips', '엉덩이'), uLen(F.hp), uL()) + cell(L('Shoe', '신발'), uShoe(F.eu, F.us, g), uS()) + ageCell + '</div>' + ed + edM;
   }
   function pnSecH(title, right){ return '<div class="pnsh"><h3>' + title + '</h3>' + (right || '') + '</div>'; }
   function pnStatus(k, a, c, st, can, nm){
@@ -1019,15 +1099,15 @@
   function gSummary(k, c, compact){
     let g = {}, amt = '', sub = '', av = '', stay = '', ctd = '';
     const GN = {no: L('No Guarantee', '노 개런티'), cond: L('Condition Guarantee', '컨디션 개런티'), net: L('Net Guarantee', '넷 개런티')};
-    const short = v => { const n = +String(v || '').replace(/[^\d]/g, ''); return n >= 1e6 ? '₩' + (Math.round(n / 1e5) / 10) + 'M' : n ? '₩' + n.toLocaleString('en-US') : ''; };
+    const short = v => { const n = +String(v || '').replace(/[^\d]/g, ''); return n ? '₩' + n.toLocaleString('en-US') : ''; };   // 1.2.218 (user): the whole amount, 2,000,000 not 2M, in every language
     if(c){
       g.gty = c.gty || '';
-      if(g.gty === 'net' && c.ctguar){ amt = short(c.ctguar) + (c.ctgmode === 'month' ? '/mo' : ''); }
-      if(g.gty === 'cond' && c.ctgm) amt = short(c.ctgm) + '/mo';
+      if(g.gty === 'net' && c.ctguar){ amt = short(c.ctguar) + (c.ctgmode === 'month' ? L('/mo', '/월') : ''); }
+      if(g.gty === 'cond' && c.ctgm) amt = short(c.ctgm) + L('/mo', '/월');
       av = c.avf || ''; stay = c.avd || ''; ctd = String(c.ctdays || '').replace(/[^\d]/g, '');
     }else{
       const p = preOf(k) || {}; g.gty = p.gty || '';
-      if(p.amt && (g.gty === 'net' || g.gty === 'cond')) amt = short(p.amt) + (g.gty === 'cond' || p.per === 'month' ? '/mo' : '');
+      if(p.amt && (g.gty === 'net' || g.gty === 'cond')) amt = short(p.amt) + (g.gty === 'cond' || p.per === 'month' ? L('/mo', '/월') : '');
       av = p.avf || ''; stay = p.avd || '';
     }
     let gH;
@@ -1084,7 +1164,7 @@
     const inp = (f, val, ph, attrs) => '<input data-gin="' + f + '" value="' + H(val) + '" placeholder="' + H(ph) + '"' + (attrs || '') + dis + '>';
     let rows = '';
     if(g.gty === 'net') rows += cell(1, L('Amount', '금액'), '<span class="gscur">₩</span>' + inp('amt', g.amt, L('Amount', '금액'), ' inputmode="numeric"') +
-      '<span class="gstog" role="group" aria-label="' + H(L('Amount is for', '금액 기준')) + '">' + [['term', L('Term', '전체')], ['month', L('Month', '월')]].map(([v, t]) => '<button type="button" data-gmode="' + v + '" aria-pressed="' + (g.mode === v) + '"' + dis + '>' + t + '</button>').join('') + '</span>');
+      '<span class="gstog" role="group" aria-label="' + H(L('Amount is for', '금액 기준')) + '">' + [['term', L('Term', '전체'), L('Term — the amount is for her whole stay', '전체 — 체류 기간 전체 금액')], ['month', L('Mo', '월'), L('Month — the amount is per month', '월 — 한 달 금액')]].map(([v, t, tip]) => '<button type="button" data-gmode="' + v + '" aria-pressed="' + (g.mode === v) + '" title="' + H(tip) + '" aria-label="' + H(tip) + '"' + dis + '>' + t + '</button>').join('') + '</span>');
     if(g.gty === 'cond') rows += cell(1, L('Per month', '월'), '<span class="gscur">₩</span>' + inp('cgm', g.cgm, L('Full guarantee', '월 개런티 전액'), ' inputmode="numeric"')) +
       cell(1, L('If', '조건'), inp('jobs', g.jobs, '5', ' inputmode="numeric" class="gsjobs"') + '<span class="gsunit">' + L('full-day jobs / 30 days', '풀데이 잡 / 30일') + '</span>');
     if(g.gty === 'no') rows += '<div class="gscell none"><small>' + L('Guarantee', '개런티') + '</small><span class="gsval">' + L('None. Nothing to fill in.', '없음. 입력할 것이 없습니다.') + '</span></div>';
@@ -1145,10 +1225,15 @@
      scrolled to her card, which is outlined for a few seconds so you keep your place. */
   function pnAllStrip(k, a){
     let dom = ''; try{ dom = agDomOf(a, a.ag || '', a.href || ''); }catch(e){}
+    /* 1.2.234 (user, 18 Nov 2026: "After I changed the Mother Agency, this still stayed as a link to Wave Management"): when her
+       mother agency is set, the strip shows and opens the mother agency's models (and her card there when it is found) */
+    let mi = null; try{ mi = motherInfo(k, a.ag || ''); }catch(e){}
+    if(mi && mi.dom){ const md = lc(String(mi.dom).replace(/^www\./i, '')); if(md && window.__illuAgModels && (window.__illuAgModels(md) || []).length) dom = md; }
     if(!dom || !window.__illuAgModels) return '';
     let ms = []; try{ ms = window.__illuAgModels(dom) || []; }catch(e){}
     if(ms.length < 2) return '';
     let me = ''; try{ me = mkeyOf(k, /^bid:/.test(k) ? BOOK.get(k.slice(4)) : null) || ''; }catch(e){}
+    if(mi && mi.dom && dom === lc(String(mi.dom).replace(/^www\./i, '')) && !mi.here){ me = ''; try{ if(mi.page && typeof normKey === 'function') me = normKey(mi.page); }catch(e){} }
     const faces = [];
     for(const m of ms){
       if(faces.length >= 4) break;
@@ -1165,7 +1250,7 @@
       if(src) faces.push(src);
     }
     let cnt = ms.length; try{ const dn = window.__illuDirCountOf ? window.__illuDirCountOf(dom) : -1; if(dn > 0) cnt = dn; }catch(e){}
-    const agN = a.ag || (AG.find(x => lc(x.domain) === dom) || {}).name || dom;
+    const agN = (mi && mi.ag && dom === lc(String(mi.dom || '').replace(/^www\./i, '')) ? mi.ag : '') || a.ag || (AG.find(x => lc(x.domain) === dom) || {}).name || dom;
     return '<button type="button" class="pnall" data-pnall="' + H(dom) + '" data-pnallk="' + H(me || k) + '" title="' + H(L('Open ' + agN + ' in the Directory', '디렉터리에서 ' + agN + ' 열기')) + '">' +
       (faces.length ? '<span class="pnallph" aria-hidden="true">' + faces.map(u => '<img alt="" loading="lazy" src="' + H(u) + '">').join('') + '</span>' : '') +
       '<span class="pnallt"><b>' + H(L('All ' + cnt + ' models', '모델 ' + cnt + '명 모두')) + '</b><small>' + H(L('from ' + agN + ', in the Directory', agN + ' · 디렉터리')) + '</small></span><span class="pnallar" aria-hidden="true">→</span></button>';
@@ -1175,8 +1260,10 @@
     const pills = [];
     if(a.nPhotos) pills.push('<span class="pnpill">' + H(L(a.nPhotos + ' photos', '사진 ' + a.nPhotos + '장')) + '</span>');
     let chip = ''; try{ chip = (a.href || a.agRef) && typeof ctsChip === 'function' ? ctsChip(a.href || ('https://' + a.agRef), a.ag || '') : ''; }catch(e){}
-    const mo = momOf(k);
-    if(mo && mo.dom && lc(mo.ag) !== lc(a.ag)){ let mc = ''; try{ mc = typeof ctsChip === 'function' ? ctsChip('https://' + mo.dom, mo.ag) : ''; }catch(e){} if(mc){ pills.push('<span class="pnct pnmomct" title="' + H(L('Write to her mother agency', '마더 에이전시에 메일')) + '"><em>' + L('Mother', '마더') + '</em>' + mc + '</span>'); chip = ''; } }
+    /* 1.2.231: whenever her mother agency is set, the contacts are the mother agency's (also when the card already names it
+       but her page is on another agency's site) */
+    const mo = motherInfo(k, a.ag);
+    if(mo && mo.dom && (!mo.here || !onDom(a.href || '', mo.dom))){ let mc = ''; try{ mc = typeof ctsChip === 'function' ? ctsChip(mo.site, mo.ag) : ''; }catch(e){} if(mc){ pills.push('<span class="pnct pnmomct" title="' + H(L('Write to her mother agency', '마더 에이전시에 메일')) + '"><em>' + L('Mother', '마더') + '</em>' + mc + '</span>'); chip = ''; } }
     if(chip) pills.push('<span class="pnct">' + chip + '</span>');
     /* 1.2.178 (user, 13 Nov 2026: "what happened the model instagram link/link input?"): her Instagram is always here -
        the handle as a link with ✎ to change it, or "add ig" to type one in (the same handle the cards use) */
@@ -1271,7 +1358,7 @@
     for(const x of keep){ const n = host.querySelector(x.sel); if(!n) continue; n.value = x.v; if(x.f){ try{ n.focus({preventScroll: true}); n.setSelectionRange(x.a, x.b); }catch(e){} } }
   };
   document.addEventListener('click', e => {
-    const t = e.target.closest && e.target.closest('.mx [data-pnage],.mx [data-pnagex],.mx [data-pnageok],.mx [data-pnv],.mx [data-pnfav],.mx [data-pnag],.mx [data-pnall],.mx [data-pnagfav],.mx [data-mxvote],.mx [data-mxget],.mx [data-mxsend],.mx [data-mxsendyes],.mx [data-mxsendno],.mx [data-gfyes],.mx [data-gfno],.mx [data-mxnote],.mx [data-mxlink],.mx [data-mxdel],.mx [data-mxopen]'); if(!t) return;
+    const t = e.target.closest && e.target.closest('.mx [data-pnage],.mx [data-pnagex],.mx [data-pnageok],.mx [data-pnmx],.mx [data-pnmxx],.mx [data-pnmxok],.mx [data-pnv],.mx [data-pnfav],.mx [data-pnag],.mx [data-pnall],.mx [data-pnagfav],.mx [data-mxvote],.mx [data-mxget],.mx [data-mxsend],.mx [data-mxsendyes],.mx [data-mxsendno],.mx [data-gfyes],.mx [data-gfno],.mx [data-mxnote],.mx [data-mxlink],.mx [data-mxdel],.mx [data-mxopen]'); if(!t) return;
     e.preventDefault(); e.stopPropagation();
     const box = t.closest('.mx'), k = box.dataset.mxk, d = t.dataset;
     if(d.mxsend != null){ if(!signedIn()) return; MXASK = k; changed(); return; }
@@ -1293,6 +1380,20 @@
     if(d.mxsendno != null){ MXASK = ''; changed(); return; }
     if(d.pnage != null){ MXAGE = MXAGE === k ? '' : k; changed(); setTimeout(() => { const i = document.querySelector('[data-mxin="age-v"]'); if(i) try{ i.focus(); i.select(); }catch(er){} }, 30); return; }
     if(d.pnagex != null){ MXAGE = ''; changed(); return; }
+    if(d.pnmx != null){ MXMEAS = MXMEAS === k ? '' : k; changed(); setTimeout(() => { const i = document.querySelector('[data-mxin="mx-ht"]'); if(i) try{ i.focus(); i.select(); }catch(er){} }, 30); return; }
+    if(d.pnmxx != null){ MXMEAS = ''; changed(); return; }
+    if(d.pnmxok != null){
+      for(const f of ['ht', 'bu', 'wa', 'hp', 'eu']){
+        const raw = String((box.querySelector('[data-mxin="mx-' + f + '"]') || {}).value || '').trim().replace(',', '.');
+        const n = raw === '' ? null : parseFloat(raw);
+        const pub = (() => { try{ const r = MEAS.get(k); const v = r ? r[['ht', 'bu', 'wa', 'hp', 'eu'].indexOf(f)] : null; return v == null || v === '' || isNaN(+v) ? null : Math.round(+v * 10) / 10; }catch(er){ return null; } })();
+        try{
+          if(n == null || isNaN(n)) mxRevert(k, f);
+          else { const v = Math.round(n * 10) / 10; if(v !== pub) mxSet(k, f, v); else mxRevert(k, f); }
+        }catch(er){}
+      }
+      try{ flushEdits(); }catch(er){}
+      MXMEAS = ''; changed(); try{ window.__illuRefreshCards && window.__illuRefreshCards(); }catch(err){} return; }
     if(d.pnageok != null){
       const av = ((box.querySelector('[data-mxin="age-v"]') || {}).value || '').replace(/[^\d]/g, '').slice(0, 3), dv = ((box.querySelector('[data-mxin="age-dob"]') || {}).value || '').trim();
       if(dv && typeof dobParse === 'function' && !dobParse(dv)){ const i = box.querySelector('[data-mxin="age-dob"]'); if(i){ i.setCustomValidity && i.setCustomValidity('DD/MM/YYYY'); i.reportValidity && i.reportValidity(); i.style.borderColor = '#C0303C'; } return; }
@@ -1407,12 +1508,20 @@
     NTPOP.style.top = (r.bottom + 8 + h > innerHeight - 8 ? Math.max(8, r.top - h - 8) : r.bottom + 8) + 'px';
   }, true);
   window.__illuVoteLamps = foot;
+  /* 1.2.219: what marks a card, for putting marked cards first (Directory roster, email model list) */
+  window.__illuCardMarks = k => { try{ return {fav: !!(k && myFav().has(k)), note: !!(k && notesOf(k).some(n => String(n.t || '').trim())), vote: k ? (window.__illuVoteState(k) || '') : ''}; }catch(e){ return {fav: false, note: false, vote: ''}; } };
   window.__illuVoteMine = k => { const s = stateOf(k); return s ? s.mine || '' : ''; };
   /* repaint every footer of one model in place */
   function repaint(k){
     let list = [];
     try{ list = document.querySelectorAll('.vmk[data-mk="' + CSS.escape(k) + '"]'); }catch(e){}
-    list.forEach(b => { const n = document.createElement('span'); n.innerHTML = foot(k, b.dataset.nm, b.dataset.meta, b.dataset.url); const nb = n.firstChild; if(nb && nb.outerHTML !== b.outerHTML) b.replaceWith(nb); });
+    list.forEach(b => { const n = document.createElement('span'); n.innerHTML = foot(k, b.dataset.nm, b.dataset.meta, b.dataset.url); const nb = n.firstChild; if(!nb) return;
+      /* 1.2.223 (user, 17 Nov 2026: "there's a double approved going on"): a card footer whose result was already joined into
+         one status pill (.ucst - "✓ Approved 4–0", see footJoin in illu-dir2.js) got the vote's own "✓ Approved 4–0" back when
+         the footer was repainted. The pill keeps the result; an open vote shows its own buttons only, as when the card is drawn. */
+      const st = b.parentElement && b.parentElement.querySelector(':scope > .ucst');
+      if(st){ if(nb.querySelector('.ivl')) st.remove(); else nb.querySelectorAll('.ivres').forEach(x => x.remove()); }
+      if(nb.outerHTML !== b.outerHTML) b.replaceWith(nb); });
   }
   function repaintAll(){ document.querySelectorAll('.vmk[data-mk]').forEach(b => repaint(b.dataset.mk)); }
   /* clicks: in the capture phase, so a card or link underneath never sees them */
@@ -1589,10 +1698,10 @@
     let age = bc ? (bc.age || '') : (p.age || ''); try{ if(!age && bc && bc.dob && typeof ageFrom === 'function') age = ageFrom(bc.dob); }catch(e){}
     put('age', age);
     const GN = {no: 'No Guarantee', cond: 'Condition Guarantee', net: 'Net Guarantee'};
-    const short = v => { const n = +String(v || '').replace(/[^\d]/g, ''); return n >= 1e6 ? '₩' + (Math.round(n / 1e5) / 10) + 'M' : n ? '₩' + n.toLocaleString('en-US') : ''; };
+    const short = v => { const n = +String(v || '').replace(/[^\d]/g, ''); return n ? '₩' + n.toLocaleString('en-US') : ''; };   // 1.2.218 (user): the whole amount, 2,000,000 not 2M, in every language
     let gty = '', amt = '', av = '', stay = '';
-    if(bc){ gty = bc.gty || ''; if(gty === 'net' && bc.ctguar) amt = short(bc.ctguar) + (bc.ctgmode === 'month' ? '/mo' : ''); if(gty === 'cond' && bc.ctgm) amt = short(bc.ctgm) + '/mo'; av = bc.avf || ''; stay = bc.avd || ''; }
-    if(!gty && p.gty){ gty = p.gty; if(p.amt && (gty === 'net' || gty === 'cond')) amt = short(p.amt) + (gty === 'cond' || p.per === 'month' ? '/mo' : ''); }
+    if(bc){ gty = bc.gty || ''; if(gty === 'net' && bc.ctguar) amt = short(bc.ctguar) + (bc.ctgmode === 'month' ? L('/mo', '/월') : ''); if(gty === 'cond' && bc.ctgm) amt = short(bc.ctgm) + L('/mo', '/월'); av = bc.avf || ''; stay = bc.avd || ''; }
+    if(!gty && p.gty){ gty = p.gty; if(p.amt && (gty === 'net' || gty === 'cond')) amt = short(p.amt) + (gty === 'cond' || p.per === 'month' ? L('/mo', '/월') : ''); }
     if(!av) av = p.avf || ''; if(!stay) stay = p.avd || '';
     if(GN[gty]) put('gty', (amt ? amt + ' · ' : '') + GN[gty]);
     put('av', av); if(stay) put('stay', /^\d+$/.test(String(stay).trim()) ? stay + ' days' : stay);
@@ -1725,10 +1834,15 @@
   function det(k){
     const i = info(k), {f} = factsOf(k), g = f.g || '';
     let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){}
-    const mom = (() => { try{ return window.__illuMother && window.__illuMother(k, i.ag); }catch(e){ return false; } })();
+    let mom = (() => { try{ return window.__illuMother && window.__illuMother(k, i.ag); }catch(e){ return false; } })();
+    /* 1.2.228 (user, 17 Nov 2026, Adriana Casas: sent to the vote from Wave Management / The Wall, then Uniko Models chosen as
+       her mother agency - "when the Mother Agency has been established, I want this part to show the Mother Agency name"):
+       the card names her mother agency, with the agency she was found at in the tooltip */
+    let agShow = i.ag || '', agTip = '';
+    try{ const MO = motherInfo(k, i.ag); if(MO){ agShow = MO.ag; mom = true; if(MO.foundAg) agTip = L('Mother agency · found at ', '마더 에이전시 · 발견: ') + MO.foundAg; } }catch(e){}
     const v = (x, h) => { const n = parseFloat(x); const t = uLen(isNaN(n) ? x : (uL(h) === 'cm' ? Math.round(n) : n), h); return t == null ? '–' : H(t); };
     const sh = uShoe(f.eu, f.us, g);
-    return '<div class="ivdet"><div class="ivdag"><b>' + H(i.ag || '') + '</b>' + (mom ? '<span class="pnmom">' + L('Mother', '마더') + '</span>' : '') + '</div>' +
+    return '<div class="ivdet"><div class="ivdag"' + (agTip ? ' title="' + H(agTip) + '"' : '') + '><b>' + H(agShow) + '</b>' + (mom ? '<span class="pnmom">' + L('Mother', '마더') + '</span>' : '') + '</div>' +
       '<div class="ivdms"><span><b>' + v(f.ht, 1) + '</b><i>·</i>' + v(f.bu) + '<i>/</i>' + v(f.wa) + '<i>/</i>' + v(f.hp) + (uL() === 'in' ? '<small>in</small>' : '') + '</span><span class="ivdsh" title="' + H(L('Shoe size', '신발 사이즈')) + '">' + (sh == null ? '–' : H(sh)) + '<small>' + H(uS()) + '</small></span></div>' +
       detRows(k, c) + '</div>';
   }
@@ -1736,11 +1850,11 @@
      the Guarantee / Available box and the Email stage chip become three label | value lines - Guarantee, Available
      (rough date · stay) and Booking (who has her booking card · the step it is on). Same on every board, PC and phone. */
   function detRows(k, c){
-    const short = v => { const n = +String(v || '').replace(/[^\d]/g, ''); return n >= 1e6 ? '₩' + (Math.round(n / 1e5) / 10) + 'M' : n ? '₩' + n.toLocaleString('en-US') : ''; };
+    const short = v => { const n = +String(v || '').replace(/[^\d]/g, ''); return n ? '₩' + n.toLocaleString('en-US') : ''; };   // 1.2.218 (user): the whole amount, 2,000,000 not 2M, in every language
     const GT = {no: L('None', '없음'), cond: L('Condition', '컨디션'), net: L('Net', '넷')};
     let gty = '', amt = '', av = '', stay = '';
-    if(c){ gty = c.gty || ''; if(gty === 'net' && c.ctguar) amt = short(c.ctguar) + (c.ctgmode === 'month' ? '/mo' : ''); if(gty === 'cond' && c.ctgm) amt = short(c.ctgm) + '/mo'; av = c.avf || ''; stay = firstNum(c.avd || c.ctdays); }
-    else{ const p = preOf(k) || {}; gty = p.gty || ''; if(p.amt && (gty === 'net' || gty === 'cond')) amt = short(p.amt) + (gty === 'cond' || p.per === 'month' ? '/mo' : ''); av = p.avf || ''; stay = firstNum(p.avd); }
+    if(c){ gty = c.gty || ''; if(gty === 'net' && c.ctguar) amt = short(c.ctguar) + (c.ctgmode === 'month' ? L('/mo', '/월') : ''); if(gty === 'cond' && c.ctgm) amt = short(c.ctgm) + L('/mo', '/월'); av = c.avf || ''; stay = firstNum(c.avd || c.ctdays); }
+    else{ const p = preOf(k) || {}; gty = p.gty || ''; if(p.amt && (gty === 'net' || gty === 'cond')) amt = short(p.amt) + (gty === 'cond' || p.per === 'month' ? L('/mo', '/월') : ''); av = p.avf || ''; stay = firstNum(p.avd); }
     const none = t => '<span class="no">' + t + '</span>';
     const gV = gty === 'no' ? H(GT.no) : gty ? (amt ? H(amt) + ' · ' : none(L('Amount? ', '금액? ')) + ' · ') + H(GT[gty] || '') : none(L('Not set', '미정'));
     const gT = gty === 'no' ? L('No guarantee', '노 개런티') : gty ? (amt ? amt + ' ' : '') + (GT[gty] || '') + L(' guarantee', ' 개런티') : '';
@@ -1788,7 +1902,10 @@
   let VS = {}; try{ VS = JSON.parse(localStorage.getItem('illu.ivview') || '{}') || {}; }catch(e){ VS = {}; }
   const saveVS = () => { try{ localStorage.setItem('illu.ivview', JSON.stringify(VS)); }catch(e){} };
   const seg = (key, opts) => '<div class="ivseg">' + opts.map(([v, l]) => '<button type="button" class="' + ((VS[key] || opts[0][0]) === v ? 'on' : '') + '" data-ivset="' + key + '=' + v + '">' + H(l) + '</button>').join('') + '</div>';
-  const fresh = (VS_k, list) => (VS[VS_k] || 'old') === 'new' ? list.reverse() : list;
+  /* 1.2.227 (user, 17 Nov 2026: "I want to see the most recent to last on this board"): with nothing chosen yet the switch
+     showed "Newest first" while the cards ran oldest first - the default is now newest first, as the switch says */
+  /* 1.2.233 (user: "3 indications of how many models are on the board. I only need 1"): the Favorites boards show their count only on the sub-board tabs */
+  const fresh = (VS_k, list) => (VS[VS_k] || 'new') === 'new' ? list.reverse() : list;
   function stPill(k){
     const st = stateOf(k);
     if(!st) return '<span class="ivst none">' + L('Not on the Team Vote', '팀 투표에 없음') + '</span>';
@@ -1815,7 +1932,9 @@
 .ivvf .ivdisc{position:static!important;inset:auto!important;margin:0!important;transform:none!important;width:15px!important;height:15px!important;font-size:7px!important;line-height:15px!important;box-shadow:none}
 .ivvf .ivwf.wait{opacity:.35;filter:grayscale(.6)}`; document.head.appendChild(st); }
   const capDisc = p => disc(p, 'xs');
+  const RAW = new Map();
   function add(id, label, render, count, title){
+    RAW.set(id, {label, render, count});
     const el = pageEl(id);
     const p = {el, render: () => { if(el.hidden) return; const h = render(); if(el.__h !== h){ el.__h = h; el.innerHTML = h; } tick(); }, count};
     PAGES.set(id, p);
@@ -1832,7 +1951,7 @@
   add('fav', ['My Favorites', '내 즐겨찾기'], () => {
     const fw = gWho() && gWho() !== me() ? gWho() : '', favSrc = fw ? (FAV.get(fw) || new Map()) : myFav();
     const list = fresh('lsort', [...favSrc].filter(([k]) => !hidK(k)).map(([k, v]) => ({k, at: v.at})).sort((a, b) => String(a.at).localeCompare(String(b.at))));
-    const head = '<div class="ivhead"><span class="ivbig">' + list.length + '</span><span class="ivkick">' + (fw ? H(L(pname(fw) + '’s favorites', pname(fw) + '의 즐겨찾기')) : L('Your favorites', '내 즐겨찾기')) + '</span><span class="ivdot"></span><span class="ivkick">' + L('Only you see this board', '나만 보는 보드') + '</span><span class="ivsp"></span>' +
+    const head = '<div class="ivhead"><span class="ivkick">' + (fw ? H(L(pname(fw) + '’s favorites', pname(fw) + '의 즐겨찾기')) : L('Your favorites', '내 즐겨찾기')) + '</span><span class="ivdot"></span><span class="ivkick">' + L('Only you see this board', '나만 보는 보드') + '</span><span class="ivsp"></span>' +
       seg('lsort', [['new', L('Newest first', '최신 순')], ['old', L('Oldest first', '오래된 순')]]) + '<button type="button" class="ivlink" data-ivgo="team">' + L('Team Vote →', '팀 투표 →') + '</button></div>';
     if(!list.length) return head + empty(L('My Favorites is empty', '내 즐겨찾기가 비어 있습니다'), L('Tap the ♡ on any card — in New Face & Development, the Directory or Compare boards — and the model lands here. Press Send to Team Vote on her card when you want the team to vote.', '추천, 디렉터리, 보드 비교의 아무 카드에서 ♡를 누르면 여기에 들어옵니다. 팀 투표를 받으려면 카드의 팀 투표로 보내기를 누르세요.'));
     return head + '<div class="ivgrid ivtv">' + list.map(x => '<div class="ivcw">' + mcard(x.k) + '<div class="ivcap">♥ ' + H(when(x.at)) + '</div>' + stPill(x.k) + offBox(x.k) + '</div>').join('') + '</div>';
@@ -2089,7 +2208,7 @@
     if((VS.mfwho || 'all') === 'cmp') list = list.filter(e => e.who.some(w => mfPicked().includes(w.p)));
     if((VS.mfsort || 'most') === 'most') list.sort((a, b) => (b.who.length - a.who.length) || String(b.at).localeCompare(String(a.at)));
     else list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
-    const head = '<div class="ivhead"><span class="ivbig">' + list.length + '</span><span class="ivkick">' + L('Every member’s favorites', '모든 멤버의 즐겨찾기') + '</span><span class="ivdot"></span><span class="ivkick">' + H(L(multi + ' liked by more than one', multi + '명은 2명 이상이 좋아함')) + '</span><span class="ivsp"></span>' +
+    const head = '<div class="ivhead"><span class="ivkick">' + L('Every member’s favorites', '모든 멤버의 즐겨찾기') + '</span><span class="ivdot"></span><span class="ivkick">' + H(L(multi + ' liked by more than one', multi + '명은 2명 이상이 좋아함')) + '</span><span class="ivsp"></span>' +
       seg('mfwho', [['all', L('Everyone', '전체')], ['multi', L('Liked by 2+', '2명 이상')], ['cmp', L('Compare members', '멤버 비교')]]) + ((VS.mfwho || 'all') === 'cmp' ? '' : seg('mfsort', [['most', L('Most liked', '많이 좋아한 순')], ['new', L('Newest', '최신 순')]])) + '</div>';
     if((VS.mfwho || 'all') === 'cmp') return head + mfCompare();
     if(!list.length) return head + empty(L('No favorites yet', '아직 즐겨찾기가 없습니다'), L('When any member taps the ♡ on a card, the model shows here with who liked her.', '멤버가 카드의 ♡를 누르면 누가 좋아했는지와 함께 여기에 나옵니다.'));
@@ -2183,6 +2302,9 @@
     return about('cxl', 'The team voted these out. Open a photo to see the result; reopen the vote if something changes.', '팀이 반대한 카드입니다. 사진을 열면 결과가 보이고, 사정이 바뀌면 투표를 다시 열 수 있습니다.') +
       (list.length ? '<div class="ivgrid ivtv">' + list.map(s => '<div class="ivcw">' + mcard(s.k) + resCap(s) + '<button type="button" class="ivbtn wide" data-ivre="' + H(s.k) + '">' + L('Reopen the vote', '투표 다시 열기') + '</button></div>').join('') + '</div>' : '<div class="ivempty sm">' + L('Nothing cancelled yet.', '아직 취소된 카드가 없습니다.') + '</div>');
   }, () => decided('cxl').length || '');
+  /* 1.2.225 (user, 17 Nov 2026: "I want the approved/cancelled sub board in My Favorites"): the same Approved and Cancelled
+     boards as under Team Vote, also as sub-boards of Favorites (Mine · Members · Approved · Cancelled) */
+  for(const [id, src] of [['fappr', 'appr'], ['fcxl', 'cxl']]){ const r = RAW.get(src); if(r) add(id, r.label, r.render, r.count); }
   document.addEventListener('click', e => { const g = e.target.closest && e.target.closest('[data-ivgo]'); if(g && window.__illuGo){ e.preventDefault(); window.__illuGo(g.dataset.ivgo); } });
 
   /* ---------- Today: waiting for your vote ---------- */
@@ -2535,7 +2657,7 @@ p.pnag{cursor:default}
 .ivinfo[open]>summary{border-color:var(--acc);color:var(--acc)}
 .ivinfo>p{position:absolute;z-index:30;right:0;top:36px;width:min(320px,80vw);margin:0;padding:12px 14px;background:var(--surf);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(20,10,30,.18)}
 .ivhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.ivbig{font-size:30px;font-weight:300;line-height:1;color:var(--acc)}
+.ivbig{font-size:30px;font-weight:300;line-height:1;color:var(--acc)}#pane-fappr .ivhead .ivbig,#pane-fcxl .ivhead .ivbig{display:none}
 .ivkick{font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--faint)}
 .ivdot{width:4px;height:4px;border-radius:50%;background:var(--line2,var(--line))}
 .ivseg{display:inline-flex;background:var(--surf);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
@@ -2743,6 +2865,12 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .pnmr b{display:inline-block;max-width:100%;font-size:clamp(10.5px,21cqw,15px);letter-spacing:-.01em}
 .pn2 .pnmr em{font-size:clamp(8px,12cqw,10px)}
 .mxc.mxage .mxagei{width:3ch;text-align:center}
+.pn2 .pnmr .pnmxc{border:0;border-left:1px solid var(--line);background:none;padding:7px 3px;text-align:center;min-width:0;font:inherit;color:inherit;cursor:pointer;container-type:inline-size;overflow:hidden}
+.pn2 .pnmr .pnmxc:first-child{border-left:0}
+.pn2 .pnmr .pnmxc:hover{background:var(--surf2,#F6F3F8)}
+.pn2 .pnmr .pnmxc small{display:block}
+.pn2 .pnaged.pnmxed{grid-template-columns:repeat(5,minmax(0,1fr))}
+@media (max-width:560px){.pn2 .pnaged.pnmxed{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .pn2 .pnmr .pnage{border:0;border-left:1px solid var(--line);background:none;padding:7px 3px;text-align:center;min-width:0;font:inherit;color:inherit;cursor:pointer}
 .pn2 .pnmr .pnage:hover:not(:disabled){background:var(--surf2,#F6F3F8)}
 .pn2 .pnmr .pnage:disabled{cursor:default}
@@ -2821,6 +2949,9 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .gsval{display:flex;align-items:center;justify-content:flex-end;gap:5px;min-width:0;flex-wrap:nowrap}
 .pn2 .gsval input{text-align:right;font:inherit;font-size:13px;font-weight:600;color:var(--ink,inherit);background:transparent;border:0;border-bottom:1.5px dashed transparent;border-radius:0;padding:2px 0;min-width:0;flex:1 1 70px;width:100%;font-variant-numeric:tabular-nums;box-shadow:none}
 .pn2 .gsval input.gsdays,.pn2 .gsval input.gsjobs{flex:none}
+/* 1.2.223 (user: "the overlapping, not being able to see the amount"): the amount box is always wide enough for ₩ 2,000,000 and more; it sits a little left of the Term | Mo switch */
+.pn2 .gsval input[data-gin="amt"]{min-width:10.5ch;flex:1 1 10.5ch;margin-right:4px}
+.pn2 .gstog button[data-gmode]{padding:2px 7px}
 .pn2 .gsval input.gsjobs{width:3ch}
 .pn2 .gsval input::placeholder{color:var(--faint);font-weight:500}
 .pn2 .gscell:hover .gsval input,.pn2 .gsval input:focus{border-bottom-color:var(--line)}

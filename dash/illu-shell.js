@@ -39,7 +39,7 @@
      A place with several pages shows them as tabs along the top and remembers the last one. */
   const GROUPS = {
     'g-atlas': {label: ['Atlas', '아틀라스'], icon: 'atl', tabs: ['atl', 'dir', 'cmpb', 'ig', 'favag']},
-    'g-opus': {label: ['Booking & Selection', '부킹 & 셀렉션'], icon: 'bk', tabs: ['fav', 'mfav', 'team', 'appr', 'tie', 'cxl', 'unav', 'bk', 'stay', 'cmp']},
+    'g-opus': {label: ['Booking & Selection', '부킹 & 셀렉션'], icon: 'bk', tabs: ['fav', 'mfav', 'fappr', 'fcxl', 'team', 'appr', 'tie', 'cxl', 'unav', 'bk', 'stay', 'cmp']},
     /* 1.2.177 (user, 13 Nov 2026: "combine these 2 and name it more ... choose when selecting the icon"): Backlog and
        404 · Blind spots are one rail button, More; pointing at it (or clicking / tapping) opens a small menu */
     'g-more': {label: ['More', '더보기'], icon: 'more', tabs: ['bkl', '404', 'bld']}
@@ -52,7 +52,7 @@
      its boards; orange when a vote waits for you. Each tab remembers the board last opened in it. */
   const SETS = {
     'g-opus': [
-      {id: 'favs', label: ['Favorites', '즐겨찾기'], icon: 'fav', tabs: ['fav', 'mfav'], sub: {fav: ['Mine', '내 즐겨찾기'], mfav: ['Members', '멤버']}},
+      {id: 'favs', label: ['Favorites', '즐겨찾기'], icon: 'fav', tabs: ['fav', 'mfav', 'fappr', 'fcxl'], sub: {fav: ['Mine', '내 즐겨찾기'], mfav: ['Members', '멤버'], fappr: ['Approved', '승인'], fcxl: ['Cancelled', '취소']}},   /* 1.2.225: Approved / Cancelled here too */
       {id: 'vote', label: ['Team Vote', '팀 투표'], icon: 'team', tabs: ['team', 'tie', 'appr', 'cxl'], sub: {team: ['Voting', '투표 중'], tie: ['Tie-breaker', '타이브레이커'], appr: ['Approved', '승인'], cxl: ['Cancelled', '취소']}, hot: true},
       {id: 'bkg', label: ['Booking', '부킹'], icon: 'bk', tabs: ['bk', 'unav', 'stay'], sub: {bk: ['Booking cards', '부킹 카드'], unav: ['Unavailable / On hold', '불가 / 보류'], stay: ['Current / On-Stay', '현재 / 체류 중']}},
       {id: 'cmp', label: null, icon: 'cmp', tabs: ['cmp'], sub: {}}
@@ -181,7 +181,9 @@
       let wait = 0; try{ wait = window.__illuVoteWaiting ? window.__illuVoteWaiting() : 0; }catch(e){}
       h = sets.filter(s => s.tabs.some(exists)).map(s => {
         const one = s.tabs.filter(exists), lab = s.label ? L(s.label[0], s.label[1]) : tabText(one[0]), on = s === cur;
-        const tot = one.reduce((a, x) => a + num(x), 0), hot = s.hot && wait > 0;
+        /* 1.2.233 (user, 18 Nov 2026: "there are 3 indications of how many models are on the board. I only need 1"): Favorites
+           keeps the count on its sub-boards (Mine 27 · Members 59 …) only - no total on the tab, no big number on the board */
+        const tot = s.id === 'favs' ? 0 : one.reduce((a, x) => a + num(x), 0), hot = s.hot && wait > 0;
         return '<button type="button" role="tab" data-shset="' + s.id + '" aria-selected="' + on + '" class="' + (on ? 'on' : '') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (IC[s.icon] || IC[one[0]] || '') + '</svg><span>' + H(lab) + '</span>' +
           (hot ? '<em class="hot" title="' + H(L(wait + ' waiting for your vote', '내 투표 대기 ' + wait)) + '">' + wait + '</em>' : tot ? '<em>' + tot + '</em>' : '') + '</button>';
       }).join('');

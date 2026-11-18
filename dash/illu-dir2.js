@@ -132,7 +132,7 @@
         boards.push(nb2);
       }
       NETS.push({i: NETS.length, key: k, name: mem.length > 1 ? netName(mem, prim) : prim.name, members: mem, offices, boards,
-        domain: prim.domain || '', id: prim.id, at: prim.at || '', prim});
+        domain: prim.domain || '', id: prim.id, at: prim.at || '', prim, added: mem.map(a => a.added || '').sort().pop() || ''});
     }
     if(moved.length){
       const byKey = new Map(NETS.map(n => [n.key, n]));
@@ -150,6 +150,73 @@
     return NETS;
   }
   window.__illuNets = nets;
+  /* 1.2.219 (user, 17 Nov 2026: "MDI Agency Contacts"): the agencies MDI signed models from (illu-mdi-data.js, read from
+     the contracts in Y:\\★지난모델). A network is an MDI contact when one of its members is on that list. */
+  let MDIN = null, MDINV = '', MDIDV = null, MDID = {};
+  function mdiOf(n){
+    if(!n) return null;
+    if(MDINV !== NETV || !MDIN || MDIDV !== window.__illuMDIData){ MDINV = NETV; MDIN = new Map(); MDIDV = window.__illuMDIData; MDID = MDIDV || {}; }
+    if(MDIN.has(n.i)) return MDIN.get(n.i);
+    let o = null;
+    for(const a of n.members || []){ const e = a && a.id != null ? MDID[String(a.id)] : null; if(!e) continue;
+      if(!o) o = {a: e.a, y: [], m: []};
+      for(const y of e.y || []) if(!o.y.includes(y)) o.y.push(y);
+      for(const m of e.m || []) if(!o.m.includes(m)) o.m.push(m); }
+    if(o){ o.y.sort(); o.toks = o.m.map(x => fold(x).split(/[^a-z0-9]+/).filter(Boolean)).filter(t => t.length >= 2); }
+    MDIN.set(n.i, o); return o;
+  }
+  /* a model on the agency's board is one MDI signed when her full name (first and last) is the name on the contract;
+     a first name alone never matches, so two models called Anastasia are never mixed up */
+  function mdiModel(m, n){
+    try{
+      if(!n){ const w = wkIndex(); n = w && (w.get(m.key) || (m.keys || []).map(k => w.get(k)).find(Boolean)); }
+      const o = mdiOf(n); if(!o || !o.toks.length) return false;
+      const c = fold(String(m.nm || '')).split(/[^a-z0-9]+/).filter(Boolean); if(c.length < 2) return false;
+      return o.toks.some(t => t.every(w => c.includes(w)) && c.every(w => t.includes(w) || w.length < 2));
+    }catch(e){ return false; }
+  }
+  function mdiLabel(o){ const y = o.y.length ? (o.y[0] === o.y[o.y.length - 1] ? o.y[0] : o.y[0] + '–' + o.y[o.y.length - 1]) : ''; return 'MDI AGENCY CONTACT' + (o.m.length ? ' · ' + o.m.length + (o.m.length === 1 ? ' MODEL' : ' MODELS') : '') + (y ? ' · ' + y : ''); }
+  window.__illuMDIOf = n => mdiOf(n);
+  /* 1.2.224 (user, 17 Nov 2026: "go through the Hiworks emails and input the agencies that we're in contact with / received
+     replies / emails received from model agencies and mark them in the MDI Agency Contacts"): each person's program reads
+     their Hiworks mail list (illu-email.js, nothing opened) and keeps, per Directory agency, the mails sent and received
+     (docs hwag/<person>). Here they are added up for the team: Replied = mail both ways, Emailed = we wrote and no mail
+     came back, Received = they wrote to us only. */
+  const HWAG = new Map(); let HWV = 0;
+  (function hwListen(){ if(typeof DB === 'undefined' || !DB){ setTimeout(hwListen, 900); return; }
+    try{ DB.collection('hwag').onSnapshot(sn => { const per = new Map();
+      for(const x of (sn.docs || [])){ let v = null; try{ v = typeof docOf === 'function' ? docOf(x) : x.data(); }catch(e){} if(!v || !Array.isArray(v.list)) continue;
+        for(const r of v.list){ const d = String(r.d || '').toLowerCase().replace(/^www\./, ''); if(!d) continue; const o = per.get(d) || {i: 0, o: 0, li: '', lo: '', who: new Set()};
+          o.i += +r.i || 0; o.o += +r.o || 0; if(String(r.li || '') > o.li) o.li = String(r.li || ''); if(String(r.lo || '') > o.lo) o.lo = String(r.lo || ''); if(v.by) o.who.add(v.by); per.set(d, o); } }
+      HWAG.clear(); per.forEach((v, k) => HWAG.set(k, v)); HWV++; MLN = null; try{ refresh(); }catch(e){} }, () => {}); }catch(e){}
+  })();
+  let MLN = null, MLNV = '';
+  function mailOf(n){
+    if(!n || !HWAG.size) return null;
+    const v = NETV + '|' + HWV; if(MLNV !== v || !MLN){ MLNV = v; MLN = new Map(); }
+    if(MLN.has(n.i)) return MLN.get(n.i);
+    let o = null;
+    for(const a of n.members || []){ const d = String(a.domain || '').toLowerCase().replace(/^www\./, ''); const x = d && HWAG.get(d); if(!x) continue;
+      if(!o) o = {i: 0, o: 0, li: '', lo: '', who: new Set()}; o.i += x.i; o.o += x.o; if(x.li > o.li) o.li = x.li; if(x.lo > o.lo) o.lo = x.lo; x.who.forEach(w => o.who.add(w)); }
+    if(o) o.st = o.i && o.o ? 'rep' : o.o ? 'sent' : 'recv';
+    MLN.set(n.i, o); return o;
+  }
+  const MLL = {rep: ['Replied', '답장 받음'], sent: ['Emailed', '메일 보냄'], recv: ['Received', '메일 받음']};
+  const mlDay = iso => { const t = Date.parse(iso || ''); return t ? new Date(t).toLocaleDateString(isKo() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short', year: 'numeric'}) : ''; };
+  function mlTip(o){ return (o.o ? o.o + ' sent by us' + (o.lo ? ' (last ' + mlDay(o.lo) + ')' : '') : 'nothing sent by us') + ' · ' + (o.i ? o.i + ' received' + (o.li ? ' (last ' + mlDay(o.li) + ')' : '') : 'nothing received') + ' · from the Hiworks mail of ' + o.who.size + (o.who.size === 1 ? ' person' : ' people'); }
+  function mdiKind(n){ const c = !!mdiOf(n), m = mailOf(n); return {c, m, any: c || !!m}; }
+  function mdiPass(n){ const k = mdiKind(n); if(!k.any) return false; const f = D2.mdiK || ''; return !f || (f === 'c' ? k.c : !!(k.m && k.m.st === f)); }
+  window.__illuMailOf = n => mailOf(n);
+  /* 1.2.223 (user, 17 Nov 2026: "some sort of marker that mentions that the instagram, agency website/list has been newly
+     added"): an agency added to the Directory in the last 14 days has a NEW tag with the day it was added */
+  const NEWDAYS = 14;
+  function newTag(iso, cls){
+    const t = Date.parse(iso || ''); if(!t || Date.now() - t > NEWDAYS * 864e5) return '';
+    const d = new Date(t), day = d.toLocaleDateString(isKo() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short'});
+    return '<span class="newtag' + (cls ? ' ' + cls : '') + '" title="' + esc((isKo() ? '새로 추가됨 · ' : 'Newly added to the Directory · ') + day) + '">' + (isKo() ? 'NEW' : 'NEW') + '<i> · ' + esc(day) + '</i></span>';
+  }
+  window.__illuNewTag = newTag;
+  window.__illuMDIModel = (m, n) => mdiModel(m, n);
   /* 1.2.194 (user, 14 Nov 2026, approved demo "A + B"): an agency row shows when the team is working on, or has worked on,
      one of its models - a coloured left edge (orange in progress, green worked with), the faces of the people and the
      status; inside the agency those models come first, newest first from the left, each with a corner tag */
@@ -212,6 +279,7 @@
       '<div class="d2r1">' +
         '<label class="d2q"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>' +
         '<input type="search" id="d2q" placeholder="Search agency, city, email…" autocomplete="off" aria-label="Search the Directory"></label>' +
+        '<button type="button" class="d2f d2mdif" data-d2mdi aria-pressed="false" title="Only the agencies MDI has signed models from (from the past contracts)"><i class="mdif" aria-hidden="true"></i>MDI Agency Contacts<em class="d2mdin"></em></button>' +
         FIL.map(x => '<button type="button" class="d2f" data-d2f="' + x.f + '" aria-haspopup="true" aria-expanded="false">' + x.label +
           '<span class="d2fv"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>').join('') +
         '<button type="button" class="d2f d2fav" data-d2fav aria-pressed="false">♡ Favorites</button>' +
@@ -246,6 +314,8 @@
       if(f){ e.stopPropagation(); togglePop(f); return; }
       if(e.target.closest('[data-d2max]')){ setMax(!D2.max); return; }
       if(e.target.closest('[data-d2fav]')){ D2.fav = !D2.fav; D2.shown = 200; refresh(); return; }
+      { const mk = e.target.closest('[data-d2mdik]'); if(mk){ D2.mdiK = mk.dataset.d2mdik; D2.shown = 200; D2.sel = -1; D2.listTop = 0; D2.keepTop = true; refresh(); return; } }
+      if(e.target.closest('[data-d2mdi]')){ D2.mdi = !D2.mdi; if(!D2.mdi) D2.mdiK = ''; D2.shown = 200; D2.sel = -1; D2.listTop = 0; D2.keepTop = true; refresh(); return; }
       const u = e.target.closest('[data-d2u]');
       if(u){ const o = document.querySelector('[data-useg="bw"] [data-u="' + u.dataset.d2u + '"]'); if(o) o.click();
         const h = document.querySelector('[data-useg="ht"] [data-u="' + (u.dataset.d2u === 'in' ? 'ft' : 'cm') + '"]'); if(h) h.click();
@@ -305,10 +375,11 @@
     const [f, v] = id.split('\u0001');
     if(f === 'meas'){ document.querySelectorAll('input[data-m^="' + v + '-"]').forEach(o => { o.value = ''; o.dispatchEvent(new Event('input', {bubbles: true})); }); syncBar(); refresh(); return; }
     if(f === 'fav'){ D2.fav = false; refresh(); return; }
+    if(f === 'mdi'){ D2.mdi = false; D2.mdiK = ''; refresh(); return; }
     pick(f, v); closePop();
   }
   function clearAll(){
-    D2.country.clear(); D2.fav = false; D2.showAll = false; D2.sel = -1;
+    D2.country.clear(); D2.fav = false; D2.mdi = false; D2.showAll = false; D2.sel = -1;
     document.querySelectorAll('input[data-f]:checked').forEach(i => i.click());
     document.querySelectorAll('input[data-m]').forEach(o => { if(o.value){ o.value = ''; o.dispatchEvent(new Event('input', {bubbles: true})); } });
     const q0 = $('#q'); if(q0 && q0.value){ q0.value = ''; q0.dispatchEvent(new Event('input', {bubbles: true})); }
@@ -330,6 +401,9 @@
     el.querySelector('[data-d2fav]').classList.toggle('on', D2.fav);
     el.querySelector('[data-d2fav]').setAttribute('aria-pressed', String(D2.fav));
     if(D2.fav) chips.push({id: 'fav\u0001', l: 'Favorites'});
+    { const mb = el.querySelector('[data-d2mdi]'); if(mb){ mb.classList.toggle('on', !!D2.mdi); mb.setAttribute('aria-pressed', String(!!D2.mdi));
+        let c = 0; const kc = {c: 0, rep: 0, sent: 0, recv: 0}; try{ for(const n of nets()){ if(netRemoved(n)) continue; const k = mdiKind(n); if(!k.any) continue; c++; if(k.c) kc.c++; if(k.m) kc[k.m.st]++; } }catch(e){} mb.querySelector('.d2mdin').textContent = c ? ' ' + c : ''; D2.mdiKC = kc; } }
+    if(D2.mdi) chips.push({id: 'mdi\u0001', l: 'MDI Agency Contacts'});
     for(const [k, id] of MEAS){
       const lo = document.querySelector('input[data-m="' + id + '-lo"]'), hi = document.querySelector('input[data-m="' + id + '-hi"]');
       const a = el.querySelector('[data-d2mi="' + id + '-lo"]'), b = el.querySelector('[data-d2mi="' + id + '-hi"]');
@@ -345,7 +419,10 @@
     fit.innerHTML = fitInfo ? fitInfo : '';
     el.querySelector('#d2chips').innerHTML = chips.map(c => '<span class="d2chip">' + esc(c.l) +
       '<button type="button" data-d2chip="' + esc(c.id) + '" aria-label="Remove ' + esc(c.l) + '">×</button></span>').join('') +
-      (chips.length || BND && BND.any ? '<button type="button" class="d2clr" data-d2clear>Clear all</button>' : '');
+      (chips.length || BND && BND.any ? '<button type="button" class="d2clr" data-d2clear>Clear all</button>' : '') +
+      /* 1.2.224: inside MDI Agency Contacts - contracts, or by Hiworks mail: replied / emailed / received */
+      (D2.mdi ? '<span class="d2mdik" role="group" aria-label="MDI Agency Contacts">' + [['', 'All'], ['c', 'Contracts'], ['rep', '✉ Replied'], ['sent', '✉ Emailed'], ['recv', '✉ Received']].map(([k, l]) =>
+        '<button type="button" data-d2mdik="' + k + '" aria-pressed="' + ((D2.mdiK || '') === k) + '"' + (k ? ' class="k-' + k + '"' : '') + '>' + l + (k && D2.mdiKC ? ' <s>' + (D2.mdiKC[k] || 0) + '</s>' : '') + '</button>').join('') + '</span>' : '');
     /* "most that fit" only means something once measurements are typed in */
     const fo = el.querySelector('#d2sort option[value="fits"]'), anyM = !!(BND && BND.any);
     if(fo){ fo.hidden = !anyM; fo.disabled = !anyM; if(!anyM && D2.sort === 'fits'){ D2.sort = 'place'; el.querySelector('#d2sort').value = 'place'; } }
@@ -368,6 +445,7 @@
     const segs = p.split('/').filter(Boolean).map(x => { try{ return decodeURIComponent(x); }catch(e){ return x; } });
     let s = segs.pop() || '';
     if(GENSEG.test(s)) s = segs.pop() || s;
+    s = s.replace(/\.(html?|php|aspx?|web)$/i, '');   /* 1.2.220: olya_lade.html and 11947-olya-lade.web are the same person */
     return fold(s).replace(/^\d+[-_]+/, '').replace(/[-_]+\d+$/, '').replace(/[^a-z0-9]+/g, '');
   }
   window.__illuCoreOf = coreOf;
@@ -421,6 +499,7 @@
       const offM = offs.filter(o => (!regions.length || regions.includes(o.region)) && (!D2.country.size || D2.country.has(o.country || 'Unknown')));
       if(!offM.length) continue;
       if(fav && !fav.has(n.domain)) continue;
+      if(D2.mdi && !mdiPass(n)) continue;
       let bs = n.boards.filter(b => (!tiers.length || tiers.includes(b.t)) && (!sexes.length || sexes.includes(b.g)) && offs.includes(b.off));
       /* a country chosen: only that country's boards (a network with no board filed there still shows) */
       if(placeF){ const inM = bs.filter(b => offM.includes(b.off)); if(inM.length || !bs.length) bs = inM; }
@@ -480,7 +559,10 @@
     for(const x of out) if(subN.has(x.rg)){ subN.get(x.rg).add(x.net); euAll.add(x.net); }
     const eu = {all: euAll.size, total: new Set(out.map(x => x.net)).size, n: EUSUBS.map(r => [r, subN.get(r).size]), on: ''};
     let fin = out;
-    if(D2.sub && euAll.size && subN.has(D2.sub)){ fin = out.filter(x => x.rg === D2.sub); eu.on = D2.sub; }
+    /* 1.2.219 (user, 17 Nov 2026: Grace Models (Russia) not found while the Western tab was on): a search looks in all
+       of Europe; a tab clicked while that search is typed narrows it, and a new search starts from All again */
+    const subOn = D2.sub && (!term || D2.subTerm === term);
+    if(subOn && euAll.size && subN.has(D2.sub)){ fin = out.filter(x => x.rg === D2.sub); eu.on = D2.sub; }
     D2.entries = new Map(fin.map(x => [x.id, x]));
     return {list: fin, byMeas, nets: new Set(fin.map(x => x.net)).size, eu};
   }
@@ -600,14 +682,27 @@
     /* 1.2.194: the models the team has worked on come first, the most recent first from the left */
     const wkm = new Map(); for(const e of ((wkByNet(true).get(r.net.i) || {}).items || [])) if(!wkm.has(e.key)) wkm.set(e.key, e);
     const wkOf = m => wkm.get(m.key) || (m.keys || []).map(k => wkm.get(k)).find(Boolean) || null;
-    let wkTop = [];
-    if(wkm.size){ wkTop = ms.filter(wkOf).sort((p, q) => String(wkOf(q).at).localeCompare(String(wkOf(p).at))); if(wkTop.length) ms = wkTop.concat(ms.filter(m => !wkOf(m))); }
-    const wkTile = m => ucard(m, {wk: wkOf(m)});
+    /* 1.2.219 (user, 17 Nov 2026: "cards that have been marked should have priority to show up on top ... when looking at the
+       agency roster"; "Vote / booking status, Favorites, Notes, Hidden: never on top"; and "if the models we worked with ...
+       are still available on the agency website ... show them at the top of the roster"): in this order -
+       1 vote or booking in progress / approved / booked (a Cancelled one stays in its A–Z place), newest first;
+       2 models MDI signed before (from the past contracts); 3 in My Favorites; 4 with team notes. Hidden cards are never drawn. */
+    const vsOf = m => { try{ for(const k of [m.key].concat(m.keys || [])){ const v = window.__illuVoteState ? window.__illuVoteState(k) : ''; if(v) return v; } }catch(e){} return ''; };
+    const live = m => { const w = wkOf(m), v = vsOf(m); if(v) return v === 'open' || v === 'tie' || v === 'appr'; return !!(w && !/cancel/i.test(String(w.lab || ''))); };
+    const mk = m => { try{ return window.__illuCardMarks ? [m.key].concat(m.keys || []).map(k => window.__illuCardMarks(k)).reduce((p, q) => ({fav: p.fav || q.fav, note: p.note || q.note}), {fav: false, note: false}) : {}; }catch(e){ return {}; } };
+    const G = [[], [], [], []], rest = [];
+    for(const m of ms){ if(live(m)) G[0].push(m); else if(mdiModel(m, r.net)) G[1].push(m); else { const k = mk(m); if(k.fav) G[2].push(m); else if(k.note) G[3].push(m); else rest.push(m); } }
+    G[0].sort((p, q) => String((wkOf(q) || {}).at || '').localeCompare(String((wkOf(p) || {}).at || '')));
+    const GL = ['Vote · booking · newest first', 'Signed with MDI before', 'In My Favorites', 'With team notes'];
+    const wkTop = [].concat(...G);
+    ms = wkTop.concat(rest);
+    const wkTile = m => ucard(m, {wk: wkOf(m), mdi: G[1].includes(m)});
     const isFav = window.ATLFAV && ATLFAV.has(a.domain);
-    const head = '<div class="d2ph"><div class="d2ph1"><h2>' + esc(a.name) + '</h2>' + illuAtChips(a) +
+    const mo = mdiOf(r.net);
+    const head = '<div class="d2ph"><div class="d2ph1"><h2>' + esc(a.name) + '</h2>' + newTag(r.net.added, 'hd') + (function(){ const o = mailOf(r.net); return o ? '<span class="mlhd ' + o.st + '" title="' + esc(mlTip(o)) + '">✉ ' + (isKo() ? MLL[o.st][1] : MLL[o.st][0]).toUpperCase() + ' · ' + o.o + (isKo() ? ' 보냄 · ' : ' SENT · ') + o.i + (isKo() ? ' 받음' : ' RECEIVED') + ((o.li || o.lo) ? ' · ' + mlDay(o.li > o.lo ? o.li : o.lo).toUpperCase() : '') + '</span>' : ''; })() + (mo ? '<span class="mdihd" title="' + esc('On the MDI contracts as “' + mo.a + '”' + (mo.m.length ? ' — ' + mo.m.join(', ') : '')) + '">' + esc(mdiLabel(mo)) + '</span>' : '') + illuAtChips(a) +
       '<span class="d2pm">' + (a.domain ? '<a class="agsite" href="https://' + esc(a.domain) + '" target="_blank" rel="noopener noreferrer">' + esc(a.domain) + ' ↗</a> · ' : '') +
         (a.domain && !a.country ? '<button type="button" class="d2locset" data-d2loc="' + esc(a.domain) + '">+ Set country</button>' :
-          (a.domain ? '<button type="button" class="d2locedit" data-d2loc="' + esc(a.domain) + '" title="Change the country or city">' : '<span>') + esc(a.offices && a.offices.length > 1 ? a.allCities.join(' · ') + ' · ' + a.offices.length + ' offices' : [a.city, a.country].filter(Boolean).join(', ')) + (a.domain ? '</button>' : '</span>')) + ' · ' + dirN(r.n) + ' models</span>' +
+          (a.domain ? '<button type="button" class="d2locedit" data-d2loc="' + esc(a.domain) + '" title="Change the country or city">' : '<span>') + esc(a.offices && a.offices.length > 1 ? a.allCities.join(' · ') + ' · ' + a.offices.length + ' offices' : [a.city, a.country].filter(Boolean).join(', ')) + (a.domain ? '</button>' : '</span>')) + '</span>' +   /* 1.2.235 (user, 18 Nov 2026: "I only need to see the amount of models on the board once"): the count is on the board buttons only */
       '<span class="d2sp"></span><span class="agct">' + ctsChip(a.domain) + '</span>' +
       '<button type="button" class="d2hb' + (isFav ? ' on' : '') + '" data-d2heart aria-pressed="' + !!isFav + '">' + (isFav ? '♥' : '♡') + ' Favorite</button>' +
       (canRemove() && !D2.showRemoved ? '<button type="button" class="d2hb d2hideb" data-d2hideag="' + esc(r.id) + '" title="Hide this agency for everyone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg><span>Hide agency</span></button>' : '') +
@@ -615,9 +710,9 @@
       '<div class="d2ph2">' + boardMenu(tabs, all, byMeas) + '</div>' +
       '<div class="d2ph3"><label class="d2mq" title="Find a model at this agency by name (all of its boards)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>' +
         '<input type="search" id="d2mq" placeholder="Find a model by name…" autocomplete="off" spellcheck="false" aria-label="Find a model at this agency by name" value="' + esc(D2.mq || '') + '"></label>' +
-      '<span class="d2shown">' + (mq ? dirN(ms.length) + ' ' + (ms.length === 1 ? 'model' : 'models') + ' found · all ' + tabs.length + (tabs.length === 1 ? ' board' : ' boards')
-        : (byMeas ? dirN(ms.length) + ' fit' : dirN(ms.length) + ' ' + (ms.length === 1 ? 'model' : 'models')) +
-        (tabs.length > 1 ? ' · ' + (D2.bsel.size ? chosen.length + ' of ' + tabs.length + ' boards' : 'all ' + tabs.length + ' boards') : '')) + '</span>' +
+      /* 1.2.235: a count here only while a search or the measurements narrow the list (the board buttons carry the totals) */
+      (mq || byMeas ? '<span class="d2shown">' + (mq ? dirN(ms.length) + ' ' + (ms.length === 1 ? 'model' : 'models') + ' found · all ' + tabs.length + (tabs.length === 1 ? ' board' : ' boards')
+        : dirN(ms.length) + ' fit' + (tabs.length > 1 ? ' · ' + (D2.bsel.size ? chosen.length + ' of ' + tabs.length + ' boards' : 'all ' + tabs.length + ' boards') : '')) + '</span>' : '') +
       (cur && !mq && bs[cur.j] && bs[cur.j].u ? '<a class="d2ob" href="' + esc(bs[cur.j].u) + '" target="_blank" rel="noopener noreferrer">Open board ↗</a>' : '') +
       '<span class="d2sp"></span>' +
       ((D2.pz || 1) !== 1 && !D2.names ? '<button type="button" class="d2pz" data-d2pz0 title="Photos back to normal size (Ctrl 0 over the photos)">Photos ' + Math.round(D2.pz * 100) + '% ✕</button>' : '') +
@@ -627,8 +722,8 @@
     const body = !ms.length
       ? '<div class="d2empty"><p>' + (mq ? 'No model at ' + esc(a.name) + ' has a name with “' + esc(D2.mq.trim()) + '”.' : byMeas ? 'No model on this board fits the measurements.' : (a.boards.length ? 'No models on this board.' : 'Its boards have not been read yet.')) + '</p></div>'
       : D2.names ? '<div class="mlist d2names">' + ms.map(m => nameRow(m, a)).join('') + '</div>'
-      : '<div class="d2grid">' + (wkTop.length && wkTop.length < ms.length ? '<div class="d2wkh"><i></i>Worked on by the team · newest first</div>' + wkTop.map(wkTile).join('') + '<div class="d2wkh rest">Everyone else</div>' + ms.slice(wkTop.length).map(wkTile).join('')
-        : wkTop.length ? '<div class="d2wkh"><i></i>Worked on by the team · newest first</div>' + ms.map(wkTile).join('') : ms.map(wkTile).join('')) + '</div>';
+      : '<div class="d2grid">' + (wkTop.length ? G.map((g, i) => g.length ? '<div class="d2wkh' + (i === 1 ? ' mdih' : '') + '"><i></i>' + GL[i] + '</div>' + g.map(wkTile).join('') : '').join('') + (rest.length ? '<div class="d2wkh rest">Everyone else</div>' + rest.map(wkTile).join('') : '')
+        : ms.map(wkTile).join('')) + '</div>';
     let pop = '';
     if(D2.open){
       const m = all.find(x => x.key === D2.open);
@@ -682,7 +777,7 @@
   function hideToast(){ const t = document.getElementById('d2toast'); if(t) t.hidden = true; }
   function narrowed(){
     const term = ((($('#q') || {}).value) || '').trim();
-    return !!(D2.showRemoved || D2.showAll || term || D2.country.size || D2.fav || (BND && BND.any) || document.querySelector('input[data-f]:checked'));
+    return !!(D2.showRemoved || D2.showAll || term || D2.country.size || D2.fav || D2.mdi || (BND && BND.any) || document.querySelector('input[data-f]:checked'));
   }
   /* before any filter: a calm start - one tile per region to begin with, nothing loaded */
   /* ---------- the start screen: six layouts to choose from (A-F), remembered on this computer ---------- */
@@ -880,7 +975,11 @@
   window.__illuDirGoAg = (ref, key) => {
     try{ const fv = document.getElementById('illufv'); if(fv && !fv.hidden){ const x = fv.querySelector('.fvx'); if(x) x.click(); } }catch(e){}
     try{ if(D2.open){ D2.open = ''; SL.full = false; SL.auto = ''; document.body.classList.remove('d2fullcard'); } }catch(e){}
-    if(typeof VIEW === 'undefined' || VIEW !== 'dir'){ try{ window.__illuGo ? window.__illuGo('dir') : setView('dir'); }catch(e){} }
+    /* 1.2.218 (user, 17 Nov 2026: "All 156 models" from the side panel did not take them to the Directory): Team Vote, Favorites
+       and the other boards are pages laid over the Directory, so the Directory was already the view underneath and nothing
+       left the board in front of it. Leave whatever page is in front (and Today) as well. */
+    const covered = document.body.classList.contains('shextra') || document.body.classList.contains('shtoday');
+    if(typeof VIEW === 'undefined' || VIEW !== 'dir' || covered){ try{ window.__illuGo ? window.__illuGo('dir') : setView('dir'); }catch(e){} }
     /* on a phone the agency list takes half the width - hide it so her agency's cards fill the screen (the ‹ › tab brings it back) */
     try{ if(key && PHONE()) D2.listOff = true; }catch(e){}
     /* 1.2.211 (user, 16 Nov 2026: "the screen ended up freezing, or just not being able to direct me to the directory agency
@@ -1157,8 +1256,8 @@
           return h +
           (D2.confirm === x.id
             ? '<div class="d2agw d2conf"><span>Hide <b>' + esc(x.a.name) + '</b>? Its ' + dirN(x.n) + ' models stop showing for everyone. Nothing is deleted.</span><button type="button" class="d2cy" data-d2rmyes="' + esc(x.id) + '">Hide</button><button type="button" class="d2cn" data-d2rmno>Cancel</button></div>'
-            : (wr = wkRow(D2.showRemoved ? null : WKR.get(x.net.i)), '') + '<div class="d2agw' + (D2.showRemoved ? ' rmd' : '') + '"><button type="button" class="d2ag' + (x === r ? ' on' : '') + wr.cls + '" data-d2ag="' + esc(x.id) + '"' + (wr.tip ? ' title="' + esc(wr.tip) + '"' : '') + '>' +
-          '<span class="d2agt"><b>' + esc(x.a.name) + '</b><s>' + wr.html + (wr.html ? '<u class="wksep">·</u>' : '') + esc(([x.a.city, x.a.country].filter(Boolean).join(', ') || 'Location not stated') + (x.a.offices.length > 1 ? ' · ' + x.a.offices.length + ' offices' : '')) + '</s></span>' +
+            : (wr = wkRow(D2.showRemoved ? null : WKR.get(x.net.i)), '') + '<div class="d2agw' + (D2.showRemoved ? ' rmd' : '') + (mdiOf(x.net) ? ' mdiw" title="MDI Agency Contact · ' + esc(mdiOf(x.net).a) : '') + '"><button type="button" class="d2ag' + (x === r ? ' on' : '') + wr.cls + '" data-d2ag="' + esc(x.id) + '"' + (wr.tip ? ' title="' + esc(wr.tip) + '"' : '') + '>' +
+          '<span class="d2agt"><b>' + esc(x.a.name) + newTag(x.net.added) + '</b><s>' + (function(){ const o = mailOf(x.net); return o ? '<u class="mlt ' + o.st + '" title="' + esc(mlTip(o)) + '">✉ ' + (isKo() ? MLL[o.st][1] : MLL[o.st][0]) + '</u><u class="wksep">·</u>' : ''; })() + wr.html + (wr.html ? '<u class="wksep">·</u>' : '') + esc(([x.a.city, x.a.country].filter(Boolean).join(', ') || 'Location not stated') + (x.a.offices.length > 1 ? ' · ' + x.a.offices.length + ' offices' : '')) + '</s></span>' +
           '<span class="d2agn">' + (byMeas ? '<b>' + dirN(x.fit) + '</b><s>of ' + dirN(x.n) + '</s>' : '<b>' + dirN(x.n) + '</b>') + '</span></button>' +
           (!x.a.country && x.a.domain && !D2.showRemoved ? '<button type="button" class="d2locb" data-d2loc="' + esc(x.a.domain) + '" title="Set this agency’s country">+ Set country</button>' : '') +
           (canRemove() ? (D2.showRemoved ? '<button type="button" class="d2rs" data-d2restore="' + esc(x.id) + '">Show again</button>'
@@ -1673,7 +1772,7 @@
         body: '<p>Its ' + dirN(x.n) + ' models stop showing in the Directory, on the boards and in search for everyone.</p><p class="idlgnote">Nothing is deleted - lamps, notes and bookings are kept. Show it again from Hidden Agencies at the end of the agency list.</p>'})
         .then(ok => { if(ok) removeAg(x.net, x.id); }); return; }
     const sb = e.target.closest('[data-d2sub]');
-    if(sb){ D2.sub = sb.dataset.d2sub || ''; try{ localStorage.setItem('illu.d2sub', D2.sub); }catch(err){} D2.sel = -1; D2.listTop = 0; D2.keepTop = true; refresh(); return; }
+    if(sb){ D2.sub = sb.dataset.d2sub || ''; D2.subTerm = ((($('#q') || {}).value) || '').trim().toLowerCase(); try{ localStorage.setItem('illu.d2sub', D2.sub); }catch(err){} D2.sel = -1; D2.listTop = 0; D2.keepTop = true; refresh(); return; }
     const fd = e.target.closest('[data-d2fold]');
     if(fd){ const r0 = fd.dataset.d2fold; if(D2.fold.has(r0)) D2.fold.delete(r0); else D2.fold.add(r0);
       try{ localStorage.setItem('illu.d2fold', JSON.stringify([...D2.fold])); }catch(err){}
@@ -1898,6 +1997,10 @@
   function recoRefresh(){
     if(!RC.st) return;
     RC.restarted = false; D2.open = ''; D2.cardPos = null;
+    /* 1.2.219 (user, 17 Nov 2026: "I'm seeing a lot of the same models after selecting New picks"): with filters on, the
+       models added to fill the set (RC.fx) were kept from one New picks to the next - they are dropped, and the new set is
+       only models this person has not been shown */
+    RC.fkey = ''; RC.fx = [];
     RC.shown = recoNext();
     RC.sets = (RC.sets || []).concat([RC.shown.map(m => m.key)]).slice(-RCSETS); RC.at = RC.sets.length - 1;
     recoSave();
@@ -1992,7 +2095,7 @@
   }
   function recoClearHistory(){
     const st = RC.st; if(!st) return;
-    st.nfh = []; st.nfk = new Set(); st.seen = new Set(); st.known = new Set(); st.hist = []; st.round = (st.round || 1) + 1;
+    st.nfh = []; st.nfk = new Set(); RC.nfGot = null; st.seen = new Set(); st.known = new Set(); st.hist = []; st.round = (st.round || 1) + 1;
     RC.sets = []; RC.fx = []; RC.fkey = ''; RC.nfPg = 0; RC.clearAsk = false; D2.open = '';
     RC.shown = recoNext();
     RC.sets = [RC.shown.map(m => m.key)]; RC.at = 0;
@@ -2093,6 +2196,13 @@
     }
     return (r ? lm.replace(r[0], '') : lm) + '<span class="ucst ' + cls + '" title="' + esc(tip) + '" aria-label="' + esc(tip) + '">' + face + '<span class="tx">' + body + '</span></span>';
   }
+  /* 1.2.220 (user, 17 Nov 2026: "I want to know somehow that this is the Mother Agency for this model"): a card at her
+     mother agency says so on the photo, above her name - whichever of her cards the mother agency was chosen on */
+  function momTag(m){
+    let on = false;
+    try{ const f = window.__illuMotherInfo; if(f && m.ag) on = (m.keys && m.keys.length ? m.keys : [m.key]).some(x => { const r = f(x, m.ag); return !!(r && r.here); }); }catch(e){}   /* 1.2.231: the one resolver */
+    return on ? '<span class="ucmomt">' + (isKo() ? '마더 에이전시' : 'Mother agency') + '</span>' : '';
+  }
   function ucard(m, o){
     o = o || {};
     /* 1.2.211: a hidden model's card is never drawn on a board (Hidden Models draws its own cards) */
@@ -2109,7 +2219,9 @@
     const mx = ht == null && bu == null && wa == null && hp == null
       ? '<span class="ucmx none">' + (isKo() ? '사이즈 없음' : 'No measurements') + '</span>'
       : '<span class="ucmx">' + fgU(ht, band && band.ht, 1) + '<i>·</i>' + fgU(bu, band && band.bu) + '<i>/</i>' + fgU(wa, band && band.wa) + '<i>/</i>' + fgU(hp, band && band.hp) + '<i>·</i><span>' + (shoeT == null ? '–' : shoeT) + '<small>' + shoeU + '</small></span></span>';
-    const meta = (m.ag || '') + (m.city ? ' · ' + m.city : '');
+    /* 1.2.228: her mother agency, when one is set, is the agency the card names */
+    let agM = m.ag || ''; try{ const mo = window.__illuMotherInfo && window.__illuMotherInfo(m.key, m.ag); if(mo) agM = mo.ag; }catch(e){}   /* 1.2.231: the one resolver */
+    const meta = agM + (m.city && agM === (m.ag || '') ? ' · ' + m.city : '');
     const tl = TIERL[m.t] || null;
     const offices = m.boards ? new Set(m.boards.map(b => b.off)).size : 1;
     /* 1.2.170 (user, 13 Nov 2026, approved demo "A + C, 2 - shades of purple"): a liked model whose booking is in progress
@@ -2130,11 +2242,13 @@
       const tip = esc(wk.lab + (wkWho(wk.who) ? ' · ' + wkWho(wk.who) : ''));
       wkFoot = '<span class="ucwks ' + (wk.live ? 'l' : 'd') + (vOpen ? ' only' : '') + '" title="' + tip + '" aria-label="' + tip + '">' + wkFaces([wk], 1) + '<i></i>' + (vOpen ? '' : '<b>' + esc(short) + '</b>') + '</span>';
     }
-    return '<article class="uc' + (bk ? ' ucbk' : '') + (wk ? ' ucw-' + (wk.live ? 'l' : 'd') + (wk.src === 'vote' ? ' ucw-v' : '') : '') + '" data-uck="' + esc(m.key) + '">' + wkTag +
+    /* 1.2.219: a model MDI signed before (full name on a past contract with this agency) has the gold corner ribbon */
+    const mdi = o.mdi != null ? !!o.mdi : mdiModel(m);
+    return '<article class="uc' + (mdi ? ' ucmdi' : '') + (bk ? ' ucbk' : '') + (wk ? ' ucw-' + (wk.live ? 'l' : 'd') + (wk.src === 'vote' ? ' ucw-v' : '') : '') + '" data-uck="' + esc(m.key) + '">' + wkTag +
       (bk ? '<span class="ucbkt" title="' + esc((isKo() ? '부킹 진행 중 · ' : 'In booking · ') + bk.who + (bk.st ? ' · ' + bk.st : '')) + '">' + (isKo() ? '부킹 중 · ' : 'In booking · ') + esc(bk.who) + '</span>' : '') +
-      '<div class="ucimg"><div class="d2t ucph" data-d2k="' + esc(m.key) + '" title="' + esc(m.nm) + '">' + pc + '</div>' +
+      (mdi ? '<span class="ucmdir" title="Signed with MDI before (past contract)">MDI</span>' : '') + '<div class="ucimg"><div class="d2t ucph" data-d2k="' + esc(m.key) + '" title="' + esc(m.nm) + '">' + pc + '</div>' +
       (minor || !/^https?:/i.test(m.href || '') ? '' : '<button type="button" class="ucarr l" data-ucarr="-1" aria-label="Previous photo">‹</button><button type="button" class="ucarr r" data-ucarr="1" aria-label="Next photo">›</button><span class="uccnt" aria-live="polite"></span>') +
-      '<div class="ucov">' + (() => { try{ const v = window.__illuAvailOf && window.__illuAvailOf(m.key); return v ? '<span class="ucav ' + esc(v.t) + '" title="' + esc(v.why || '') + '">' + (v.t === 'later' ? '⏳ ' : '⛔ ') + esc(window.__illuAvailLabel(v, true)) + '</span>' : ''; }catch(e){ return ''; } })() + ''/* 1.2.189 (user, 14 Nov 2026: "let's just completely get rid of this"): no "NAME · booking" label on cards */ + '<b>' + esc(m.nm) + '</b><span class="ucag">' + esc(meta) + '</span>' + mx + '</div>' +
+      '<div class="ucov">' + momTag(m) + (() => { try{ const v = window.__illuAvailOf && window.__illuAvailOf(m.key); return v ? '<span class="ucav ' + esc(v.t) + '" title="' + esc(v.why || '') + '">' + (v.t === 'later' ? '⏳ ' : '⛔ ') + esc(window.__illuAvailLabel(v, true)) + '</span>' : ''; }catch(e){ return ''; } })() + ''/* 1.2.189 (user, 14 Nov 2026: "let's just completely get rid of this"): no "NAME · booking" label on cards */ + '<b>' + esc(m.nm) + '</b><span class="ucag">' + esc(meta) + '</span>' + mx + '</div>' +
       (offices > 1 ? '<span class="ucbadge">' + offices + (isKo() ? '개 오피스' : ' offices') + '</span>' : '') + '</div>' +
       '<div class="ucft' + (wkFoot ? ' haswk' : '') + '"><em>' + esc(tl ? (isKo() ? tl[1] : tl[0]) : (m.div || '')) + '</em>' + footJoin(lamps(m.key, m.nm, meta, m.href), wkFoot, wk) + '</div></article>';
   }
@@ -2279,10 +2393,14 @@
     if(ready && RC.st && !(RC.st.nfh || []).length && nfPool().length) nfDraw();
     if(ready) nfAll = nfList(fs);
     /* 1.2.108 (user, 8 Nov 2026): pages of 60 instead of "Show more" growing the list downward */
-    const nfPages = Math.max(1, Math.ceil(nfAll.length / 60)); if(RC.nfPg >= nfPages) RC.nfPg = nfPages - 1; if(!(RC.nfPg >= 0)) RC.nfPg = 0;
-    if(tab === 'nf') list = nfAll.slice(RC.nfPg * 60, RC.nfPg * 60 + 60);
-    nfAll = nfAll.filter(m => !hidM(m)); list = list.filter(m => !hidM(m));
-    if(tab === 'nf') list = nfAll.slice(RC.nfPg * 60, RC.nfPg * 60 + 60);
+    nfAll = nfAll.filter(m => !hidM(m));
+    /* 1.2.219 (user, 17 Nov 2026: "I want the picks to be new ones I haven't seen"): page 1 is only the newest New picks -
+       models not shown to this person before; when fewer are left than a page, only those, never older ones mixed in */
+    const lastD = new Set(((RC.st && RC.st.nfh) || []).slice(-1)[0] || []);
+    const nfNew = lastD.size ? nfAll.filter(m => lastD.has(m.fp)) : [], nfOld = lastD.size ? nfAll.filter(m => !lastD.has(m.fp)) : nfAll;
+    const pgOf = i => !nfNew.length ? nfOld.slice(i * 60, i * 60 + 60) : i === 0 ? nfNew : nfOld.slice((i - 1) * 60, i * 60);
+    const nfPages = Math.max(1, (nfNew.length ? 1 : 0) + Math.ceil(nfOld.length / 60)); if(RC.nfPg >= nfPages) RC.nfPg = nfPages - 1; if(!(RC.nfPg >= 0)) RC.nfPg = 0;
+    if(tab === 'nf') list = pgOf(RC.nfPg).filter(m => !hidM(m));
     if(tab === 'you') strip = nfAll.slice(0, 12);
     const every = list.concat(strip.filter(m => !list.some(x => x.key === m.key)));
     RC.disp = list;
@@ -2309,6 +2427,8 @@
     const body2 = !ready ? body
       : tab === 'kor' ? (list.length ? '<p class="rc2note">The best 9 by the Korean-market bands (women ' + KB().F.ht.join('–') + ' cm, men ' + KB().M.ht.join('–') + ' cm, plus bust, waist and hips). Green figures are inside the band. New picks shows the next 9.</p><div class="rc2grid">' + list.map(m => tile2(m, true)).join('') + '</div>' : '<div class="d2empty"><p>Nothing left to suggest for the Korean market under these filters. Change the filters, or press New picks to start again from the top.</p></div>')
       : tab === 'nf' ? (PH ? '' : '<div class="rc2bar"><span class="rc2note">' + nfN.toLocaleString() + ' models with a photo on New face and Development boards' + (fon ? ' match your filters' : '') + ' · your newest picks first · under 18s are never shown</span></div>') +
+          (RC.nfGot === 0 ? '<p class="rcall">You have now seen all ' + nfN.toLocaleString() + ' models that match' + (fon ? ' these filters' : '') + ' — no new ones to pick. Change the filters, or press Clear history to start again.</p>'
+            : RC.nfGot > 0 && RC.nfGot < 60 && RC.nfPg === 0 ? '<p class="rcall">Only ' + RC.nfGot + ' model' + (RC.nfGot === 1 ? '' : 's') + ' you have not seen yet' + (fon ? ' with these filters' : '') + ' — here they are. Older picks are on the next pages.</p>' : '') +
           (list.length ? '<div class="rc2grid">' + list.map(m => tile2(m)).join('') + '</div>' + (nfPages > 1 ? '<nav class="rc2pg" aria-label="Pages"><button type="button" class="rcnb" data-rcpg="' + (RC.nfPg - 1) + '"' + (RC.nfPg ? '' : ' disabled') + '>‹ Previous</button><span>Page <b>' + (RC.nfPg + 1).toLocaleString() + '</b> of ' + nfPages.toLocaleString() + ' · ' + (RC.nfPg * 60 + 1).toLocaleString() + '–' + (RC.nfPg * 60 + list.length).toLocaleString() + ' of ' + nfN.toLocaleString() + '</span><button type="button" class="rcnb" data-rcpg="' + (RC.nfPg + 1) + '"' + (RC.nfPg < nfPages - 1 ? '' : ' disabled') + '>Next page ›</button></nav>' : '') : '<div class="d2empty"><p>No model on these boards matches your filters.</p></div>')
       : body + (strip.length ? '<section class="rc2nf" aria-label="From New face and Development boards"><div class="rc2bar"><div><b>From New face &amp; Development boards</b><span class="rc2note">' + nfN.toLocaleString() + ' models · ' + nfF.toLocaleString() + ' New face · ' + (nfN - nfF).toLocaleString() + ' Development</span></div>' + subSeg + '<button type="button" class="rcnb" data-rctab="nf">See all</button></div><div class="rc2strip">' + strip.map(m => tile2(m)).join('') + '</div></section>' : '');
     const G0 = $('.d2body'), gTop = G0 ? G0.scrollTop : 0;
@@ -2330,7 +2450,7 @@
       ddH +
       '<button type="button" class="rcbtn" data-rcref' + (!ready || !pool.length ? ' disabled' : '') + '>New picks</button>' + clearH + '</div>';
     pane.classList.toggle('rcper1', PH && rcPer() === 1); pane.classList.toggle('rcper2', PH && rcPer() === 2); pane.classList.toggle('rcphone', PH);
-    pane.innerHTML = '<div class="rcwrap"><div class="rchd"><div>' + (PH ? '' : '<h2>' + (isKo() ? '뉴페이스 & 디벨롭먼트' : 'New Face &amp; Development') + '</h2>') + (PH ? tabs : '<div class="rctabrow">' + tabs + ddH + '</div>') + (PH ? phRow : '<p>' + esc(sub2) + '</p>' + (tab === 'you' ? '<p class="rcprog">' + esc(prog) + '</p>' : '')) + '</div>' +
+    pane.innerHTML = '<div class="rcwrap"><div class="rchd"><div>' + (PH ? '' : '<h2>' + (isKo() ? '뉴페이스 & 디벨롭먼트' : 'New Face &amp; Development') + '</h2>') + (PH ? tabs : '<div class="rctabrow">' + tabs + ddH + '</div>') + (PH ? phRow : '<p>' + esc(sub2) + '</p>' + (tab === 'you' ? '<p class="rcprog">' + esc(prog) + '</p>' : '')) + (tab === 'you' && RC.restarted ? '<p class="rcall">You had seen every model that matches — this set starts a new round, in a new order.</p>' : '') + '</div>' +
       '<button type="button" class="illufs" data-rcfull aria-pressed="' + !!RC.full + '" title="' + (RC.full ? 'Exit full screen (Esc)' : 'Show New Face & Development on the whole screen') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (RC.full ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>') + '</svg><span>' + (RC.full ? 'Exit full screen' : 'Full screen') + '</span></button>' +
       (tab === 'you' && RC.sets && RC.sets.length > 1 ? '<div class="rcnav" role="group" aria-label="Your picks, newest first">' +
         '<button type="button" class="rcnb" data-rcstep="1"' + (RC.at < RC.sets.length - 1 ? '' : ' disabled') + ' title="Newer picks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Newer</span></button>' +
@@ -2349,6 +2469,9 @@
   function rcFit(){ const w = document.querySelector('#pane-arr .rcwrap'); if(!w || RC.full) { if(w) w.style.height = ''; return; }
     const top = w.getBoundingClientRect().top + scrollY; w.style.height = Math.max(520, Math.round(innerHeight - top - 46)) + 'px'; }
   addEventListener('resize', () => { if(VIEW === 'arr') rcFit(); });
+  /* 1.2.237 (phone): Back closes an agency opened in the Directory and returns to the list */
+  window.__illuDirAgOpen = () => { try{ return VIEW === 'dir' && D2.sel !== -1 && D2.sel != null && !!document.querySelector('#pane-dir .d2panel') && !document.querySelector('#pane-dir .d2panel .d2blank'); }catch(e){ return false; } };
+  window.__illuDirAgClose = () => { try{ D2.sel = -1; D2.bopen = false; refresh(); return true; }catch(e){ return false; } };
   window.__rcFull = on => { if(on === undefined) return !!RC.full; RC.full = !!on; document.body.classList.toggle('rcfull', RC.full); if(VIEW === 'arr') recoRender(); return RC.full; };
   window.__illuReco = () => ({pool: (RC.pool || []).length, shown: RC.shown.map(m => m.key), disp: (RC.disp || []).map(m => [m.key, m.g]), round: RC.st && RC.st.round, seen: RC.st ? RC.st.seen.size : 0, known: RC.st ? RC.st.known.size : 0, restarted: !!RC.restarted});
   window.__illuRecoRefresh = recoRefresh;
@@ -2393,6 +2516,7 @@
     '#pane-arr .rc2c .mk i[data-v="y"].on{background:#fff3d6!important;border-color:#c98a00;color:#7a5200}' +
     '#pane-arr .rc2c .mk i[data-v="r"].on{background:#fbe7e5!important;border-color:#b3261e;color:#9c2018}' +
     '#pane-arr .rc2bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:2px 0 12px}#pane-arr .rc2bar>div{display:flex;flex-direction:column;margin-right:auto}' +
+    '#pane-arr .rcall{margin:6px 0 10px;padding:8px 12px;border-radius:10px;background:#FFF6D6;color:#6B5200;font-size:12.5px;font-weight:500}' +
     '#pane-arr .rc2note{font-size:12.5px;color:var(--mut);margin:0 0 10px}#pane-arr .rc2bar .rc2note{margin:0}' +
     '#pane-arr .rc2nf{margin:18px 2px 8px;padding:14px;border:1px solid var(--line,#e6e0ea);border-radius:16px;background:var(--surf,#fff)}' +
     '#pane-arr .rc2strip{display:grid;grid-auto-flow:column;grid-auto-columns:190px;gap:14px;overflow-x:auto;padding-bottom:6px}' +
@@ -2406,13 +2530,13 @@
   document.addEventListener('click', e => {
     if(VIEW !== 'arr' || !e.target.closest) return;
     const tb2 = e.target.closest('[data-rctab]'); if(tb2){ e.preventDefault(); RC.tab = tb2.dataset.rctab; try{ localStorage.setItem('illu.rctab', RC.tab); }catch(er){} D2.open = ''; recoRender(); const G = $('.d2body'); if(G) G.scrollTop = 0; return; }
-    const nfb = e.target.closest('[data-rcnf]'); if(nfb){ e.preventDefault(); RC.ddOpen = false; RC.nfSub = nfb.dataset.rcnf; RC.nfN = 60; RC.nfPg = 0; try{ localStorage.setItem('illu.rcnfsub', RC.nfSub); }catch(er){} recoRender(); return; }
+    const nfb = e.target.closest('[data-rcnf]'); if(nfb){ e.preventDefault(); RC.ddOpen = false; RC.nfGot = null; RC.nfSub = nfb.dataset.rcnf; RC.nfN = 60; RC.nfPg = 0; try{ localStorage.setItem('illu.rcnfsub', RC.nfSub); }catch(er){} recoRender(); return; }
     if(e.target.closest('[data-rcmore]')){ e.preventDefault(); RC.nfN += 60; recoRender(); return; }
     const pg = e.target.closest('[data-rcpg]'); if(pg){ e.preventDefault(); if(pg.disabled) return; RC.nfPg = Math.max(0, +pg.dataset.rcpg || 0); recoRender(); const G = $('.d2body'); if(G) G.scrollTop = 0; const P = $('#pane-arr'); if(P && P.scrollIntoView) P.scrollIntoView({block: 'start'}); return; }
     if(e.target.closest('[data-rcref]')){ e.preventDefault();
       if(RC.tab === 'kor'){ (RC.krCur || []).forEach(k => RC.krSeen.add(k)); const before = RC.krCur; RC.krCur = null; const fs = recoSig(); const nx = krList(fs);
         if(!nx.length && before && before.length){ RC.krSeen = new Set(); RC.krCur = null; } recoRender(); const G = $('.d2body'); if(G) G.scrollTop = 0; return; }
-      if(RC.tab === 'nf'){ const got = nfDraw(); if(!got) RC.nfSeed++; RC.nfN = 60; RC.nfPg = 0; recoRender(); const G = $('.d2body'); if(G) G.scrollTop = 0; return; }
+      if(RC.tab === 'nf'){ const got = nfDraw(); RC.nfGot = got; if(!got) RC.nfSeed++; RC.nfN = 60; RC.nfPg = 0; recoRender(); const G = $('.d2body'); if(G) G.scrollTop = 0; return; }
       recoRefresh(); return; }
     if(e.target.closest('[data-rcclear]')){ e.preventDefault(); if(!RC.clearAsk){ RC.clearAsk = true; recoRender(); clearTimeout(RC.clearT); RC.clearT = setTimeout(() => { if(RC.clearAsk){ RC.clearAsk = false; if(VIEW === 'arr') recoRender(); } }, 8000); return; } recoClearHistory(); return; }
     if(e.target.closest('[data-rcclearno]')){ e.preventDefault(); RC.clearAsk = false; recoRender(); return; }
@@ -3090,6 +3214,7 @@ body.d2max #d2bar{margin-top:0}
 .uc .ucov{position:absolute;left:0;right:0;bottom:0;padding:44px 12px 10px;background:linear-gradient(rgba(10,6,14,0),rgba(10,6,14,.55) 45%,rgba(10,6,14,.82));color:#fff;pointer-events:none;display:flex;flex-direction:column;gap:1px;font-family:var(--sans,Inter,system-ui,sans-serif)}
 .uc .ucov b{font-size:14.5px;font-weight:600;letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .uc .ucag{font-size:12px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.uc .ucmomt{display:inline-block;align-self:flex-start;margin:0 0 4px;font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;line-height:1;padding:4px 7px;border-radius:999px;background:rgba(255,255,255,.92);color:var(--acc)}
 .uc .ucav{align-self:flex-start;display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:#A3283F;color:#fff;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;margin-bottom:3px;text-shadow:none;letter-spacing:.02em;text-transform:uppercase}.uc .ucav.later{background:#C97916}
 .mrow .mav{font-size:10px;font-weight:700;border-radius:999px;padding:1px 6px;margin-left:6px;background:#FBECEF;color:#A3283F;white-space:nowrap}.mrow .mav.later{background:#FDF1E1;color:#9A5A0A}
 /* 1.2.186 (user, 14 Nov 2026, chose option B): the booking label smaller - 8.5px, medium weight, slimmer pill; an all-capitals name shows as Daniel */
@@ -3136,6 +3261,32 @@ body.d2max #d2bar{margin-top:0}
 .d2wkh{grid-column:1/-1;display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--acc,#6B2E6A);margin:2px 0 -4px}
 .d2wkh i{width:7px;height:7px;border-radius:50%;background:#E07B1A}
 .d2wkh.rest{color:var(--mut,#6d6577);margin-top:10px}
+.d2wkh+.uc~.d2wkh:not(.rest){margin-top:10px}
+.d2wkh.mdih{color:#9a7526}.d2wkh.mdih i{background:#c9a24a}
+/* 1.2.219 MDI Agency Contacts: gold corner ribbon (option C, approved 17 Nov 2026) */
+.d2agw.mdiw .d2ag{position:relative;overflow:hidden}
+.d2agw.mdiw .d2ag:after{content:"MDI";position:absolute;top:9px;left:-21px;width:70px;transform:rotate(-45deg);background:#c9a24a;color:#fff;font:800 8px/14px Inter,system-ui,sans-serif;letter-spacing:.08em;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,.2);pointer-events:none}
+.d2agw.mdiw .d2agt{padding-left:10px}
+.mdihd{position:relative;display:inline-flex;align-items:center;height:26px;padding:0 16px 0 11px;background:#c9a24a;color:#fff;font:700 11px/1 Inter,system-ui,sans-serif;letter-spacing:.06em;white-space:nowrap;clip-path:polygon(0 0,100% 0,calc(100% - 9px) 50%,100% 100%,0 100%);max-width:100%;overflow:hidden;text-overflow:ellipsis;cursor:default}
+.d2mdif{white-space:nowrap;flex:0 0 auto}
+.d2mdik{display:inline-flex;align-items:center;gap:4px;margin-left:8px;flex-wrap:wrap}
+.d2mdik button{border:1px solid var(--line,#e6dfe3);background:var(--surf,#fff);color:inherit;font:600 11.5px/1 Inter,system-ui,sans-serif;border-radius:999px;padding:5px 10px;cursor:pointer;white-space:nowrap}
+.d2mdik button s{text-decoration:none;opacity:.6;font-weight:700}
+.d2mdik button[aria-pressed="true"]{background:#c9a24a;border-color:#c9a24a;color:#fff}
+.mlt{text-decoration:none;font-weight:700}.mlt.rep{color:#23794A}.mlt.sent{color:#1F5FBF}.mlt.recv{color:#8A6A00}
+.d2list .d2ag.on .mlt{color:#fff}
+.mlhd{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:999px;font:700 11px/1 Inter,system-ui,sans-serif;letter-spacing:.05em;white-space:nowrap;cursor:default}
+.mlhd.rep{background:#E3F4E8;color:#23794A}.mlhd.sent{background:#E7F0FF;color:#1F5FBF}.mlhd.recv{background:#FFF6D6;color:#6B5200}
+@media (max-width:760px){.mlhd{height:auto;min-height:22px;padding:3px 9px;white-space:normal;line-height:1.3;font-size:10px}}
+.newtag{display:inline-flex;align-items:center;margin-left:7px;padding:1px 7px;border-radius:999px;background:#E7F0FF;color:#1F5FBF;font:800 10px/16px Inter,system-ui,sans-serif;letter-spacing:.06em;vertical-align:2px;white-space:nowrap}
+.newtag i{font-style:normal;font-weight:600;letter-spacing:0;opacity:.8}
+.newtag.hd{font-size:11px;line-height:20px;padding:2px 9px;vertical-align:0}
+.d2ag.on .newtag{background:rgba(255,255,255,.9)}
+@media (max-width:760px){.mdihd{height:auto;min-height:24px;padding:4px 16px 4px 9px;white-space:normal;line-height:1.3;font-size:10px}}
+.d2mdif .mdif{display:inline-block;width:0;height:0;border-left:8px solid #c9a24a;border-bottom:8px solid transparent;margin-right:6px;vertical-align:1px}
+.d2mdif .d2mdin{font-style:normal;opacity:.7;font-weight:700}
+.d2mdif.on{background:#c9a24a;border-color:#c9a24a;color:#fff}.d2mdif.on .mdif{border-left-color:#fff}
+.uc.ucmdi .ucmdir{position:absolute;top:12px;left:-26px;z-index:8;width:92px;transform:rotate(-45deg);background:#c9a24a;color:#fff;font:800 10px/18px Inter,system-ui,sans-serif;letter-spacing:.12em;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.3);pointer-events:none}
 .uc .ucwkt{position:absolute;top:8px;left:8px;z-index:7;max-width:calc(100% - 16px);display:inline-flex;align-items:center;gap:4px;padding:3px 9px 3px 3px;border-radius:999px;background:rgba(255,255,255,.94);box-shadow:0 1px 4px rgba(20,10,30,.18);font:700 10.5px var(--sans,Inter,system-ui,sans-serif);white-space:nowrap;pointer-events:auto}
 .uc .ucwkt.l{color:#C2620C}.uc .ucwkt.d{color:#2E8A57}
 .uc .ucwkt>span:last-child{color:#2b2230;overflow:hidden;text-overflow:ellipsis}

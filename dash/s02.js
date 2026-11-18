@@ -1420,7 +1420,9 @@ const ctsDoc = dom => 'contacts/' + (String(dom || 'unknown')
 const ctsClean = c => ({e: String((c && c.e) || '').trim(),
                         n: String((c && c.n) || '').trim(),
                         r: String((c && c.r) || '').trim(),
-                        p: String((c && c.p) || '').trim()});
+                        p: String((c && c.p) || '').trim(),
+                        /* 1.2.226: ★ main point of contact (one or more per agency) */
+                        ...(c && c.s ? {s: 1} : {})});
 const ctsReal = c => !!(c && (c.e || c.n || c.r || c.p));
 function ctsList(dom){
   let l = CONTACTS.get(dom);
@@ -1671,15 +1673,18 @@ function ctsRow(c, i){
       'placeholder="email" aria-label="Email address" value="' + esc(c.e) + '">' +
     '<input class="ctf ctf-p" data-k="p" type="tel" autocomplete="off" ' +
       'placeholder="phone" aria-label="Direct phone number" value="' + esc(c.p) + '">' +
-    '<span class="ctacts">' + mailBtn(c) + telBtn(c.p, c.n || c.e) +
+    '<span class="ctacts">' + '<button type="button" class="ctstar' + (c.s ? ' on' : '') + '" aria-pressed="' + !!c.s + '" title="' + (c.s ? 'Main point of contact — click to unmark' : 'Mark as a main point of contact') + '" aria-label="Main point of contact">' + (c.s ? '★' : '☆') + '</button>' + mailBtn(c) + telBtn(c.p, c.n || c.e) +
     '<button type="button" class="ctdel" title="Remove this contact" ' +
       'aria-label="Remove this contact">×</button></span></div>';
 }
 function ctsRows(dom){
   const list = CONTACTS.get(dom) || [];
   if(!list.length) return '<p class="ctempty">' + CTEMPTY + '</p>';
+  /* 1.2.226 (user, 17 Nov 2026: "for emails, I also want to put a star / multiple stars to declare main point of contact"):
+     the starred contacts come first; each row keeps its own place number, so typing still edits the right one */
+  const order = list.map((c, i) => [c, i]).sort((x, y) => (+!!y[0].s) - (+!!x[0].s) || x[1] - y[1]);
   return '<div class="cthd"><span></span><span>Name</span><span>Title / role</span>' +
-    '<span>Email</span><span>Phone</span><span></span></div>' + list.map(ctsRow).join('');
+    '<span>Email</span><span>Phone</span><span></span></div>' + order.map(([c, i]) => ctsRow(c, i).replace('<div class="ctrow"', '<div class="ctrow' + (c.s ? ' ctmain' : '') + '"')).join('');
 }
 function mapHref(v){
   const s = String(v || '').trim();
@@ -3774,6 +3779,17 @@ document.addEventListener('click', e => {
     ctsRepaintSeg(ctx, ctx.list.length - 1);
     return;
   }
+  const star = e.target.closest('.ctstar');
+  if(star){
+    const ctx = ctsCtx(star), row = star.closest('.ctrow');
+    if(!ctx || !row) return;
+    if(typeof SIGNED === 'function' && !SIGNED()){ try{ nudgeSignIn(star); }catch(_){} return; }
+    const c = ctx.list[+row.dataset.i]; if(!c) return;
+    if(c.s) delete c.s; else c.s = 1;
+    ctsRepaintSeg(ctx, null);
+    saveContacts(ctx.dom);
+    return;
+  }
   const del = e.target.closest('.ctdel');
   if(del){
     const ctx = ctsCtx(del);
@@ -4224,9 +4240,13 @@ function renderIG(){
         const seen = LITDAY ? '' : '';
         const when = IGSEEN.get(normKey(url)) || '';
         return '<div class="igrow" data-h="' + esc(a.h) + '">' +
-          '<a class="ignm" href="' + esc(url) + '" data-u="' + esc(url) + '" data-n="' +
+          '<span class="ignmw">' + '<a class="ignm" href="' + esc(url) + '" data-u="' + esc(url) + '" data-n="' +
             esc(a.n || '') + '" data-meta="' + esc([a.c, a.k].filter(Boolean).join(' · ')) +
             '" target="_blank" rel="noopener noreferrer">' + esc(a.n || igHandle(a.h)) + '</a>' +
+          /* 1.2.223 (user: "a marker that mentions that the instagram ... has been newly added"): added in the last 14 days */
+          (function(){ const t = Date.parse(a.at || ''); if(!t || Date.now() - t > 14 * 864e5) return ''; const day = new Date(t).toLocaleDateString('en-GB', {day: 'numeric', month: 'short'});
+            return '<span class="newtag" title="' + esc('Newly added to the Instagram board · ' + day + (a.note ? ' · ' + a.note : '')) + '">NEW<i> · ' + esc(day) + '</i></span>'; })() +
+          (a.src === 'mdi' ? '<span class="igmdi" title="' + esc(a.note || 'MDI past contract') + '">MDI</span>' : '') + '</span>' +
           '<span class="ighd" title="' + esc(igHandle(a.h)) + '">' +
             esc(igHandle(a.h)) + '</span>' +
           '<span class="igtier">' +
@@ -4749,10 +4769,11 @@ async function setPic(key, file){
   try{ PICPRE.set(key, URL.createObjectURL(file)); }catch(e){}
   picNote = 'Uploading…'; picPaint();
   try{
-    const res = await ASSETS.upload(await picShrink(file));
+    const res = await ASSETS.upload(await picShrink(file), {kind: 'model'});   // 1.2.216: Dropbox MODEL PHOTOS
     if(!res || !res.id) throw new Error('no id');
     const old = PICS.get(key);
     PICS.set(key, res.id);
+    try{ const PH = window.__illuPhoto; if(PH && PH.PMAIN && PH.PMAIN.has(key)) PH.clearMain(key); }catch(e){}   /* 1.2.229: the dropped photo is now the card photo */
     picNote = '';
     picPaint();
     /* keep the local copy until the stored one has loaded, so the card never blinks empty */

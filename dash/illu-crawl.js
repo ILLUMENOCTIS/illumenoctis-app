@@ -117,7 +117,7 @@
       L.step = 'finding boards';
       const found = [];
       const reread = [];
-      for(const b of brk){ const r = await TO(illu.crawlBoard(b.u), 600000); if(r && r.models && r.models.length >= 3) reread.push({u: b.u, d: b.d, g: b.g, t: b.t, m: r.models.map(([h, n]) => [n || '', '|' + h])}); }
+      for(const b of brk){ const r = await TO(illu.crawlBoard(b.u), 600000); if(r && r.models && r.models.length >= 3) reread.push({u: b.u, d: b.d, g: b.g, t: b.t, ...(b.x ? {x: b.x} : {}), m: r.models.map(([h, n]) => [n || '', '|' + h])}); }
       if(!a.boards.length){
         const home = a.site || (a.domain ? 'https://' + a.domain : '');
         if(!home){ st.state = 'failed'; st.error = 'no website'; }

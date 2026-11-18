@@ -722,6 +722,8 @@ var ATLAS_CITY={"United Kingdom|London":[51.5085,-0.1257],"Czech Republic|Prague
     const el = side.querySelector('.atlag[data-ag="' + CSS.escape(d) + '"]');
     if(el) el.scrollIntoView({block: 'nearest', behavior: 'smooth'});
   }
+  window.__atlLevel = () => S.lv;            /* 1.2.237: the phone's Back steps out one level (illu-back.js) */
+  window.__atlUp = () => up();
   function up(){
     if(S.lv === 'agency') go('country', S.c);
     else if(S.lv === 'country') go('region', S.r);
@@ -896,11 +898,31 @@ var ATLAS_CITY={"United Kingdom|London":[51.5085,-0.1257],"Czech Republic|Prague
       const r = svg.getBoundingClientRect();
       return [VB[0] + (cx - r.left) / r.width * VB[2], VB[1] + (cy - r.top) / r.height * VB[3]];
     };
+    /* 1.2.237 (user, 18 Nov 2026, phone: "Atlas globe/map isn't zooming in or out when touching the map"): two fingers
+       pinch to zoom (and slide the view while pinching); one finger still turns the globe, a tap still opens */
+    const PTS = new Map(); let pinch = null;
+    const pinchStart = () => {
+      const [a, b] = [...PTS.values()];
+      pinch = {d: Math.hypot(a.x - b.x, a.y - b.y) || 1};
+      if(drag && drag.raf) cancelAnimationFrame(drag.raf);
+      drag = null; wrap.classList.remove('drag'); hideTip();
+    };
     svg.addEventListener('pointerdown', e => {
+      if(e.pointerType === 'touch'){ PTS.set(e.pointerId, {x: e.clientX, y: e.clientY}); if(PTS.size === 2){ try{ svg.setPointerCapture(e.pointerId); }catch(_){} pinchStart(); return; } if(PTS.size > 2) return; }
       if(e.button !== 0) return;
       drag = {x: e.clientX, y: e.clientY, vb: VB.slice(), lam: LAM, moved: false, id: e.pointerId};
     });
+    const pinchEnd = e => { if(PTS.delete(e.pointerId) && pinch && PTS.size < 2){ pinch = null; drag = null; reproject(false); frame(); } };
+    svg.addEventListener('pointerup', pinchEnd, true);
+    svg.addEventListener('pointercancel', pinchEnd, true);
     svg.addEventListener('pointermove', e => {
+      if(PTS.has(e.pointerId)) PTS.set(e.pointerId, {x: e.clientX, y: e.clientY});
+      if(pinch && PTS.size >= 2){
+        const [a, b] = [...PTS.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+        if(Math.abs(d - pinch.d) > 2){ zoomAt(pinch.d / d, (a.x + b.x) / 2, (a.y + b.y) / 2, 0); pinch.d = d; }
+        return;
+      }
       if(drag){
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
         if(!drag.moved && Math.hypot(dx, dy) > 4){ drag.moved = true; try{ svg.setPointerCapture(drag.id); }catch(_){} wrap.classList.add('drag'); hideTip(); }
@@ -923,6 +945,7 @@ var ATLAS_CITY={"United Kingdom|London":[51.5085,-0.1257],"Czech Republic|Prague
       hover(e);
     });
     const end = e => {
+      if(pinch) return;
       if(!drag) return;
       const was = drag.moved; if(drag.raf) cancelAnimationFrame(drag.raf);
       if(was && drag.next){ LAM = drag.next[0]; VB = clampVB([VB[0], drag.next[1], VB[2], VB[3]], drag.vb); }

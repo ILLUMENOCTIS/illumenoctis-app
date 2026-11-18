@@ -9,12 +9,32 @@
   const vis = e => !!e && e.isConnected && !e.hidden && getComputedStyle(e).display !== 'none';
   const click = sel => { const b = document.querySelector(sel); if(b){ b.click(); return true; } return false; };
   /* top first: what is drawn above what */
+  /* 1.2.237 (user, 18 Nov 2026, phone: "Need to be able to backtrack my actions. When going back, it should close the
+     current section/window/toggle etc and let me trace back to the board"): more layers - the page explanation, the ID
+     window, filter lists, full screen, Maximize, the map's own levels, an agency opened in the Directory. Most of them
+     already close with Esc on the computer, so Back sends the same Esc. */
+  const esc = () => { try{ document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true})); }catch(e){} return true; };
+  const B = c => !!document.body && document.body.classList.contains(c);
+  const view = () => { try{ return typeof VIEW !== 'undefined' ? VIEW : ''; }catch(e){ return ''; } };
   const LAYERS = [
     ['newcard', () => vis(document.getElementById('ncm')), () => click('#ncm [data-ncx]')],
+    ['idwin', () => { const m = document.getElementById('idmodal'); return !!m && m.dataset.on === '1'; }, esc],
+    ['about', () => { const b = document.getElementById('ababout'); return !!b && b.getAttribute('aria-expanded') === 'true'; }, () => click('#ababout')],
+    ['info', () => !!document.querySelector('.shinfop'), () => click('[data-shinfo]')],
+    ['shmore', () => { const m = document.querySelector('.shmore, #shmore'); return vis(m); }, esc],
+    ['filterlist', () => { const p = document.getElementById('d2pop'); return vis(p); }, esc],
+    ['rcdd', () => !!document.querySelector('#pane-arr .rcddl'), () => click('#pane-arr [data-rcdd]')],
     ['favsheet', () => !!document.querySelector('#pane-favag .fgsheet'), () => click('#pane-favag .fgveil')],
     ['viewer', () => vis(document.getElementById('illufv')), () => click('#illufv .fvx')],
     ['booking', () => { const b = document.querySelector('body > .bv, .bv'); return !!b && !b.hidden; }, () => { try{ bvClose(); return true; }catch(e){ return false; } }],
     ['card', () => !!document.querySelector('.d2card'), () => click('.d2card .d2x') || (window.__illuCardClose && (window.__illuCardClose(), true))],
+    ['rcfull', () => B('rcfull'), () => { try{ if(window.__rcFull){ window.__rcFull(false); return true; } }catch(e){} return click('[data-rcfull]'); }],
+    ['boardfull', () => B('d2bfull'), esc],
+    ['dirmax', () => B('d2max'), () => click('[data-d2max]')],
+    ['mapmax', () => B('atlmaxon'), () => { try{ window.atlasSetMax && window.atlasSetMax(false); return true; }catch(e){ return false; } }],
+    ['maplevel', () => view() === 'atl' && !!window.__atlLevel && window.__atlLevel() !== 'world', () => { try{ window.__atlUp(); return true; }catch(e){ return false; } }],
+    ['agency', () => !!window.__illuDirAgOpen && window.__illuDirAgOpen() && matchMedia('(max-width:760px)').matches, () => window.__illuDirAgClose()],
+    ['filters', () => { const t = document.querySelector('#fbar .fbtog'); return !!t && t.getAttribute('aria-expanded') === 'true' && vis(t); }, () => click('#fbar .fbtog')],
     ['drawer', () => { const d = document.getElementById('abdrawer'); return !!d && d.classList.contains('open'); }, () => click('#abdrawer [data-abclose]')],
     ['more', () => vis(document.getElementById('abmorep')), () => click('#abmore')],
     ['typelist', () => !!document.querySelector('#pane-arr .rcddl'), () => click('#pane-arr .rcddb')]
@@ -49,7 +69,8 @@
       const top = LAYERS.find(l => l[0] === o[0]);
       byBack = true; let done = false; try{ done = top[2](); }catch(e){}
       if(!done) byBack = false;
-      setTimeout(tick, 0); return;
+      /* a layer with steps of its own (the map's levels) stays open after one step: it keeps a step in the history */
+      setTimeout(() => { try{ if(done && openNow().includes(top[0])){ byBack = false; history.pushState({illu: 'l'}, ''); } }catch(e){} tick(); }, 120); return;
     }
     if(hist.length){ const to = hist.pop(); byBack = true; try{ window.__illuGo && window.__illuGo(to); }catch(e){ byBack = false; } setTimeout(tick, 0); }
   });

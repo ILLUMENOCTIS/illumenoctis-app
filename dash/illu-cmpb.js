@@ -19,7 +19,10 @@
   const H = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
   const KEY = 'illu.cmpb';
   const load = () => { try{ return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; }catch(e){ return {}; } };
-  const st = Object.assign({boards: [], lay: 'side', size: 'm', hideLit: false, multi: false, sync: true, n: 40, recent: []}, load());
+  /* 1.2.237 (user, 18 Nov 2026, phone: Compare boards): on a phone the boards start one under the other (Rows) - side by
+     side, the second board was off the screen; Columns / Mixed can still be chosen */
+  const phone = (() => { try{ return matchMedia('(max-width:760px)').matches; }catch(e){ return false; } })();
+  const st = Object.assign({boards: [], lay: phone ? 'rows' : 'side', size: 'm', hideLit: false, multi: false, sync: true, n: 40, recent: []}, load());
   st.n = 40;
   const save = () => { try{ localStorage.setItem(KEY, JSON.stringify({boards: st.boards, lay: st.lay, size: st.size, hideLit: st.hideLit, multi: st.multi, sync: st.sync, recent: st.recent})); }catch(e){} };
   const pk = {tab: 'browse', rg: '', co: '', kind: 'all', sort: 'az', q: '', n: 80};

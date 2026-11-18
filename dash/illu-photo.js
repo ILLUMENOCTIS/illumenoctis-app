@@ -92,7 +92,7 @@
   }
   function paintCell(key, force){
     document.querySelectorAll('.litpic[data-pic="' + CSS.escape(key) + '"]').forEach(cell => {
-      if(cell.classList.contains('has')) return;
+      if(cell.classList.contains('has') && !force && !PMAIN.has(key)) return;   /* 1.2.229: a chosen card photo repaints a card that shows a saved copy */
       if(force && cell.closest('.d2card')){ const im = cell.querySelector(':scope > img'), u2 = pmSrc(PMAIN.get(key)) || (litFacts0({key}) || {}).photo || PLINK.get(key) || ''; if(im && PMAIN.has(key) && !im.dataset.orig) im.dataset.orig = im.getAttribute('src') || '';
         if(im && !PMAIN.has(key) && im.dataset.orig){ im.src = im.dataset.orig; delete im.dataset.orig; return; }   /* back to the photo the card had */
         if(u2){ if(im) im.src = u2; else cell.insertAdjacentHTML('afterbegin', '<img class="agimg" alt="" referrerpolicy="no-referrer" decoding="async" src="' + String(u2).replace(/"/g, '&quot;') + '">'); } return; }   // the open card keeps its slideshow; only its picture changes
@@ -322,6 +322,20 @@
     }finally{ sweeping = false; }
   }
 
+  /* 1.2.229 (user, 17 Nov 2026, Flavie Sammartano: "main photo still isn't changing" - '✓ Card photo' was saved (pmain/…)
+     but her cards kept the saved copy of her first photo, because a saved copy (PICS) always came first): the photo chosen
+     with 'Card photo' now comes before a saved copy; dropping a new photo on the card clears that choice (s02.js) */
+  if(typeof picCell === 'function'){
+    const picCellS = picCell;
+    window.picCell = picCell = function(key, nm, src){
+      const pm = PMAIN.get(key), id = PICS.get(key);
+      if(pm && pm.u && id && !expired(pm.u) && !PICPRE.get(key)){
+        PICS.delete(key);
+        try{ return picCellS(key, nm, pmSrc(pm)); } finally { PICS.set(key, id); }
+      }
+      return picCellS(key, nm, src);
+    };
+  }
   /* every agency photo goes through the program's small-picture cache: the first view fetches
      and shrinks it once, every later view opens it straight from this computer */
   if(window.illu && typeof picCell === 'function'){

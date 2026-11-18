@@ -548,7 +548,17 @@
         }
       }
       applyExtra();
-      const sum = {ok: true, mails: r.seen, contacts: addC, agencies: addA, dupes: dupe, free, skipped: noise, newAgs: newAgs.slice(0, 40), at: new Date().toISOString()};
+      /* 1.2.224 (user, 17 Nov 2026: "go through the Hiworks emails and input the agencies that we're in contact with / received
+         replies / emails received from model agencies and mark them in the MDI Agency Contacts"): per Directory agency, how many
+         mails this person sent to it and got from it, and the newest each way - from the mail list only, nothing opened */
+      try{
+        const per = new Map();
+        for(const [dom, g] of byDom){ if(!g.ag) continue; const d = lc(g.ag.domain); const x = per.get(d) || {d, i: 0, o: 0, li: '', lo: ''};
+          for(const o of g.rows){ x.i += o.ki || 0; x.o += o.ko || 0; if(String(o.li || '') > x.li) x.li = String(o.li || ''); if(String(o.lo || '') > x.lo) x.lo = String(o.lo || ''); }
+          if(x.i || x.o) per.set(d, x); }
+        await DB.doc('hwag/' + m).set({by: m, at: new Date().toISOString(), mails: r.seen, list: [...per.values()]});
+      }catch(e){ console.warn('hwag', e); }
+      const sum = {ok: true, agv: 1, mails: r.seen, contacts: addC, agencies: addA, dupes: dupe, free, skipped: noise, newAgs: newAgs.slice(0, 40), at: new Date().toISOString()};
       try{ localStorage.setItem('illu.hwcts.' + m, JSON.stringify(sum)); }catch(e){}
       try{ await DB.doc('hwscan/' + m).set(sum); }catch(e){}
       if(manual || addC || addA){ try{ (window.__illuToast || window.toast || (() => {}))(L2('Hiworks: ' + addC + ' new agency contacts' + (addA ? ', ' + addA + ' new agencies in the Directory' : '') + ' (' + r.seen + ' emails read, nothing twice)', 'Hiworks: 새 연락처 ' + addC + '개' + (addA ? ', 새 에이전시 ' + addA + '곳' : '') + ' (' + r.seen + '통 확인, 중복 없음)')); }catch(e){} }
@@ -559,7 +569,7 @@
   async function autoRun(){
     const m = me(); if(!m) return;
     let last = null; try{ last = JSON.parse(localStorage.getItem('illu.hwcts.' + m) || 'null'); }catch(e){}
-    if(last && Date.now() - new Date(last.at).getTime() < 22 * 3600e3) return;
+    if(last && last.agv && Date.now() - new Date(last.at).getTime() < 22 * 3600e3) return;   /* 1.2.224: a scan from before the per-agency counts runs once more */
     let st = null; try{ st = await window.illu.hiworksStatus(m); }catch(e){}
     if(st && st.signed) run(false);
   }
