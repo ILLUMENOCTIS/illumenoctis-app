@@ -272,6 +272,11 @@ window.addEventListener('resize', () => {
 document.addEventListener('fullscreenchange', () => {
   if(!document.fullscreenElement && bvEl.classList.contains('bvmax')) bvMaxSet(false);
 });
+/* 1.2.259: a video never takes the whole screen on its own (that view has no arrows) - it goes back to the viewer */
+document.addEventListener('fullscreenchange', () => {
+  const f = document.fullscreenElement;
+  if(f && f.tagName === 'VIDEO'){ try{ document.exitFullscreen().catch(() => {}); }catch(e){} }
+});
 /* The PDF button: the pictures in the open folder, two to a page, under the model's
    name and figures - the sheet an agency sends a client. Made here, saved here. */
 async function bvMakePdf(btn){
@@ -1975,6 +1980,9 @@ async function bvDrawStage(c, got){
     bvURL = url;
     const v = document.createElement('video');
     v.controls = true; v.playsInline = true; v.preload = 'metadata';
+    /* 1.2.259 (user, 18 Nov 2026: "I need the left and right arrows to scroll through the image/videos from the full screen"): a video's own full screen showed only the video - no arrows. Its full-screen button is gone; double-click and the viewer's own full screen fill the screen WITH the arrows, and the arrow keys step through the files even while the video has focus. */
+    try{ v.setAttribute('controlsList', 'nofullscreen'); v.disablePictureInPicture = true; }catch(e){}
+    v.addEventListener('dblclick', e => { e.preventDefault(); e.stopPropagation(); bvMaxSet(!bvEl.classList.contains('bvmax')); });
     v.onerror = () => {
       if(seq !== bvSeq) return;
       box.innerHTML = fileCard('this browser could not play it. Phone videos are often ' +
@@ -2676,7 +2684,7 @@ document.addEventListener('keydown', e => {
     return;
   }
   if(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
-  if(e.target && e.target.tagName === 'VIDEO') return;
+  if(e.target && e.target.tagName === 'VIDEO' && e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
   if((e.key === '+' || e.key === '=') && bvPhotoEl()){ e.preventDefault(); bvZoomTo(bvZ.k * 1.5); return; }
   if((e.key === '-' || e.key === '_') && bvPhotoEl()){ e.preventDefault(); bvZoomTo(bvZ.k / 1.5); return; }
   if(e.key === '0' && bvPhotoEl()){ e.preventDefault(); bvZoomTo(1); return; }

@@ -1512,7 +1512,7 @@
     let h = '';
     /* 1.2.242: a film from her page plays in the slideshow (muted, looping; the sound and controls are on it) */
     const curV = !!cur && (cur.cat === 'Video' || /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(cur.url || ''));
-    if(cur && curV){ const old = pic.querySelector('.d2sl video.d2slv'); if(old && old.getAttribute('src') === cur.url) h += '<!--v-->'; else h += '<video class="d2sli d2slv" src="' + enc(cur.url) + '" autoplay muted loop playsinline controls preload="metadata"></video>'; }
+    if(cur && curV){ const old = pic.querySelector('.d2sl video.d2slv'); if(old && old.getAttribute('src') === cur.url) h += '<!--v-->'; else h += '<video class="d2sli d2slv" src="' + enc(cur.url) + '" autoplay muted loop playsinline controls controlslist="nofullscreen" disablepictureinpicture preload="metadata"></video>'; }
     else if(cur) h += '<img class="d2sli" alt="" src="' + enc(slImg(cur.url, full ? 2000 : 900)) + '" draggable="false">';
     h += '<button type="button" class="d2slf" data-d2slf aria-pressed="' + full + '" title="' + (full ? 'Exit full view · F or Esc' : 'Full view · F') + '" aria-label="' + (full ? 'Exit full view' : 'Full view') + '">' + (full ? IC_EXIT : IC_FULL) + '<span>' + (full ? 'Exit full view' : 'Full view') + '</span><kbd>F</kbd></button>';
     /* 1.2.112: make the photo shown the card photo (only a link is kept - nothing is saved); back to the crawler's photo */

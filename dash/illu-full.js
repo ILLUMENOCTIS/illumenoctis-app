@@ -63,7 +63,7 @@
     const isV = u => !!(S.vid && S.vid.has(u));
     const cur = S.photos[S.i];
     let vid = box.querySelector('.fvvid');
-    if(n && isV(cur)){ if(!vid){ vid = document.createElement('video'); vid.className = 'fvvid'; vid.controls = true; vid.playsInline = true; box.querySelector('.fvstage').appendChild(vid); } if(vid.getAttribute('src') !== cur) vid.src = cur; vid.hidden = false; img.hidden = true; }
+    if(n && isV(cur)){ if(!vid){ vid = document.createElement('video'); vid.className = 'fvvid'; vid.controls = true; vid.playsInline = true; /* 1.2.259: no video-only full screen - the view's own (with its arrows) */ try{ vid.setAttribute('controlsList', 'nofullscreen'); vid.disablePictureInPicture = true; }catch(e){} vid.addEventListener('dblclick', ev => { ev.preventDefault(); ev.stopPropagation(); try{ if(document.fullscreenElement) document.exitFullscreen(); else box.requestFullscreen(); }catch(x){} }); box.querySelector('.fvstage').appendChild(vid); } if(vid.getAttribute('src') !== cur) vid.src = cur; vid.hidden = false; img.hidden = true; }
     else { if(vid){ try{ vid.pause(); }catch(e){} vid.hidden = true; vid.removeAttribute('src'); } img.hidden = false; if(n) img.src = cur; }
     paintTabs();
     img.alt = S.name || '';
