@@ -19,7 +19,13 @@
      - "Update from Hiworks" (user: "an update Hiworks email that applies for all emails on the list"; PC program only):
        one press reads Hiworks for every booking card on the list and every Processing booking card (the card's own
        "Collect from Hiworks") and for every agency on the list (the "Emailed before" history), then redraws. Same rules
-       as those buttons: unread mail is only listed, never opened; nothing is sent. */
+       as those buttons: unread mail is only listed, never opened; nothing is sent.
+   1.2.252 (user, 18 Nov 2026: "allow me to delete the email selection from the list"):
+     - a model's mini card has a small × (always shown on a phone): she leaves that agency's row, with the emails that
+       were only about her; the agency row itself has "Remove from list" in its opened view;
+     - the removal is for everyone (docs bemhide/<id>), with Undo for a few seconds and "Removed from the list (n)" under
+       the list to put any of them back. Nothing in Hiworks or on her booking card is deleted - only this list;
+     - a new email about her (or to that agency) after the removal brings her (the row) back on its own. */
 (function(){
   'use strict';
   if(window.__illuBEmail) return; window.__illuBEmail = true;
@@ -54,6 +60,20 @@
     const d = new Date(s); return isNaN(d) ? null : d;
   }
   const Y0 = new Date(2026, 0, 1);
+
+  /* ---------- removed from the list (1.2.252) ---------- */
+  let HIDE = new Map(), EFF = [];
+  const hid32 = s => { let h = 5381; s = String(s); for(let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); };
+  const hideId = (rk, mk) => 'h' + hid32(rk + '|' + (mk || '')) + hid32((mk || '') + '#' + rk);
+  (function hideListen(){
+    if(typeof DB === 'undefined' || !DB){ setTimeout(hideListen, 900); return; }
+    try{ DB.collection('bemhide').onSnapshot(sn => {
+      const m = new Map();
+      for(const d of (sn.docs || [])){ const v = docData(d); const id = docId(d); if(v && id && v.r) m.set(id, {id, r: String(v.r), dom: String(v.dom || ''), mk: String(v.mk || ''), k: v.k || '', nm: v.nm || '', ag: v.ag || '', by: v.by || '', at: Date.parse(v.at) || 0, seen: +v.seen || Date.parse(v.at) || 0}); }
+      HIDE = m; DATAV++; if(document.getElementById('bemlist')) drawList();
+    }, () => {}); }catch(e){ console.warn('bemhide', e); }
+  })();
+  function hideFor(r){ const out = []; for(const h of HIDE.values()) if(h.r === r.key || (h.dom && r.dom && h.dom.toLowerCase() === String(r.dom).toLowerCase())) out.push(h); return out; }
 
   /* ---------- the rows ---------- */
   let HW = [], HWAT = 0, HWBUSY = false, AGH = [], DATAV = 0;
@@ -90,7 +110,7 @@
       const nkey = String(disp).trim().toLowerCase();
       const key = a ? 'ag:' + String(a.domain || a.name).toLowerCase() : dom ? 'dom:' + dom : 'nm:' + nkey;
       let r = rows.get(key) || byName.get(nkey);         // one row per agency, whether it was found by its domain or by its name
-      if(!r){ r = {key, ag: disp, dom: a ? String(a.domain || dom) : dom, to: '', toAt: 0, by: new Set(), models: new Map(), msgs: new Map(), opened: []}; rows.set(key, r); byName.set(nkey, r); }
+      if(!r){ r = {key, ag: disp, dom: a ? String(a.domain || dom) : dom, to: '', toAt: 0, by: new Set(), models: new Map(), msgs: new Map(), opened: [], ope: []}; rows.set(key, r); byName.set(nkey, r); }
       return r;
     };
     const cards = new Map();
@@ -170,13 +190,32 @@
         if(!nm){ try{ const i = keyInfo(h.mk); if(i) nm = i.nm || ''; }catch(e){} }
         if(!nm){ const sl = decodeURIComponent(String(h.mk).replace(/[?#].*$/, '').replace(/\/(portfolio|book)?\/?$/i, '').split('/').pop() || ''); nm = sl.replace(/\.web$|\.html?$/i, '').replace(/^\d+-|-\d+$/g, '').replace(/[-_]+/g, ' ').replace(/\b\w/g, z => z.toUpperCase()); }
         r.models.set(mk, {k: h.mk, nm, ht, bid: c ? c.id : '', st: c ? (c.st || '') : '', cardAg: c ? (c.ag || '') : h.ag, sent: false}); }
-      r.opened.push(h.t);
+      r.opened.push(h.t); r.ope.push({t: h.t, mk});
+      const mo = r.models.get(mk); if(mo) mo.lo = Math.max(mo.lo || 0, +h.t);
     }
     const now = Date.now(), today = new Date(); today.setHours(0, 0, 0, 0);
     const out = [];
     const hid = k => { try{ return !!(window.__illuHidK && window.__illuHidK(k)); }catch(e){ return false; } };
+    const eff = [];
     for(const r of rows.values()){
       for(const [mk, m] of [...r.models]) if(hid(m.k)) r.models.delete(mk);   // 1.2.251: hidden models leave the board
+      /* 1.2.252: removed from the list - until a newer email (or a newer ✉ window) about her / to that agency */
+      /* the newest email / ✉ window known for the row and for each model: kept with a removal, so only a NEWER one
+         brings it back (compared with what was known then, not with the clock) */
+      r.rowLast = Math.max(0, ...[...r.msgs.values()].map(m => +m.t), ...r.opened.map(t => +t));
+      const lastOf = mk => { let t = 0; for(const m of r.msgs.values()) if(m.ms.has(mk) && +m.t > t) t = +m.t; const mo = r.models.get(mk); if(mo && (mo.lo || 0) > t) t = mo.lo; return t; };
+      r.lastOf = new Map([...r.models.keys()].map(mk => [mk, lastOf(mk)]));
+      const hs = hideFor(r);
+      if(hs.length && r.models.size){
+        const whole = hs.filter(h => !h.mk && h.seen >= r.rowLast).pop();
+        if(whole){ eff.push(Object.assign({}, whole, {nm: '', ag: r.ag, rk: r.key})); continue; }
+        const gone = new Set();
+        for(const h of hs) if(h.mk && r.models.has(h.mk) && h.seen >= r.lastOf.get(h.mk)){ eff.push(Object.assign({}, h, {nm: nmOf(r.models.get(h.mk)) || h.nm, ag: r.ag, rk: r.key})); r.models.delete(h.mk); gone.add(h.mk); }
+        if(gone.size){
+          for(const [ek, m] of [...r.msgs]) if(m.d === 'out' && m.ms.size && [...m.ms].every(x => gone.has(x))) r.msgs.delete(ek);   // the emails only about her
+          r.opened = r.ope.filter(o => !gone.has(o.mk)).map(o => o.t);
+        }
+      }
       if(!r.models.size) continue;
       const ms = [...r.msgs.values()].sort((a, b) => a.t - b.t);
       r.list = ms; r.sent = ms.filter(m => m.d === 'out').length; r.recv = ms.filter(m => m.d === 'in').length;
@@ -194,6 +233,7 @@
       r.mine = r.by.has(me());
       out.push(r);
     }
+    EFF = eff.sort((a, b) => b.at - a.at);
     return out.sort((a, b) => b.at - a.at);
   }
   function agSame(name, r){ try{ const a = AG.find(x => x.name === name); return !!(a && r.dom && String(a.domain || '').toLowerCase() === String(r.dom).toLowerCase()); }catch(e){ return false; } }
@@ -239,7 +279,8 @@
         [['all', L('All', '전체'), r.list.length], ['in', L('Received', '받은 메일'), r.recv], ['out', L('Sent', '보낸 메일'), r.sent]].map(([k, l, n]) => '<button type="button" data-bemtv="' + k + '" aria-pressed="' + (v === k) + '">' + l + ' <s>' + n + '</s></button>').join('') + '</div>' +
       '<span class="bemsp"></span>' +
       (lastIn ? '<a class="bembtn" href="https://mails.office.hiworks.com' + E(lastIn.hw) + '" target="_blank" rel="noopener">' + L('Reply in Hiworks', 'Hiworks에서 답장') + ' ↗</a>' : '') +
-      (r.to ? '<span class="cts bemcts" data-dom="' + E(r.dom || domOf(r.to)) + '"><a class="ctmail bembtn fill" href="mailto:' + E(r.to) + '">' + L('Ask about another model', '다른 모델 문의하기') + '</a></span>' : '') + '</div>' +
+      (r.to ? '<span class="cts bemcts" data-dom="' + E(r.dom || domOf(r.to)) + '"><a class="ctmail bembtn fill" href="mailto:' + E(r.to) + '">' + L('Ask about another model', '다른 모델 문의하기') + '</a></span>' : '') +
+      '<button type="button" class="bembtn bemdelrow" data-bemdelrow title="' + E(L('Takes this agency off the list for everyone. Nothing is deleted in Hiworks; a new email to them brings it back.', '모든 사람의 목록에서 이 에이전시를 뺍니다. Hiworks에서는 아무것도 지워지지 않으며, 새 메일을 보내면 다시 나타납니다.')) + '">' + XI + L('Remove from list', '목록에서 삭제') + '</button></div>' +
       (r.opened.length && !r.list.length ? '<p class="bemop">' + L('Opened in Hiworks from the program on ', '프로그램에서 Hiworks 작성 창을 연 날: ') + E(r.opened.map(t => day(t) + ' ' + hm(t)).slice(-3).join(', ')) + L(' — no sent email is on record yet. When it is sent, it shows here.', ' — 아직 보낸 메일 기록이 없습니다. 보내면 여기에 표시됩니다.') + '</p>' : '') +
       (ms.length ? '<div class="bemmsgs">' + ms.map(m => '<div class="bemmsg ' + m.d + '"><span class="bemdir">' + (m.d === 'in' ? I.in + L('Received', '받음') : I.out + L('Sent', '보냄')) + '</span>' +
           '<span class="bemwhen">' + E(day(m.t)) + ' · ' + hm(m.t) + '</span><span class="bemtxt">' + E(m.s || L('(no summary yet)', '(요약 없음)')) + '</span>' +
@@ -257,6 +298,7 @@
   }
   /* her name as her cards show it: the booking card's name, else the Directory's (a name fixed with the ✎ is kept there) */
   const nmOf = m => { if(m.bid){ try{ const c = BOOK.get(m.bid); if(c && c.nm) return c.nm; }catch(e){} } try{ const i = keyInfo(m.k); if(i && i.nm) return i.nm; }catch(e){} return m.nm || ''; };
+  const XI = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>';
   const BKI = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18"/></svg>';
   /* her mini card (was a name chip in 1.2.248) */
   function chip(r, m, mk){
@@ -264,7 +306,8 @@
     const tip = nm + (m.ht ? ' · ' + m.ht + ' cm' : '') + ' — ' + (m.sent ? (bk ? L('has a booking card — choose which card to open', '부킹 카드 있음 — 열 카드를 고르세요') : L('open her card', '모델 카드 열기')) : L('opened in Hiworks, not confirmed sent', 'Hiworks 작성 창만 열림, 발송 미확인'));
     return '<button type="button" class="bemmc' + (m.sent ? '' : ' unc') + '" data-bemmc="' + E(r.key) + '" data-bemmk="' + E(mk) + '" title="' + E(tip) + '">' +
       '<span class="bemph">' + (ph ? '<img src="' + E(ph) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') + '<i>' + E(ini(nm)) + '</i>' +
-      (bk ? '<span class="bembk' + (canc ? ' canc' : '') + '" aria-label="' + E(L('has a booking card', '부킹 카드 있음')) + '">' + BKI + '</span>' : '') + '</span>' +
+      (bk ? '<span class="bembk' + (canc ? ' canc' : '') + '" aria-label="' + E(L('has a booking card', '부킹 카드 있음')) + '">' + BKI + '</span>' : '') +
+      '<span class="bemdel" role="button" tabindex="0" data-bemdel title="' + E(L('Remove ', '') + nm + L(' from this agency’s list', ' — 이 에이전시 목록에서 삭제')) + '" aria-label="' + E(L('Remove from list', '목록에서 삭제')) + '">' + XI + '</span></span>' +
       '<span class="bemmn">' + E(nm) + '</span><span class="bemmh">' + E(m.sent ? (m.ht ? m.ht + ' cm' : '') : L('not confirmed', '발송 미확인')) + '</span></button>';
   }
   function list(){
@@ -299,7 +342,15 @@
         '<div class="bemseg" role="group" aria-label="' + E(L('Replies', '답장')) + '"><button type="button" data-bemf="any" aria-pressed="' + (ST.f === 'any') + '">' + L('All', '전체') + '</button><button type="button" data-bemf="replied" aria-pressed="' + (ST.f === 'replied') + '">' + L('Reply in', '답장 옴') + ' <s>' + p.filter(r => r.recv).length + '</s></button><button type="button" data-bemf="open" aria-pressed="' + (ST.f === 'open') + '">' + L('No reply yet', '답장 없음') + ' <s>' + p.filter(r => !r.recv).length + '</s></button></div>' +
         '<span class="bemsp"></span><div class="bemtot">' + totals() + '</div>' + updBtn() + '</div>' +
       '<div class="bemhint"><span class="bemlive"></span><span class="bemhtxt">' + L('Every model inquiry you send from Hiworks is added here automatically — newest activity on top.', 'Hiworks로 보낸 모델 문의는 자동으로 추가됩니다 — 최근 활동이 맨 위.') + '</span><span class="bemupdmsg" id="bemupdmsg">' + updMsg() + '</span></div>' +
-      '<div class="bemlist" id="bemlist">' + list() + '</div>';
+      '<div class="bemlist" id="bemlist">' + list() + '</div><div id="bemrem">' + remPanel() + '</div>';
+  }
+  function remPanel(){
+    if(!EFF.length) return '';
+    return '<details class="bemrem"' + (ST.remOpen ? ' open' : '') + '><summary>' + L('Removed from the list', '목록에서 삭제됨') + ' <s>' + EFF.length + '</s></summary><div class="bemremls">' +
+      EFF.map(h => { const t = new Date(h.at); const who = pname(h.by);
+        return '<div class="bemremit"><span class="bemremn"><b>' + E(h.mk ? (h.nm || h.k) : L('Whole agency', '에이전시 전체')) + '</b> · ' + E(h.ag) + '</span>' +
+          '<span class="bemremw">' + E(L('Removed ', '삭제 ') + day(t) + ' ' + hm(t) + (who ? ' · ' + who : '')) + '</span>' +
+          '<button type="button" class="bembtn" data-bemrestore="' + E(h.id) + '">' + L('Put back', '되돌리기') + '</button></div>'; }).join('') + '</div></details>';
   }
   function tabs(){
     const n = ROWS.length, rep = ROWS.some(r => r.mine && r.st === 'replied');
@@ -323,7 +374,7 @@
   wrap();
   function draw(){ try{ window.__illuTodayRender && window.__illuTodayRender(); }catch(e){} }
   /* the list only (typing in the search box keeps its place) */
-  function drawList(){ const l = document.getElementById('bemlist'); if(!l){ draw(); return; } ROWS = build(); l.innerHTML = list(); const t = document.querySelector('#bem .bemtot'); if(t) t.innerHTML = totals(); }
+  function drawList(){ const l = document.getElementById('bemlist'); if(!l){ draw(); return; } ROWS = build(); l.innerHTML = list(); const t = document.querySelector('#bem .bemtot'); if(t) t.innerHTML = totals(); const rp = document.getElementById('bemrem'); if(rp) rp.innerHTML = remPanel(); }
   window.__illuBEmailRows = () => { ROWS = build(); return ROWS; };
 
   /* 1.2.251: the shared email record - the newest agency row for each model, read by the ✉ marker on every card
@@ -395,9 +446,11 @@
     const doms = new Set();
     for(const r of ROWS){ const d = String(r.dom || '').toLowerCase(); if(d && d.indexOf(':') < 0 && !FREE.test(d) && !OWN.test(d)) doms.add(d); }
     UPD = {i: 0, n: ids.size + doms.size, stop: false, now: ''}; updPaint();
-    let cardsDone = 0, agDone = 0, signin = false, fails = 0;
+    let cardsDone = 0, agDone = 0, signin = false, fails = 0, booked = 0;
+    /* 1.2.252: first my own Sent mail - an inquiry sent with her link gets her booking card (Email = In process) */
+    try{ if(window.__illuCheckMine){ UPD.now = L('my sent mail', '내가 보낸 메일'); updPaint(); for(let w = 0; w < 20; w++){ const r = await window.__illuCheckMine(); if(r){ if(r.why === 'signin') signin = true; booked = (r.booked || []).length; break; } await sleep(1000); } } }catch(e){ fails++; }
     for(const id of ids){
-      if(UPD.stop) break;
+      if(UPD.stop || signin) break;
       let c = null; try{ c = BOOK.get(id); }catch(e){} UPD.i++;
       if(!c){ continue; }
       UPD.now = (c.nm || '') + (c.ag ? ' · ' + c.ag : ''); updPaint();
@@ -417,11 +470,39 @@
     const stopped = UPD.stop;
     UPD = null;
     const msg = signin ? L('Hiworks needs you to sign in once in the program.', 'Hiworks 로그인이 한 번 필요합니다.')
-      : (stopped ? L('Stopped · ', '중지됨 · ') : '') + L(cardsDone + ' cards and ' + agDone + ' agencies read · ' + Math.max(0, s1 - s0) + ' new sent · ' + Math.max(0, r1 - r0) + ' new received', '카드 ' + cardsDone + '개, 에이전시 ' + agDone + '곳 확인 · 새로 보낸 메일 ' + Math.max(0, s1 - s0) + ' · 새로 받은 메일 ' + Math.max(0, r1 - r0)) + (fails ? L(' · ' + fails + ' could not be read', ' · ' + fails + '개 읽지 못함') : '');
+      : (stopped ? L('Stopped · ', '중지됨 · ') : '') + (booked ? L(booked + ' new booking ' + (booked === 1 ? 'card' : 'cards') + ' · ', '새 부킹 카드 ' + booked + '개 · ') : '') + L(cardsDone + ' cards and ' + agDone + ' agencies read · ' + Math.max(0, s1 - s0) + ' new sent · ' + Math.max(0, r1 - r0) + ' new received', '카드 ' + cardsDone + '개, 에이전시 ' + agDone + '곳 확인 · 새로 보낸 메일 ' + Math.max(0, s1 - s0) + ' · 새로 받은 메일 ' + Math.max(0, r1 - r0)) + (fails ? L(' · ' + fails + ' could not be read', ' · ' + fails + '개 읽지 못함') : '');
     UPDLAST = {at: new Date().toISOString(), msg, signin}; try{ localStorage.setItem('illu.bemail.upd', JSON.stringify(UPDLAST)); }catch(e){}
     draw();
   }
   window.__illuBEmailUpdate = update;
+
+  /* ---------- remove / put back (1.2.252) ---------- */
+  let UNDO = null;
+  function undoBar(txt, id){
+    document.querySelectorAll('.bemundo').forEach(x => x.remove()); clearTimeout(UNDO);
+    const b = document.createElement('div'); b.className = 'bemundo'; b.setAttribute('role', 'status');
+    b.innerHTML = '<span>' + E(txt) + '</span><button type="button" data-bemrestore="' + E(id) + '">' + L('Undo', '되돌리기') + '</button>';
+    document.body.appendChild(b); UNDO = setTimeout(() => b.remove(), 8000);
+  }
+  function remove(r, mk){
+    if(typeof DB === 'undefined' || !DB) return;
+    const m = mk ? r.models.get(mk) : null; if(mk && !m) return;
+    const id = hideId(r.key, mk || '');
+    const seen = mk ? ((r.lastOf && r.lastOf.get(mk)) || 0) : (r.rowLast || 0);
+    const v = {r: r.key, dom: String(r.dom || ''), mk: mk || '', k: m ? String(m.k || '') : '', nm: m ? nmOf(m) : '', ag: r.ag, by: me(), at: new Date().toISOString(), seen};
+    HIDE.set(id, {id, r: v.r, dom: v.dom, mk: v.mk, k: v.k, nm: v.nm, ag: v.ag, by: v.by, at: Date.parse(v.at), seen}); DATAV++;
+    if(!mk) ST.open.delete(r.key);
+    drawList(); closePick();
+    undoBar(mk ? L('Removed ' + v.nm + ' from ' + r.ag, v.nm + ' — ' + r.ag + ' 목록에서 삭제했습니다') : L('Removed ' + r.ag + ' from the list', r.ag + ' — 목록에서 삭제했습니다'), id);
+    try{ DB.collection('bemhide').doc(id).set(v).catch(e => { console.warn('bemhide save', e); HIDE.delete(id); DATAV++; drawList(); }); }catch(e){ console.warn(e); }
+  }
+  function restore(id){
+    document.querySelectorAll('.bemundo').forEach(x => x.remove());
+    if(!HIDE.has(id)) return;
+    const old = HIDE.get(id); HIDE.delete(id); DATAV++; drawList();
+    try{ DB.collection('bemhide').doc(id).delete().catch(e => { console.warn('bemhide put back', e); HIDE.set(id, old); DATAV++; drawList(); }); }catch(e){ console.warn(e); }
+  }
+  window.__illuBEmailRemove = remove;
 
   /* ---------- which card ---------- */
   function closePick(){ document.querySelectorAll('.bempick,.bempickbg').forEach(x => x.remove()); document.querySelectorAll('.bemmc.on').forEach(x => x.classList.remove('on')); }
@@ -467,10 +548,15 @@
     const t = e.target; if(!t.closest) return;
     const tab = t.closest('[data-bemv]');
     if(tab){ e.preventDefault(); e.stopPropagation(); ST.v = tab.dataset.bemv; keep(); if(ST.v === 'mail') loadHw(true); draw(); return; }
+    const ub = t.closest('.bemundo [data-bemrestore]'); if(ub){ e.preventDefault(); e.stopPropagation(); restore(ub.dataset.bemrestore); return; }
     if(!t.closest('#bem')) return;
     if(t.closest('.ctmail')) return;                          // Ask about another model: the program's own ✉ template window
     if(t.closest('a[href]')) return;                          // Reply in Hiworks (opens in the browser)
     const up = t.closest('[data-bemupd]'); if(up){ e.preventDefault(); e.stopPropagation(); update(); return; }
+    const dl = t.closest('[data-bemdel]'); if(dl){ e.preventDefault(); e.stopPropagation(); const mc = dl.closest('[data-bemmc]'); const r = mc && ROWS.find(x => x.key === mc.dataset.bemmc); if(r) remove(r, mc.dataset.bemmk); return; }
+    const dr = t.closest('[data-bemdelrow]'); if(dr){ e.preventDefault(); e.stopPropagation(); const it = dr.closest('[data-bemrow]'); const r = it && ROWS.find(x => x.key === it.dataset.bemrow); if(r) remove(r, ''); return; }
+    const rs = t.closest('[data-bemrestore]'); if(rs){ e.preventDefault(); e.stopPropagation(); restore(rs.dataset.bemrestore); return; }
+    const sm = t.closest('.bemrem > summary'); if(sm){ e.preventDefault(); e.stopPropagation(); ST.remOpen = !ST.remOpen; const d = sm.parentElement; d.open = ST.remOpen; return; }
     const mc = t.closest('[data-bemmc]'); if(mc){ e.preventDefault(); e.stopPropagation(); pick(mc); return; }
     const w = t.closest('[data-bemwho]'); if(w){ e.stopPropagation(); ST.who = w.dataset.bemwho; keep(); draw(); return; }
     const f = t.closest('[data-bemf]'); if(f){ e.stopPropagation(); ST.f = f.dataset.bemf; draw(); return; }
@@ -478,7 +564,7 @@
     if(t.closest('.bemthread')) return;
     const it = t.closest('[data-bemrow]'); if(it && t.closest('.bemrw')){ e.stopPropagation(); const k = it.dataset.bemrow; if(ST.open.has(k)) ST.open.delete(k); else ST.open.add(k); drawList(); }
   }, true);
-  document.addEventListener('keydown', e => { if((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('bemrw')){ e.preventDefault(); e.target.click(); } });
+  document.addEventListener('keydown', e => { if((e.key === 'Enter' || e.key === ' ') && e.target.classList && (e.target.classList.contains('bemrw') || e.target.classList.contains('bemdel'))){ e.preventDefault(); e.stopPropagation(); e.target.click(); } }, true);
   /* a photo that does not load leaves her initials (the page's rules do not allow onerror= in the HTML) */
   document.addEventListener('error', e => { const im = e.target; if(im && im.tagName === 'IMG' && im.parentElement && im.parentElement.classList.contains('bemph')) im.remove(); }, true);
   document.addEventListener('input', e => { const q = e.target.closest && e.target.closest('[data-bemq]'); if(!q) return; ST.q = q.value; drawList(); });
@@ -549,6 +635,26 @@
 .bembk.canc{background:#8b8189}
 .bemmn{margin-top:5px;font-size:11.5px;font-weight:600;line-height:1.25;width:76px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 .bemmh{font-size:10.5px;color:var(--dim)}
+.bemdel{position:absolute;left:4px;top:4px;z-index:3;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:rgba(20,10,20,.62);color:#fff;opacity:0;transition:opacity .15s,background .15s;cursor:pointer}
+.bemdel svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.8}
+.bemmc:hover .bemdel,.bemmc:focus-within .bemdel{opacity:1}
+.bemdel:hover,.bemdel:focus-visible{background:#b3261e;outline:0;opacity:1}
+@media (hover:none){.bemdel{opacity:1;width:22px;height:22px}}
+.bemdelrow{display:inline-flex;align-items:center;gap:5px;border-color:var(--line);color:var(--dim)}
+.bemdelrow svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2.4}
+.bemdelrow:hover{border-color:#b3261e;color:#b3261e}
+.bemrem{margin-top:10px;font-size:12.5px;color:var(--dim)}
+.bemrem summary{cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:4px 2px;list-style:none}
+.bemrem summary::-webkit-details-marker{display:none}
+.bemrem summary::before{content:"▸";font-size:10px;transition:transform .15s}.bemrem[open] summary::before{transform:rotate(90deg)}
+.bemrem summary s{text-decoration:none;font-size:11px;background:var(--chip,rgba(0,0,0,.05));border-radius:6px;padding:1px 6px}
+.bemremls{border:1px solid var(--line);border-radius:12px;background:var(--surf,#fff);margin-top:6px}
+.bemremit{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:9px 12px;border-bottom:1px solid var(--line)}.bemremit:last-child{border-bottom:0}
+.bemremn{flex:1 1 220px;min-width:0;color:var(--ink,var(--fg));overflow-wrap:anywhere}
+.bemremw{font-size:11.5px;white-space:nowrap}
+.bemundo{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:9999;display:flex;align-items:center;gap:14px;max-width:calc(100vw - 32px);background:#2a1f29;color:#fff;border-radius:12px;padding:10px 12px 10px 16px;font-size:13px;box-shadow:0 10px 28px rgba(20,10,20,.3)}
+.bemundo span{min-width:0;overflow-wrap:anywhere}
+.bemundo button{border:0;background:none;color:#e9b8df;font:inherit;font-weight:700;cursor:pointer;padding:4px 6px;white-space:nowrap}
 .bemmc.unc .bemph{outline:1.5px dashed var(--faint,#b3aab1);outline-offset:2px;filter:saturate(.6) brightness(.95)}
 .bemmeta{display:contents}
 .bemnum{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}

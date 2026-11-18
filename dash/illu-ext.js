@@ -300,6 +300,9 @@ document.head.appendChild(st);
   window.__illuCheckMine = checkMine;
   if (window.illu && window.illu.hiworksMine && !window.illu.web) {
     setTimeout(checkMine, 20000);
+    /* 1.2.252: the Hiworks window closed (or left the writing page): read my Sent mail - a little later, and once more,
+       because Hiworks lists a sent email after a few seconds. A sent inquiry -> her booking card, Email = In process. */
+    try { if (window.illu.onHiworksClosed) window.illu.onHiworksClosed(() => { setTimeout(checkMine, 6000); setTimeout(checkMine, 40000); }); } catch (e) {}
   }
 
   /* ---------- email templates (docs mailtpl/<id>: {name, subject, body, kind, by, at, o}) ---------- */

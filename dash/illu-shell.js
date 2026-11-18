@@ -446,7 +446,7 @@
     const h =
       '<div class="shlay' + (ckOn ? '' : ' noclk') + '">' +
       '<div class="shclk' + (W.clk ? '' : ' noclk') + (W.map ? '' : ' nomap') + (ckOn ? '' : ' none') + '" id="shclk"></div>' +
-      '<div class="shhead"><div><div class="shkick">' + H(dateLine()) + '</div><h2>' + H(greet() + (nm ? ', ' + nm : '')) + ' <span class="shsub2">— ' + H(sub) + '</span></h2></div></div>' +
+      '<div class="shhead"><div><div class="shkick">' + H(dateLine()) + '</div><h2>' + H(greet() + (nm ? ', ' + nm + (isKO() ? '님' : '') : '')) + ' <span class="shsub2">— ' + H(sub) + '</span></h2></div></div>' +
       '<div class="shmainc">' + (window.__illuVoteToday ? window.__illuVoteToday() : '<div></div>') + '</div>'   /* 1.2.158 (user): the On-Stay row taken off Today again - the board stays in Opus */ +
       sidePanel(list) +
       '</div>';
