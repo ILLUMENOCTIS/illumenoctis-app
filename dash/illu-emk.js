@@ -64,16 +64,19 @@
     }
   }
   let BUSY = false, LASTV = '';
+  /* 1.2.255 (user, 18 Nov 2026: "I also don't think it's necessary to show the 'Waiting' for the email once the card has
+     been cancelled"): a model whose booking card is cancelled has no marker */
+  function cancelled(k){ try{ const c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : (typeof bkForKey === 'function' ? bkForKey(k) : null); return !!(c && (c.st === 'canc' || (typeof bkStOf === 'function' && bkStOf(c) === 'canc'))); }catch(e){ return false; } }
   function pass(){
     BUSY = false;
     const R = REC(); if(!R) return;
     const keys = R.keys(); LASTV = R.ver();
     const seen = new Set();
     for(const k of keys){
-      const i = R.of(k); if(!i) continue;
+      const i = R.of(k); if(!i || cancelled(k)) continue;
       for(const [host, small] of targets(k)){ place(host, i, small, k); seen.add(host); }
     }
-    for(const [host, small, k] of bookTargets()){ const i = R.of(k); if(i){ place(host, i, small, k); seen.add(host); } }
+    for(const [host, small, k] of bookTargets()){ const i = R.of(k); if(i && !cancelled(k)){ place(host, i, small, k); seen.add(host); } }
     /* a card that no longer has an email on record (or was redrawn for another model) loses its marker */
     for(const el of document.querySelectorAll('.emk')){ if(!seen.has(el.parentElement)) el.remove(); }
   }

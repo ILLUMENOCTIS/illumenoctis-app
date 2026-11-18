@@ -442,8 +442,13 @@ body.bkpipeon #bkmain{display:none!important}
     ['own', ['Other reason', '기타 사유'], ['Please write the reason below.', '아래에 사유를 적어 주세요.'], '']
   ];
   const MARK = {nokr: ['Not for Korea', '한국 불가'], no: ['Not available (with another Korean agency)', '불가 (다른 한국 에이전시)'], later: ['On hold — ask again later', '보류 — 나중에 다시 문의']};
+  /* 1.2.255 (user, 18 Nov 2026 - Emma Luise cancelled with "Other reason", Arina P with "another Korean agency": "the one on
+     the right shows the Not Available sign, but the one on the left doesn't"): every reason can mark her card now. The
+     reasons with no sign of their own (dates, guarantee, other) offer the sign to use - Not available first. */
+  const PICK = [['no', ['Not available', '불가']], ['nokr', ['Not for Korea', '한국 불가']], ['later', ['On hold — ask again later', '보류 — 나중에 다시 문의']]];
+  const markOf = r => r ? (r[3] || S.mt || 'no') : '';
   window.__illuCxlLabel = x => { const r = R.find(y => y[0] === (x && x.r)); return r ? (x.r === 'own' && x.why ? x.why.slice(0, 60) : L(r[1][0], r[1][1])) : L('Cancelled', '취소'); };
-  const S = {bid: '', go: null, r: '', why: '', mark: true};
+  const S = {bid: '', go: null, r: '', why: '', mark: true, mt: 'no'};
   function box(){ let b = document.getElementById('bkcxl'); if(!b){ b = document.createElement('div'); b.id = 'bkcxl'; document.body.appendChild(b); } return b; }
   function draw(){
     const b = box(); let c = null; try{ c = BOOK.get(S.bid); }catch(e){} if(!c){ b.hidden = true; return; }
@@ -453,14 +458,15 @@ body.bkpipeon #bkmain{display:none!important}
       '<p class="cxsub">' + H(L('Choose the main reason. It stays on her card so the team knows what happened.', '주요 사유를 선택하세요. 카드에 남아 팀이 상황을 알 수 있습니다.')) + '</p>' +
       '<fieldset><legend>' + H(L('Reason', '사유')) + '</legend>' + R.map(x => '<label class="cxopt' + (S.r === x[0] ? ' on' : '') + '"><input type="radio" name="cxr" value="' + x[0] + '"' + (S.r === x[0] ? ' checked' : '') + '><span><b>' + H(L(x[1][0], x[1][1])) + '</b><small>' + H(L(x[2][0], x[2][1])) + '</small></span></label>').join('') + '</fieldset>' +
       '<label class="cxlab" for="cxwhy">' + H(need ? L('What happened? (required)', '무슨 일이 있었나요? (필수)') : L('Anything to add? (optional)', '덧붙일 내용 (선택)')) + '</label><textarea id="cxwhy" rows="3" maxlength="400">' + H(S.why) + '</textarea>' +
-      (r && r[3] ? '<label class="cxmark ' + r[3] + '"><input type="checkbox" id="cxmk"' + (S.mark ? ' checked' : '') + '><span><b>' + H(L('Also mark her card: ', '카드에도 표시: ') + L(MARK[r[3]][0], MARK[r[3]][1])) + '</b><small>' + H(L('Shown on her card on every board, so nobody asks the agency again by mistake.', '모든 보드의 카드에 표시되어 실수로 다시 문의하지 않게 합니다.')) + '</small></span></label>' : '') +
+      (r ? '<label class="cxmark ' + markOf(r) + '"><input type="checkbox" id="cxmk"' + (S.mark ? ' checked' : '') + '><span><b>' + H(L('Also mark her card: ', '카드에도 표시: ')) + (r[3] ? H(L(MARK[r[3]][0], MARK[r[3]][1])) : '<select id="cxmt" aria-label="' + H(L('Which sign', '표시 종류')) + '">' + PICK.map(([k, t]) => '<option value="' + k + '"' + (S.mt === k ? ' selected' : '') + '>' + H(L(t[0], t[1])) + '</option>').join('') + '</select>') + '</b><small>' + H(L('Shown on her card on every board, so nobody asks the agency again by mistake.', '모든 보드의 카드에 표시되어 실수로 다시 문의하지 않게 합니다.')) + '</small></span></label>' : '') +
       '<div class="cxacts"><button type="button" data-cxkeep>' + H(L('Keep it in Processing', '진행 중으로 유지')) + '</button><button type="button" class="cxgo" data-cxgo' + (!S.r || (need && !S.why.trim()) ? ' disabled' : '') + '>' + H(L('Cancel the booking', '부킹 취소')) + '</button></div></div>';
   }
-  function ask(bid, go){ S.bid = bid; S.go = go; S.r = ''; S.why = ''; S.mark = true; draw(); setTimeout(() => { const i = document.querySelector('#bkcxl input[name=cxr]'); if(i) i.focus(); }, 30); }
+  function ask(bid, go){ S.bid = bid; S.go = go; S.r = ''; S.why = ''; S.mark = true; S.mt = 'no'; draw(); setTimeout(() => { const i = document.querySelector('#bkcxl input[name=cxr]'); if(i) i.focus(); }, 30); }
   document.addEventListener('change', e => {
     const t = e.target; if(!t.closest || !t.closest('#bkcxl')) return;
     if(t.name === 'cxr'){ S.r = t.value; S.mark = true; draw(); if(S.r === 'own'){ const w = document.getElementById('cxwhy'); if(w) w.focus(); } }
     if(t.id === 'cxmk') S.mark = t.checked;
+    if(t.id === 'cxmt'){ S.mt = t.value; S.mark = true; draw(); }
   }, true);
   document.addEventListener('input', e => { if(e.target.id !== 'cxwhy') return; S.why = e.target.value; const g = document.querySelector('#bkcxl [data-cxgo]'); if(g) g.disabled = !S.r || (S.r === 'own' && !S.why.trim()); }, true);
   document.addEventListener('click', e => {
@@ -471,7 +477,7 @@ body.bkpipeon #bkmain{display:none!important}
       let me = ''; try{ me = ME || ''; }catch(er){}
       const r = R.find(x => x[0] === S.r);
       c.cxl = {r: S.r, why: S.why.trim(), by: me, at: new Date().toISOString()};
-      if(r && r[3] && S.mark && window.__illuAvailSet){ try{ window.__illuAvailSet(c.k || ('bid:' + c.id), {nm: c.nm || '', ag: c.ag || '', t: r[3], why: L(r[1][0], r[1][1]) + (S.why.trim() ? ' — ' + S.why.trim() : ''), from: L('Booking cancelled', '부킹 취소'), remind: ''}); }catch(er){} }
+      if(r && S.mark && window.__illuAvailSet){ try{ window.__illuAvailSet(c.k || ('bid:' + c.id), {nm: c.nm || '', ag: c.ag || '', t: markOf(r), why: L(r[1][0], r[1][1]) + (S.why.trim() ? ' — ' + S.why.trim() : ''), from: L('Booking cancelled', '부킹 취소'), remind: ''}); }catch(er){} }
       const go = S.go; S.go = null; b.hidden = true; if(go) go();
     }
   }, true);
@@ -497,7 +503,7 @@ body.bkpipeon #bkmain{display:none!important}
 #bkcxl .cxopt{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--line,#E7E2EC);border-radius:10px;padding:9px 11px;cursor:pointer}#bkcxl .cxopt:hover,#bkcxl .cxopt.on{border-color:#5A2C57}#bkcxl .cxopt.on{background:rgba(90,44,87,.07)}
 #bkcxl .cxopt input{margin-top:2px;accent-color:#5A2C57}#bkcxl .cxopt b{display:block;font-size:13.5px;font-weight:600}#bkcxl .cxopt small{color:var(--mut,#6D6577);font-size:12px}
 #bkcxl .cxlab{font-size:12px;font-weight:600;color:var(--mut,#6D6577)}#bkcxl textarea{border:1px solid var(--line,#E7E2EC);border-radius:10px;padding:9px 11px;font:inherit;color:inherit;background:var(--surf,#fff);resize:vertical}
-#bkcxl .cxmark{display:flex;gap:10px;align-items:flex-start;border-radius:10px;padding:10px 11px;background:#FBECEF}#bkcxl .cxmark.later{background:#FDF1E1}#bkcxl .cxmark input{margin-top:2px;accent-color:#5A2C57}#bkcxl .cxmark b{font-size:13px}#bkcxl .cxmark small{display:block;color:var(--mut,#6D6577);font-size:12px;margin-top:2px}
+#bkcxl .cxmark{display:flex;gap:10px;align-items:flex-start;border-radius:10px;padding:10px 11px;background:#FBECEF}#bkcxl .cxmark.later{background:#FDF1E1}#bkcxl .cxmark input{margin-top:2px;accent-color:#5A2C57}#bkcxl .cxmark b{font-size:13px}#bkcxl .cxmark small{display:block;color:var(--mut,#6D6577);font-size:12px;margin-top:2px}#bkcxl .cxmark select{font:600 13px inherit;color:inherit;border:1px solid var(--line,#E1D9E6);border-radius:7px;padding:2px 6px;margin-left:2px;background:var(--surf,#fff);max-width:100%}
 #bkcxl .cxacts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}#bkcxl .cxacts button{border:1px solid var(--line,#E7E2EC);background:var(--surf,#fff);color:inherit;border-radius:999px;padding:8px 16px;font:600 13px inherit;font-family:inherit;cursor:pointer}
 #bkcxl .cxacts .cxgo{background:#A3283F;border-color:#A3283F;color:#fff}#bkcxl .cxacts .cxgo:disabled{opacity:.45;cursor:not-allowed}`;
   document.head.appendChild(css);
