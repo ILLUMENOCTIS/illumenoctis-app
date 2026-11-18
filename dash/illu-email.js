@@ -191,12 +191,12 @@
     if(keep.length !== cur.list.length) c.em = Object.assign({}, cur, {list: keep});
     return n0 - keep.length;
   }
-  async function collect(c, quiet){
+  async function collect(c, quiet, x){
     if(!c || HWBUSY) return null;
     HWBUSY = true; HWMSG = ''; if(!quiet) redraw();
     const A = agAddrs(c), {first} = nameParts(c);
     let have = []; try{ const v = await bodies(c.id, true); have = emOf(c).list.filter(e => v.b[e.k] && /^hw:\d+$/.test(e.k)).map(e => e.k.slice(3)); }catch(e){}
-    let r = null; try{ r = await window.illu.hiworksCollect(String(c.nm || '').trim(), hwMe(), {addrs: A.addrs, first, have, dom: A.dom}); }catch(e){ r = {ok: false, why: String(e && e.message || e)}; }
+    let r = null; try{ r = await window.illu.hiworksCollect(String(c.nm || '').trim(), hwMe(), {addrs: A.addrs, first, have, dom: A.dom, readNew: !!(x && x.readNew)}); }catch(e){ r = {ok: false, why: String(e && e.message || e)}; }
     HWBUSY = false;
     if(r && r.need === 'signin'){ HWMSG = E(T('Hiworks needs you to sign in once in the program.', 'Hiworks 로그인이 한 번 필요합니다.')) + ' <button type="button" class="bvbtn" data-emsignin>' + T('Sign in to Hiworks', 'Hiworks 로그인') + '</button> ' + E(T('Then press Collect again.', '그다음 다시 가져오기를 누르세요.')); redraw(); return r; }
     if(!r || !r.ok){ HWMSG = E(T('Could not read Hiworks: ', 'Hiworks를 읽지 못했습니다: ') + ((r && r.why) || '')); redraw(); return r; }
@@ -243,7 +243,8 @@
   }, true);
 
   /* ---- drawing ---- */
-  const isGet = u => /drive\.google\.com\/(drive\/(u\/\d+\/)?folders|file\/d|open\?|uc\?)|\.mediaslide\.com\/package\/view\//i.test(String(u || ''));
+  const isGet = u => /drive\.google\.com\/(drive\/(u\/\d+\/)?folders|file\/d|open\?|uc\?)|\.mediaslide\.com\/package\/view\/|(^|\/\/)(www\.)?(we\.tl\/|wetransfer\.com\/downloads\/)/i.test(String(u || ''));
+  window.__illuIsGet = isGet;
   const fileChip = f => {
     const ic = f.kind === 'link' || (f.url && !f.name) ? '🔗' : f.kind === 'video' ? '🎬' : f.kind === 'pdf' ? '📄' : '📎';
     const host = (() => { try{ return new URL(f.url).hostname.replace(/^www\./, ''); }catch(e){ return ''; } })();

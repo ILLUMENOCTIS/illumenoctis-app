@@ -15,6 +15,17 @@
 
   window.bvAddFiles = async function(files){
     if(!bv || !files || !files.length) return;
+    /* 1.2.257 (user, 18 Nov 2026 - photos dragged straight out of a .zip that was not extracted arrived empty, 192 files
+       of 0 B in her Dropbox folder): an empty file is never saved; say why */
+    const all = [...files], empty = all.filter(f => !f || !(f.size > 0));
+    files = all.filter(f => f && f.size > 0);
+    if(empty.length){
+      const msg = ko()
+        ? '빈 파일 ' + empty.length + '개는 저장하지 않았습니다 — zip 파일이면 먼저 압축을 푸세요 (오른쪽 클릭 → 압축 풀기), 그다음 풀린 폴더에서 끌어 오세요'
+        : empty.length + (empty.length === 1 ? ' file is' : ' files are') + ' empty and ' + (empty.length === 1 ? 'was' : 'were') + ' not saved — if they came from a .zip, extract it first (right-click → Extract All), then drag them from the extracted folder';
+      if(!files.length){ say(msg); try{ bvMsgNext = msg; bvDraw(); }catch(e){} return; }
+    }
+    const emptyNote = empty.length ? (ko() ? ' · 빈 파일 ' + empty.length + '개 제외 (zip은 먼저 압축 풀기)' : ' · ' + empty.length + ' empty skipped (extract the .zip first)') : '';
     const c = BOOK.get(bv.id); if(!c) return;
     if(typeof SIGNED === 'function' && !SIGNED()){ say(ko() ? '파일을 추가하려면 먼저 로그인하세요' : 'Sign in to add files'); return; }
     if(busy){ say(ko() ? '앞의 파일을 아직 저장하는 중입니다' : 'Still saving the last files'); return; }
@@ -44,6 +55,7 @@
     bvMsgNext = saved.length
       ? (ko() ? saved.length + '개를 ' + place(src) + '에 저장했습니다 · ' + fold : saved.length + ' saved to ' + place(src) + ' · ' + fold) + (fail ? (ko() ? ' · 실패: ' : ' · failed: ') + fail : '')
       : (ko() ? '저장하지 못했습니다: ' : 'Could not save: ') + fail;
+    bvMsgNext += emptyNote;
     bvDraw();
   };
 
