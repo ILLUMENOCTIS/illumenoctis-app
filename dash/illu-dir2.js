@@ -1376,6 +1376,63 @@
   const SL = {key: '', i: 0, photos: null, state: '', why: '', full: false, side: true};
   try{ SL.side = localStorage.getItem('illu.d2fullside') !== '0'; }catch(e){}
   const slImg = (u, w) => window.__illuSlideSrc ? window.__illuSlideSrc(u, w) : (window.illu && window.illu.web) ? (window.__illuSmall ? window.__illuSmall(u, w && w <= 400 ? 300 : 900) : u) : 'illuimg://p/' + encodeURIComponent(u) + '?r=' + encodeURIComponent((D2.openM && D2.openM.href) || '') + '&nc=1&w=' + (w || 1400);
+/* 1.2.254 (user, 18 Nov 2026: "there are too many duplicate images on this slide. I'm seeing a lot of this on a lot of
+     the images on the slideshows from numerous cards"): one picture often comes in many file names -
+       Webflow    6880dd325b09f80e66ab2d52_aga-9.jpg, …-p-500.jpg, …-p-800.jpg … -p-3200.jpg (up to 8 of one photo)
+       mediaslide profile-1788…-<md5>.jpg, large-1788…-<md5>.jpg, square-…
+       WordPress  name-scaled-e1782379181793-600x891.jpg (an edited copy, in sizes)
+       others     name_600x.jpg, name@2x.jpg, name-800w.jpg, Cloudinary /upload/w_600,c_fill/…, /tr:w-300/…
+     samePic(u) gives one key for all of them (the picture's own id in its name when it has one); picRank(u) says which
+     of them is the biggest - that one is kept, at the place the picture first appeared. */
+  const PIC_SIZEWORD = /(^|[-_/])(large|medium|small|thumb|thumbnail|xlarge|xl|big|full|mini|crop|resized|preview|th|profile|square|portrait|original|orig|hires|hi|lo|web)(?=[-_./]|$)/gi;
+  function picUnwrap(u){
+    let s = String(u || '');
+    try{ if(/^illuimg:/i.test(s)) s = decodeURIComponent(new URL(s).pathname.replace(/^\/+/, '')); }catch(e){}
+    try{ if(/images\.weserv\.nl/i.test(s)) s = new URL(s).searchParams.get('url') || s; }catch(e){}
+    return s;
+  }
+  function samePic(u){
+    const s = picUnwrap(u);
+    let x; try{ x = new URL(s); }catch(e){ return s; }
+    const host = x.host.replace(/^www\./, '').toLowerCase();
+    { const w = /wixstatic\.com$/i.test(host) && x.pathname.match(/\/media\/([^/]+)/); if(w) return 'wix:' + w[1].toLowerCase(); }
+    let p = x.pathname; try{ p = decodeURIComponent(p); }catch(e){} p = p.toLowerCase();
+    const hasId = /(?:^|[^0-9a-f])[0-9a-f]{24,64}(?![0-9a-f])/.test(p.slice(p.lastIndexOf('/') + 1));
+    if(/\/upload\//.test(p)) p = p.replace(/\/(?:(?:w|h|c|g|q|f|ar|dpr|e|x|y|fl|b|o|r|t)_[a-z0-9.:]+,?)+\//g, '/');
+    p = p.replace(/\/tr:[^/]+\//g, '/').replace(/\/(?:fit-in\/)?\d{2,4}x\d{2,4}\//g, '/').replace(/\/(?:w|h|width|height|size)[-_=]?\d{2,4}\//g, '/');
+    p = p.replace(/\.(jpe?g|png|webp|avif)$/, '');
+    for(let i = 0; i < 3; i++) p = p.replace(/-p-\d{3,4}$/, '').replace(/[-_]\d{2,4}x\d{0,4}$/, '').replace(/@\dx$/, '').replace(/-\d{3,4}w$/, '').replace(/-e\d{10,13}$/, '').replace(/-scaled$/, '');
+    p = p.replace(PIC_SIZEWORD, '$1');
+    /* a file named by the picture's own id (mediaslide, Webflow): the same name on another server or folder is the same picture;
+       the rest of the name still counts (<her id>-1.jpg and <her id>-2.jpg are two pictures) */
+    if(hasId) return 'id:' + p.slice(p.lastIndexOf('/') + 1);
+    return host + p;
+  }
+  function picRank(u){
+    const s = picUnwrap(u).replace(/[?#].*$/, '');
+    const f = s.slice(s.lastIndexOf('/') + 1).toLowerCase();
+    let m;
+    if((m = f.match(/-p-(\d{3,4})\.[a-z]+$/))) return +m[1];
+    if((m = f.match(/[-_](\d{2,4})x(\d{0,4})\.[a-z]+$/))) return +m[1];
+    if((m = f.match(/-(\d{3,4})w\.[a-z]+$/))) return +m[1];
+    if((m = f.match(/@(\d)x\.[a-z]+$/))) return 900 * +m[1];
+    if((m = s.match(/[/,]w_(\d+)/))) return +m[1];
+    if((m = f.match(/^(thumbnail|thumb|th|mini|small|square|medium|profile|portrait|large|big|xlarge|xl|full|original|hires)[-_]/))) return {thumbnail: 150, thumb: 150, th: 150, mini: 200, small: 400, square: 500, medium: 800, profile: 900, portrait: 900, large: 2000, big: 2000, xlarge: 2600, xl: 2600, full: 9000, original: 9999, hires: 9000}[m[1]];
+    return 5000;                                       // the file itself, no size in its name
+  }
+  /* the list with every picture once (biggest copy, first place) */
+  function onePerPic(list, urlOf){
+    urlOf = urlOf || (x => x);
+    const at = new Map(), out = [];
+    for(const it of list){
+      const u = urlOf(it); if(!u) continue;
+      const k = samePic(u);
+      if(!at.has(k)){ at.set(k, out.length); out.push(it); continue; }
+      const j = at.get(k); if(picRank(u) > picRank(urlOf(out[j]))) out[j] = it;
+    }
+    return out;
+  }
+  window.__illuSamePic = samePic; window.__illuOnePerPic = onePerPic;
   const fileKey = u => { let p = String(u || ''); try{ if(/images\.weserv\.nl/.test(p)) p = new URL(p).searchParams.get('url') || p; }catch(e){} try{ p = decodeURIComponent(new URL(p.startsWith('illuimg:') ? decodeURIComponent(new URL(p).pathname.slice(1)) : p).pathname); }catch(e){}
     return p.toLowerCase().replace(/^.*\//, '').replace(/-\d{2,4}x\d{2,4}(?=\.)/, '').replace(/\.(jpe?g|png|webp|avif)$/, '').replace(/^(large|medium|small|thumb|xlarge)[-_]/, ''); };
   const SLWHY = {
@@ -1399,7 +1456,9 @@
       if(SL.key !== key) return;
       const C = $('.d2card'), main = C && C.querySelector('.litpic img');
       const mk = main ? fileKey(main.currentSrc || main.src) : '';
-      const ph = ((r && r.photos) || []).filter(x => !mk || fileKey(x.url) !== mk);
+      const mainK = main ? samePic(main.dataset && main.dataset.orig || main.currentSrc || main.src) : '';
+      /* 1.2.254: every picture once (the phone's reader too), and not the card's own photo again */
+      const ph = onePerPic(((r && r.photos) || []).filter(x => x && x.url), x => x.url).filter(x => (!mk || fileKey(x.url) !== mk) && (!mainK || x.cat === 'Video' || samePic(x.url) !== mainK));
       SL.photos = ph; SL.state = ph.length ? 'ok' : 'none';
       /* 1.2.149: opened from a card that was on another photo - start on that photo */
       try{ const want = window.__illuTileIdx ? window.__illuTileIdx(key) : ''; if(want){ const j = ph.findIndex(x => fileKey(x.url) === fileKey(want)); if(j >= 0) SL.i = j + 1; } }catch(e){}
@@ -2302,7 +2361,8 @@
         if(!(window.illu && window.illu.modelPhotos) || !href) throw 0;
         const r = await window.illu.modelPhotos(href);
         const mk = fileKey(first);
-        const more = ((r && r.photos) || []).map(x => x.url || x).filter(x => x && (!mk || fileKey(x) !== mk));
+        const fk = first ? samePic(first) : '';
+        const more = onePerPic(((r && r.photos) || []).map(x => x.url || x).filter(Boolean)).filter(x => (!mk || fileKey(x) !== mk) && (!fk || samePic(x) !== fk));
         t.list = (first ? [first] : []).concat(more); t.state = t.list.length > 1 ? 'ok' : 'none';
       }catch(e){ t.state = 'none'; }
       document.querySelectorAll('.uc').forEach(x => { if(ucTileKey(x) === k) ucTilePaint(x); });
