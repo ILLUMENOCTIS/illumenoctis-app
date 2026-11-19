@@ -15,6 +15,15 @@
   const ko = () => { try{ return LANG === 'ko'; }catch(e){ return false; } };      // 1.2.248: isKo is not global - LANG is
   const L = (en, k) => ko() ? k : en;
   let lastV = -1;
+  /* ".../model/julia-svensson/" -> "Julia Svensson"; ".../646-katya-k" -> "Katya K" */
+  function slugName(href){
+    let seg = ''; try{ seg = decodeURIComponent(new URL(href).pathname.split('/').filter(Boolean).pop() || ''); }catch(e){ return ''; }
+    seg = seg.replace(/\.[a-z]{2,5}$/i, '').replace(/^\d+[-_]/, '').replace(/[-_]+\d*$/, m => /\d/.test(m) ? '' : m);
+    const w = seg.split(/[-_+\s]+/).filter(x => x && !/^\d+$/.test(x));
+    if(!w.length || w.join('').length < 2) return '';
+    return w.map(x => x.charAt(0).toUpperCase() + x.slice(1).toLowerCase()).join(' ').slice(0, 80);
+  }
+  window.__illuSlugName = slugName;
   /* the chosen names onto the Directory's own lists (AG boards), and the board's name back where a choice was cleared */
   function apply(){
     if(typeof AG === 'undefined' || !Array.isArray(AG)) return 0;
@@ -26,6 +35,8 @@
       const want = NM.get(k);
       if(want){ if(!ORIG.has(k)) ORIG.set(k, m[0] || ''); if(m[0] !== want){ m[0] = want; n++; } }
       else if(ORIG.has(k) && m[0] !== ORIG.get(k)){ m[0] = ORIG.get(k); n++; }
+      /* 1.2.264 (user: "name not showing up" - Julia Svensson, Le troch): a board row read with no name gets one from her page address */
+      if(!String(m[0] || '').trim()){ const sn = slugName(href); if(sn){ m[0] = sn; n++; } }
     }
     for(const k of [...ORIG.keys()]) if(!NM.has(k)) ORIG.delete(k);
     return n;
@@ -41,7 +52,7 @@
     try{ window.__illuVoteRerender && window.__illuVoteRerender(); }catch(e){}
   }, 200); }
   /* boards read again (the crawler, the sign-in list) come with the board's names: put the chosen ones back */
-  setInterval(() => { if(NM.size && (window.__illuAGv || 0) !== lastV) redraw(false); }, 3000);
+  setInterval(() => { if((window.__illuAGv || 0) !== lastV) redraw(false); }, 3000);   /* 1.2.264: also for rows with no name */
   (function listen(){
     if(typeof DB === 'undefined' || !DB){ setTimeout(listen, 800); return; }
     try{

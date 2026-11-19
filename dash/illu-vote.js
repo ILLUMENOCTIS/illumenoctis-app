@@ -235,7 +235,12 @@
     /* 1.2.158: a booking card with no Directory page (the models from the agency server) answers for itself */
     let bc = null; try{ bc = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : (!i && typeof bkForKey === 'function' ? bkForKey(k) : null); }catch(e){}
     const bi = bc ? {nm: bc.nm || '', ag: bc.ag || '', city: bc.city || '', country: bc.nat || bc.country || ''} : {};
-    return Object.assign({key: k, nm: snap.nm || bi.nm || '', ag: snap.ag || bi.ag || '', href: snap.href || (/^https?:/i.test(k) ? k : '')}, bi, i || {}, {key: k});
+    /* 1.2.264: an empty value from the Directory (a board row read with no name) does not wipe the name the vote / favorite / booking card knows */
+    const ii = {}; for(const [x, v] of Object.entries(i || {})) if(v != null && v !== '') ii[x] = v;
+    const bb = {}; for(const [x, v] of Object.entries(bi)) if(v != null && v !== '') bb[x] = v;
+    const r = Object.assign({key: k, nm: snap.nm || bi.nm || '', ag: snap.ag || bi.ag || '', href: snap.href || (/^https?:/i.test(k) ? k : '')}, bb, ii, {key: k});
+    if(!r.nm && window.__illuSlugName) r.nm = window.__illuSlugName(r.href || k);
+    return r;
   }
   function signedIn(){ try{ if(!SIGNED()){ nudgeSignIn(); return false; } }catch(e){ return false; } return true; }
   function cast(k, v, about){

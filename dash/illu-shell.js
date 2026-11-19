@@ -446,7 +446,9 @@
     const h =
       '<div class="shlay' + (ckOn ? '' : ' noclk') + '">' +
       '<div class="shclk' + (W.clk ? '' : ' noclk') + (W.map ? '' : ' nomap') + (ckOn ? '' : ' none') + '" id="shclk"></div>' +
-      '<div class="shhead"><div><div class="shkick">' + H(dateLine()) + '</div><h2>' + H(greet() + (nm ? ', ' + nm + (isKO() ? '님' : '') : '')) + ' <span class="shsub2">— ' + H(sub) + '</span></h2></div></div>' +
+      '<div class="shhead"><div><div class="shkick">' + H(dateLine()) + '</div><h2>' + H(greet() + (nm ? ', ' + nm + (isKO() ? '님' : '') : '')) + ' <span class="shsub2">— ' + H(sub) + '</span></h2></div>' +
+        /* 1.2.264 (user: have the empty space beside the greeting say "MDI MODEL MANAGEMENT BOOKING") */
+        '<div class="shbrand" aria-label="MDI Model Management Booking">MDI MODEL MANAGEMENT BOOKING</div></div>' +
       '<div class="shmainc">' + (window.__illuVoteToday ? window.__illuVoteToday() : '<div></div>') + '</div>'   /* 1.2.158 (user): the On-Stay row taken off Today again - the board stays in Opus */ +
       sidePanel(list) +
       '</div>';
@@ -789,6 +791,11 @@ body.shtoday #appbar #ababout,body.shtoday #appbar #abtools,body.shtoday #appbar
 #pane-today{padding:18px 0 40px;display:flex;flex-direction:column;gap:18px;font-family:var(--sans,Inter,system-ui,sans-serif);color:var(--ink)}
 #pane-today[hidden]{display:none}
 .shtoday .shhead{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+@font-face{font-family:"IlluBrand";font-weight:400;font-display:swap;src:url(../fonts/bodoni-moda-latin-400-normal.woff2) format("woff2")}
+.shtoday .shbrand{font-family:"IlluBrand","Bodoni Moda",Didot,"Times New Roman",serif;font-size:clamp(16px,1.25vw,24px);font-weight:400;letter-spacing:.11em;line-height:1.1;color:var(--ink,var(--text,#1b1724));margin:0 0 6px;white-space:nowrap}
+.shtoday .shhead:has(.shbrand){justify-content:flex-start;column-gap:clamp(24px,3vw,56px)}
+
+@media (max-width:900px){.shtoday .shbrand{font-size:15px;letter-spacing:.12em;white-space:normal}}
 .shtoday .shhead h2{font-size:27px;font-weight:700;margin:2px 0 4px;letter-spacing:0}
 .shtoday .shhead p{margin:0}
 .shtoday .shbtns{display:flex;gap:8px;flex-wrap:wrap}
