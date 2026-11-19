@@ -102,10 +102,10 @@
           '<div class="csps">' + (ppl.length ? ppl.map(p => '<label class="cspp"><input type="checkbox" data-csp="' + E(p) + '"' + (DLG.to.has(p) ? ' checked' : '') + '>' + disc(p) + '<b>' + E(pname(p)) + '</b></label>').join('') : '<p class="csmut">' + E(L('Nobody else on the team has a sign-in yet. Copy the link instead.', '아직 다른 팀원 계정이 없습니다. 링크를 복사하세요.')) + '</p>') + '</div>' +
           '<label class="csl" for="csnote"><span>' + E(L('Note (optional)', '메모 (선택)')) + '</span></label><textarea id="csnote" rows="2" maxlength="500" placeholder="' + E(L('e.g. Which of these for the Seoul job?', '예: 서울 촬영에 누가 좋을까요?')) + '">' + E(DLG.note) + '</textarea>') +
       (DLG.msg ? '<p class="csmut cserr">' + E(DLG.msg) + '</p>' : '') +
-      '<div class="csa">' + (DLG.sent ? '' : '<button type="button" class="csb pri" data-cssendgo' + (DLG.to.size && !DLG.busy ? '' : ' disabled') + '>' + SENDI + E(DLG.busy ? L('Sending…', '보내는 중…') : DLG.to.size ? L('Send to ' + DLG.to.size + (DLG.to.size === 1 ? ' person' : ' people'), DLG.to.size + '명에게 보내기') : L('Send', '보내기')) + '</button>') +
-        '<button type="button" class="csb" data-cscopy="msg">' + E(L('Copy message + link', '메시지 + 링크 복사')) + '</button><button type="button" class="csb" data-cscopy="url">' + E(L('Copy link', '링크 복사')) + '</button>' +
-        (navigator.share && window.illu && window.illu.web ? '<button type="button" class="csb" data-csnative>' + E(L('Share…', '공유…')) + '</button>' : '') + '</div>' +
-      (DLG.id ? '<div class="csu">' + E(linkOf(DLG.id)) + '</div>' : '') +
+      /* 1.2.263 (user: "the 3 sending methods seem redundant"): one Send, and one small "copy / share a link" for KakaoTalk */
+      '<div class="csa">' + (DLG.sent ? '<button type="button" class="csb pri" data-csclose>' + E(L('Done', '완료')) + '</button>' : '<button type="button" class="csb pri" data-cssendgo' + (DLG.to.size && !DLG.busy ? '' : ' disabled') + '>' + SENDI + E(DLG.busy ? L('Sending…', '보내는 중…') : DLG.to.size ? L('Send to ' + DLG.to.size + (DLG.to.size === 1 ? ' person' : ' people'), DLG.to.size + '명에게 보내기') : L('Send', '보내기')) + '</button>') +
+        '</div>' +
+      '<button type="button" class="csalt" ' + (navigator.share && window.illu && window.illu.web ? 'data-csnative' : 'data-cscopy="msg"') + '>' + E(navigator.share && window.illu && window.illu.web ? L('Or share a link (KakaoTalk, messages…)', '또는 링크 공유 (카카오톡, 메시지…)') : L('Or copy a link to paste in KakaoTalk', '또는 카카오톡에 붙여 넣을 링크 복사')) + '</button>' +
       '<p class="csmut sm">' + E(L('The link opens the phone app; they sign in with their own name and PIN. Nothing about the models changes.', '링크는 휴대폰 앱에서 열리며, 받는 사람은 자기 이름과 PIN으로 로그인합니다. 모델 정보는 바뀌지 않습니다.')) + '</p>' +
       '<textarea class="csht" aria-hidden="true" tabindex="-1"></textarea></div>';
   }
@@ -307,6 +307,8 @@ body.illufvon #cstray,body.d2carding #cstray,body.d2fullcard #cstray{display:non
 .cspp input{width:17px;height:17px;accent-color:var(--acc,#5A2C57)}
 #csdlg textarea#csnote{width:100%;box-sizing:border-box;border:1px solid var(--line,#e6e0ea);border-radius:10px;padding:8px 10px;font:inherit;font-size:13.5px;resize:vertical;background:var(--surf,#fff);color:inherit}
 .csa{display:flex;gap:8px;flex-wrap:wrap}
+.csalt{align-self:center;border:0;background:none;padding:4px 6px;font:inherit;font-size:12.5px;color:var(--mut,#7a7086);text-decoration:underline;text-underline-offset:3px;cursor:pointer}.csalt:hover{color:var(--acc,#5A2C57)}
+.csa .csb.pri{flex:1;justify-content:center;min-height:44px;font-size:14px}
 .csu{border:1px dashed var(--line,#e6e0ea);border-radius:10px;padding:8px 10px;font-family:ui-monospace,Consolas,monospace;font-size:12px;word-break:break-all;user-select:all}
 .csmut{margin:0;color:var(--mut,#7a7086);font-size:13px}.csmut.sm{font-size:12px}.cserr{color:#A8323C}
 .csok{margin:0;color:#1F7A4D;font-weight:600;font-size:13.5px}
