@@ -260,7 +260,7 @@ function bvMaxSet(on){
          b.title = on ? 'Restore (Esc)' : 'Maximize'; b.setAttribute('aria-label', b.title); }
   /* the real full screen where the browser allows it; the page-filling view either way */
   try{
-    if(on && !document.fullscreenElement && bvEl.requestFullscreen)
+    if(on && (!document.fullscreenElement || document.fullscreenElement.tagName === 'VIDEO') && bvEl.requestFullscreen)
       bvEl.requestFullscreen().catch(() => {});
     if(!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }catch(e){}
@@ -272,10 +272,30 @@ window.addEventListener('resize', () => {
 document.addEventListener('fullscreenchange', () => {
   if(!document.fullscreenElement && bvEl.classList.contains('bvmax')) bvMaxSet(false);
 });
-/* 1.2.259: a video never takes the whole screen on its own (that view has no arrows) - it goes back to the viewer */
+/* 1.2.259: a video never takes the whole screen on its own (that view has no arrows).
+   1.2.265 (user: "not able to go full screen mode"): the video's own full-screen button is back, and it opens the full
+   screen of the viewer it sits in - booking card viewer, full photo view or the Directory slideshow - with the arrows. */
+let FSPREV = null, FSOURS = null;
 document.addEventListener('fullscreenchange', () => {
-  const f = document.fullscreenElement;
-  if(f && f.tagName === 'VIDEO'){ try{ document.exitFullscreen().catch(() => {}); }catch(e){} }
+  const f = document.fullscreenElement, prev = FSPREV; FSPREV = f;
+  if(!f || f.tagName !== 'VIDEO') return;
+  /* our viewer's full screen was closed and the browser went back to the video's: close that too */
+  if(prev && prev === FSOURS){ FSOURS = null; try{ document.exitFullscreen().catch(() => {}); }catch(e){} return; }
+  const fv = f.closest('#illufv'), b = f.closest('.bv'), d2 = f.closest('.d2sl');
+  if(!(fv || b || d2)) return;                        // a video anywhere else keeps its own full screen
+  /* switch straight to the viewer (still inside the click that asked for full screen). If the browser says the click is
+     used up, the program asks for it again as a click; on the phone/web copy the video simply keeps its own full screen. */
+  const want = el => { FSOURS = el; el.requestFullscreen().catch(() => {
+    if(window.illu && window.illu.fsGesture){ window.__illuFsHost = () => el.requestFullscreen().catch(() => { FSOURS = null; }); window.illu.fsGesture().catch(() => { FSOURS = null; }); }
+    else FSOURS = null;
+  }); };
+  try{
+    if(b && typeof bvEl !== 'undefined' && b === bvEl){ bvMaxSet(true); want(bvEl); return; }
+    if(fv){ want(fv); return; }
+    /* the Directory slideshow: its own full view (fills the page, with the arrows), and the whole screen around it */
+    const fb = d2.querySelector('[data-d2slf][aria-pressed="false"]'); if(fb) fb.click();
+    want(d2.closest('.d2card') || d2);
+  }catch(e){}
 });
 /* The PDF button: the pictures in the open folder, two to a page, under the model's
    name and figures - the sheet an agency sends a client. Made here, saved here. */
@@ -1981,7 +2001,7 @@ async function bvDrawStage(c, got){
     const v = document.createElement('video');
     v.controls = true; v.playsInline = true; v.preload = 'metadata';
     /* 1.2.259 (user, 18 Nov 2026: "I need the left and right arrows to scroll through the image/videos from the full screen"): a video's own full screen showed only the video - no arrows. Its full-screen button is gone; double-click and the viewer's own full screen fill the screen WITH the arrows, and the arrow keys step through the files even while the video has focus. */
-    try{ v.setAttribute('controlsList', 'nofullscreen'); v.disablePictureInPicture = true; }catch(e){}
+    try{ v.disablePictureInPicture = true; }catch(e){}   /* 1.2.265: its full-screen button works again - it opens the viewer's full screen (with the arrows) */
     v.addEventListener('dblclick', e => { e.preventDefault(); e.stopPropagation(); bvMaxSet(!bvEl.classList.contains('bvmax')); });
     v.onerror = () => {
       if(seq !== bvSeq) return;
