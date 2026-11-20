@@ -1633,6 +1633,7 @@
      That page can't read the Directory, so the program puts each open card's photo address and measurements
      in vpub/board. A program that can't see a photo keeps the one another program already put there. */
   let pubT = 0;
+  const stab = o => JSON.stringify(o, (k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().reduce((r, x) => (r[x] = v[x], r), {}) : v);
   function pubSoon(){ if(pubT) return; pubT = setTimeout(() => { pubT = 0; try{ publishBoard(); }catch(e){} }, 4000); }
   setInterval(pubSoon, 10 * 60 * 1000);
   /* 1.2.171 (user: "the photo isn't appearing from the shared link to vote. allow me look through all the photos
@@ -1649,7 +1650,7 @@
     let b = b0;
     try{ const bmp = await createImageBitmap(b0); const z = Math.min(1, 1400 / Math.max(bmp.width, bmp.height)); const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * z); cv.height = Math.round(bmp.height * z); cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height); b = (await new Promise(res => cv.toBlob(res, 'image/jpeg', .85))) || b0; }catch(e){}
     const res = await ASSETS.upload(new File([b], 'vote.jpg', {type: b.type || 'image/jpeg'}));
-    return res && res.id ? '/_blob/' + res.id : '';
+    return res && res.id && !res.queued ? '/_blob/' + res.id : '';   // 1.2.268: only a copy that reached Dropbox is shared
   }
   /* 1.2.204 (user, 16 Nov 2026, approved demo "Vote Slideshow Panel"): the vote page's slideshow has Book, Snaps, Videos
      and Agency. Her booking folder's files are shown through a view-only Dropbox link to each file (nothing copied into the
@@ -1749,7 +1750,9 @@
       if(!gal || (!gal.busy && Date.now() - gal.at > 6 * 3600 * 1000)){ GAL.set(h, Object.assign({}, gal || {}, {ps: (gal && gal.ps) || old.ps || [], sm: Object.assign({}, old.sm || {}), at: Date.now(), busy: true, done: !!gal})); const k0 = st.k, o0 = old; GALQ = GALQ.then(() => gather(k0, h, o0)).catch(() => {}); }
     }
     try{ publishGal(); }catch(e){}
-    if(JSON.stringify(c) === JSON.stringify(PUBNOW)) return;
+    /* 1.2.268: compared with the keys in one order - the database hands the stored copy back with its keys re-ordered,
+       so the plain comparison never matched and every computer re-saved both pages every 10 minutes (317 saves a day) */
+    if(stab(c) === stab(PUBNOW)) return;
     PUBNOW = c; save('vpub/board', {c, at: nowIso(), by: me()});
   }
   /* 1.2.176 (user: "allow the USER to view the slideshow photos via mobile as well"): a phone cannot open the booking
@@ -1767,7 +1770,7 @@
       if(ps.length || Object.keys(sm).length){ c[h] = {}; if(ps.length) c[h].ps = ps; if(Object.keys(sm).length) c[h].sm = sm; }
       if(!gal || (!gal.busy && Date.now() - gal.at > 6 * 3600 * 1000)){ GAL.set(h, {ps: (gal && gal.ps) || old.ps || [], sm: Object.assign({}, old.sm || {}), at: Date.now(), busy: true, done: !!gal}); GALQ = GALQ.then(() => gather(k, h, old)).catch(() => {}); }
     }
-    if(JSON.stringify(c) === JSON.stringify(GALNOW)) return;
+    if(stab(c) === stab(GALNOW)) return;
     GALNOW = c; save('vpub/gal', {c, at: nowIso(), by: me()});
   }
   /* the published photos of a model (vote card first, then booking card) */
@@ -1787,7 +1790,7 @@
 
   /* ---------- the pages: Lumen, Communicatus, Approved, Tie-breaker, Cancelled ---------- */
   const PAGES = new Map();
-  const card = k => { const m = info(k); let h = ''; try{ h = window.__illuCard ? window.__illuCard(m) : ''; }catch(e){ h = ''; } return h.replace('<article class="uc"', '<article class="uc" data-ivk="' + H(k) + '"'); };
+  const card = k => { const m = info(k); let h = ''; try{ h = window.__illuCard ? window.__illuCard(m) : ''; }catch(e){ h = ''; } return h.replace(/<article class="uc((?: [^"]*)?)"/, (_, c) => '<article class="uc' + c + '" data-ivk="' + H(k) + '"'); };   /* 1.2.268 (user, 20 Nov 2026: "I can't expand on Polina's card when i select her photo"): a card with more classes (the MDI ribbon, a worked-on tag) lost its key, so a click on its photo did nothing */
   /* 1.2.105 (user, 8 Nov 2026): every vote board is one grid over the whole width, and each card says who
      ♥'d it first - the person who put it up for the vote (or who opened the vote, when nobody ♥'d it) */
   function likesOf(k){ const out = []; for(const [p, m] of FAV) if(m.has(k)) out.push({p, at: m.get(k).at}); out.sort((a, b) => String(a.at).localeCompare(String(b.at))); return out; }
@@ -1809,13 +1812,21 @@
   /* the live part: every second, each open vote's clock, its Vote Now ribbon and the speed of its glow */
   const CLKI = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>';
   function rate(b){ const r = 8 / (8 - 6 * Math.min(ageH(b.dataset.at) / 3, 1)); b.querySelectorAll('.ivl').forEach(x => { try{ x.getAnimations().forEach(a => { if(Math.abs(a.playbackRate - r) > .002){ if(a.updatePlaybackRate) a.updatePlaybackRate(r); else a.playbackRate = r; } }); }catch(e){} }); }
+  /* 1.2.268 (user, 20 Nov 2026: "The program is also lagging a little and there some delays"; Paul's computer reported
+     600 freezes in 10 minutes, one a second): the clocks are updated in passes - first everything is read, then
+     everything is written - so the page is laid out once a second instead of once per card. Nothing runs while the
+     window is hidden or no vote card is on screen. */
   function tick(){
-    document.querySelectorAll('.vmk[data-at]').forEach(b => {
-      const uc = b.closest('.uc'); if(!uc || !uc.offsetParent) return;
+    if(document.hidden) return;
+    const vis = [];
+    document.querySelectorAll('.vmk[data-at]').forEach(b => { const uc = b.closest('.uc'); if(uc && uc.offsetParent) vis.push([b, uc]); });
+    /* the glow speeds (reads the animations before anything is written) */
+    for(const [b] of vis) if(b.classList.contains('open') && !b.classList.contains('voted')) rate(b);
+    const strips = [];
+    for(const [b, uc] of vis){
       const at = b.dataset.at, h = ageH(at), late = b.classList.contains('need') && h >= 3;
-      if(b.classList.contains('open') && !b.classList.contains('voted')) rate(b);
       if(b.classList.contains('late') !== late) b.classList.toggle('late', late);
-      const ph = uc.querySelector('.ucimg') || uc.querySelector('.ucph'); if(!ph) return;
+      const ph = uc.querySelector('.ucimg') || uc.querySelector('.ucph'); if(!ph) continue;
       /* 1.2.107 (user, 8 Nov 2026): the date and the live clock in one strip across the top of the photo;
          after 3 hours without my vote the strip turns amber and says "Vote" before the clock */
       let sp = ph.querySelector(':scope > .ivstrip');
@@ -1823,9 +1834,12 @@
       if(sp.__at !== at){ sp.__at = at; const d = new Date(at); let ds = ''; try{ ds = d.toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short'}); }catch(e){} sp.querySelector('.ivsd b').textContent = ds; sp.querySelector('.ivsd i').textContent = ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); sp.title = L('On the vote since ', '투표에 오른 시각: ') + dfmt(at); }
       if(sp.classList.contains('late') !== late) sp.classList.toggle('late', late);
       const t = clk(at), cb = sp.querySelector('.ivclk b'); if(cb.textContent !== t) cb.textContent = t;
-      /* the time of day only when it fits whole - never cut in half */
-      const key = sp.clientWidth + '|' + late + '|' + t.length; if(sp.__fit !== key){ sp.__fit = key; const sd = sp.querySelector('.ivsd'); sd.classList.remove('cut', 'cut2'); if(sd.scrollWidth > sd.clientWidth + 1){ sd.classList.add('cut'); if(sd.scrollWidth > sd.clientWidth + 1) sd.classList.add('cut2'); } }
-    });
+      strips.push([sp, late, t.length]);
+    }
+    /* the time of day only when it fits whole - never cut in half (measured all together, then changed) */
+    const refit = [];
+    for(const [sp, late, tl] of strips){ const key = sp.clientWidth + '|' + late + '|' + tl; if(sp.__fit !== key){ sp.__fit = key; refit.push(sp); } }
+    for(const sp of refit){ const sd = sp.querySelector('.ivsd'); sd.classList.remove('cut', 'cut2'); if(sd.scrollWidth > sd.clientWidth + 1){ sd.classList.add('cut'); if(sd.scrollWidth > sd.clientWidth + 1) sd.classList.add('cut2'); } }
     /* a card whose vote is decided (or that left the vote) loses its clock and ribbon */
     document.querySelectorAll('.uc .ivstrip').forEach(x => { const uc = x.closest('.uc'); if(uc && !uc.querySelector('.vmk[data-at]')) x.remove(); });
   }

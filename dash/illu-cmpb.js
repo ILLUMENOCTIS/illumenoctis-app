@@ -77,7 +77,7 @@
     try{ h = window.__illuCard(m); }catch(e){ h = ''; }
     if(!h) return '';
     MODELS.set(m.key, m);
-    return h.replace('<article class="uc"', '<article class="uc" data-cbkey="' + H(m.key) + '"').replace('<div class="ucov">', also + dot + '<div class="ucov">');
+    return h.replace(/<article class="uc((?: [^"]*)?)"/, (_, c) => '<article class="uc' + c + '" data-cbkey="' + H(m.key) + '"').replace('<div class="ucov">', also + dot + '<div class="ucov">');
   }
   const colHead = s => '<div class="cbch"><i style="background:' + s.c + '"></i><b>' + H(s.lab.ag) + '</b><span>' + H([s.lab.city, s.lab.board].filter(Boolean).join(' · ') + ' · ' + (s.show.length !== s.ms.length ? s.show.length + ' / ' : '') + s.ms.length) + '</span></div>';
   function render(){

@@ -57,9 +57,14 @@
     strip.querySelectorAll('.fvt').forEach((b, k) => b.classList.toggle('on', k === S.i));
     const on = strip.querySelector('.fvt.on'); if(on) try{ on.scrollIntoView({block: 'nearest', inline: 'center'}); }catch(e){}
   }
+  /* 1.2.268 (user, 20 Nov 2026: "a long delay regarding the photos appearing in the slideshow"): the next two photos and
+     the one before are fetched while the current one is looked at, so ‹ › show them at once (kept in memory only) */
+  const WARM = new Map();
+  window.__illuWarm = urls => { for(const u of urls){ if(!u || WARM.has(u) || /^video:|\.(mp4|mov|webm)(\?|$)/i.test(u)) continue; const im = new Image(); im.decoding = 'async'; im.src = u; WARM.set(u, im); while(WARM.size > 12) WARM.delete(WARM.keys().next().value); } };
   function draw(){
     if(!S) return;
     const n = S.photos.length;
+    if(n > 1) try{ window.__illuWarm([1, 2, -1].map(d => S.photos[(S.i + d + n) % n]).filter(u => !(S.vid && S.vid.has(u)))); }catch(e){}
     const isV = u => !!(S.vid && S.vid.has(u));
     const cur = S.photos[S.i];
     let vid = box.querySelector('.fvvid');

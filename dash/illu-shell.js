@@ -417,7 +417,7 @@
     if(!out.length) return '';
     /* the same card as everywhere else (illu-dir2.js); the photo opens the Korean-market list */
     return '<div class="shkick" style="margin-top:6px">' + L('Korean-market picks', '한국 시장 추천') + '</div><div class="shpicks">' +
-      out.map(m => { let h = ''; try{ h = window.__illuCard ? window.__illuCard(m, {kor: true}) : ''; }catch(e){} return h.replace('<article class="uc"', '<article class="uc" data-shkor'); }).join('') + '</div>';
+      out.map(m => { let h = ''; try{ h = window.__illuCard ? window.__illuCard(m, {kor: true}) : ''; }catch(e){} return h.replace(/<article class="uc((?: [^"]*)?)"/, (_, c) => '<article class="uc' + c + '" data-shkor'); }).join('') + '</div>';
   }
   function dirStats(){
     let ags = 0, profiles = 0;

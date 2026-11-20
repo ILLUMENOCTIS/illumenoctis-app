@@ -179,5 +179,6 @@
     notes();
   }
   window.abPaint = paint;
-  setInterval(paint, 700); document.addEventListener('click', () => setTimeout(paint, 60)); setTimeout(paint, 300);
+  /* 1.2.268: every 2 s (was 0.7 s) and not while the window is hidden - a click still repaints at once */
+  setInterval(() => { if(!document.hidden) paint(); }, 2000); document.addEventListener('click', () => setTimeout(paint, 60)); setTimeout(paint, 300);
 })();

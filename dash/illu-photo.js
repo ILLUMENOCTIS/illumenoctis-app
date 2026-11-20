@@ -178,6 +178,10 @@
           if(!ASSETS){ try{ ASSETS = await use('assets'); }catch(e){} }
           if(!ASSETS) break;
           const res = await ASSETS.upload(new File([r.jpeg], 'photo.jpg', {type: 'image/jpeg'}));
+          /* 1.2.268 (user, 20 Nov 2026: Yuli Group cards with no photo): a copy that could not reach Dropbox from this
+             computer (no Dropbox here - it waits on this computer only) is not shared: every other computer would get an
+             empty picture. The agency's own photo keeps showing; the copy is tried again next time the program opens. */
+          if(res && res.queued) continue;
           if(res && res.id && !PICS.get(key)){
             PICS.set(key, res.id);
             await savePicShard(key);
@@ -386,7 +390,7 @@
         await DB.doc('diag/' + id).set({at: new Date().toISOString(), view: typeof VIEW !== 'undefined' ? VIEW : '', pane: (() => { try{ const pn = [...document.querySelectorAll('.pane')].find(x => !x.hidden && x.offsetParent); return pn ? pn.id : ''; }catch(e){ return ''; } })(), ver: (window.illu && window.illu.version) || '', filt: window.__illuRecoSig ? window.__illuRecoSig() : null, dom, cache: st});
       }catch(e){}
     };
-    setInterval(diagNow, 180000); setTimeout(diagNow, 20000);
+    setInterval(diagNow, 30 * 60000); setTimeout(diagNow, 20000);   /* 1.2.268: every 30 minutes (was 3) - fewer saves */
     window.__illuDiagNow = diagNow;
   }
   /* pick a photo as the card photo / go back to the one the crawler found */
@@ -401,7 +405,7 @@
       else if(/^https?:/i.test(url) && window.illu && illu.photoThumb){ const r = await illu.photoThumb(url, page || ''); if(r && r.jpeg) blob = new Blob([r.jpeg], {type: 'image/jpeg'}); }
       if(!blob || !blob.size || !/^image\//i.test(blob.type || 'image/jpeg')) return '';
       const res = await ASSETS.upload(new File([blob], 'photo.' + ((blob.type || '').split('/')[1] || 'jpg').replace('jpeg', 'jpg'), {type: blob.type || 'image/jpeg'}));
-      return res && res.id ? '/_blob/' + res.id : '';
+      return res && res.id && !res.queued ? '/_blob/' + res.id : '';   // 1.2.268: only a copy that reached Dropbox is shared
     }catch(e){ return ''; }
   }
   const needsStash = u => /^\/_blob\/bk\./.test(String(u || '')) || expiring(u);

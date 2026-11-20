@@ -57,9 +57,11 @@
         /* 1.2.216: the live connection's restarts and catch-ups, and this computer's downloads */
         live: (() => { try{ const l = window.__illuLive && window.__illuLive.stats ? window.__illuLive.stats() : null; return l ? {up: l.up, restarts: l.restarts, reasons: l.reasons, catchups: l.catchups, events: l.events, fetched: l.fetched, full: l.full, fromCache: l.fromCache, kept: l.kept} : null; }catch(e){ return null; } })(),
         net: (() => { try{ const n = window.IlluNet ? window.IlluNet.stats() : null; return n ? {month: n.month, bytes: n.bytes, day: n.dayBytes, hour: n.hourBytes, braked: n.braked, saver: n.saver} : null; }catch(e){ return null; } })(),
+        /* 1.2.268: the program's own jobs that took longest (see illu-tprof.js) */
+        jobs: (() => { try{ return window.__illuTProf ? window.__illuTProf.top(10) : null; }catch(e){ return null; } })(),
         boot: (() => { try{ const n = performance.getEntriesByType('navigation')[0]; return n ? Math.round(n.loadEventEnd || n.domContentLoadedEventEnd) : null; }catch(e){ return null; } })()};
       await DB.doc('perf/' + ME).set(doc); sent++;
-      LT.n = 0; LT.ms = 0; LT.worst = 0; LT.since = Date.now(); ERRS.length = 0;
+      LT.n = 0; LT.ms = 0; LT.worst = 0; LT.since = Date.now(); ERRS.length = 0; try{ window.__illuTProf && window.__illuTProf.reset(); }catch(e){}
     }catch(e){}
   }
   setTimeout(report, 90000); setInterval(report, 10 * 60000);

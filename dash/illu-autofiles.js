@@ -54,6 +54,21 @@
     if(t.includes(' ' + w.join(' ') + ' ')) return 2;
     return w[0].length >= 3 && t.includes(' ' + w[0] + ' ') ? 1 : 0;
   }
+  const planTexts = P => [P.title || '', ...(P.groups || []).map(g => g.name || ''), ...(P.groups || []).flatMap(g => (g.files || []).slice(0, 200).map(f => (f.sub || '') + ' ' + (f.name || '')))];
+  /* another model named in the files (a first name of a model on the same agency's boards, or on any booking card) while
+     hers appears nowhere: returns that name, else '' */
+  function otherModel(c, texts){
+    if(texts.some(t => hits(c, t))) return '';
+    const mine = new Set(words(c.nm));
+    const t = ' ' + texts.map(x => words(x).join(' ')).join(' ') + ' ';
+    const host = (() => { try{ return new URL(c.k).hostname.replace(/^www\./, ''); }catch(e){ return ''; } })();
+    const names = new Set();
+    try{ for(const a of AG){ const same = host && (String(a.d || a.domain || a.w || '').includes(host) || (a.boards || []).some(b => String(b.p || '').includes(host)));
+      if(!same) continue; for(const b of (a.boards || [])) for(const m of (b.m || [])){ const w = words(m[0])[0]; if(w && w.length >= 4 && !mine.has(w)) names.add(w); } } }catch(e){}
+    try{ for(const x of BOOK.values()){ const w = words(x && x.nm)[0]; if(w && w.length >= 4 && !mine.has(w)) names.add(w); } }catch(e){}
+    for(const n of names) if(t.includes(' ' + n + ' ')) return n.charAt(0).toUpperCase() + n.slice(1);
+    return '';
+  }
   function pickOwner(cards, texts){
     const sc = cards.map(c => texts.reduce((a, t) => Math.max(a, hits(c, t)), 0));
     const top = Math.max(...sc); if(!top) return null;
@@ -156,6 +171,17 @@
           if(owner && /mediaslide/i.test(t.u)) P = await illu.getFilesPlan(t.u, String(owner.nm || '').trim()).catch(e => ({ok: false, why: String(e && e.message || e)}));
         }
         const at = new Date().toISOString();
+        /* 1.2.268 (user, 20 Nov 2026: "There are also photos and videos of a different model in Illia's card" - a Mazer
+           package of KARYNA, sent in the ILLIA email thread, was saved into Illia's folder): before saving, the files must
+           not name another model while never naming her. If they do, nothing is saved and the link asks who it is for. */
+        if(owner && P && P.ok){
+          const other = otherModel(owner, planTexts(P));
+          if(other){
+            mark(owner, t.u, {at, by: me(), st: 'which', title: P.title || '', why: L('the files are named ' + other + ', not ' + (owner.nm || ''), '파일 이름이 ' + other + '입니다 (' + (owner.nm || '') + ' 아님)'), with: [owner.id]});
+            res.which++; tell({at, st: 'which', nm: owner.nm || '', cid: owner.id, title: P.title || '', why: other});
+            continue;
+          }
+        }
         if(!owner){
           for(const c of cs) mark(c, t.u, {at, by: me(), st: 'which', title: P && P.title || '', with: cs.map(x => x.id)});
           res.which++; tell({at, st: 'which', nm: cs.map(c => c.nm).join(' / '), cid: cs[0].id, title: P && P.title || ''});
@@ -186,20 +212,25 @@
     const {d, h} = kday(); if(h < 7) return;
     let mk = ''; try{ mk = localStorage.getItem('illu.autof.morning') || ''; }catch(e){}
     if(mk === d) return;
+    /* 1.2.268: a computer that could not run it (not signed in to Hiworks) tries again after an hour, not every 15 minutes -
+       each try was two saves (82 a day) */
+    let tried = 0; try{ tried = +(localStorage.getItem('illu.autof.tried') || 0); }catch(e){}
+    if(Date.now() - tried < 60 * 60000) return;
     if(typeof DB !== 'undefined' && DB){
       let cur = null; try{ const x = await DB.doc('autof/morning').get(); cur = typeof docOf === 'function' ? docOf(x) : null; }catch(e){}
       if(cur && cur.d === d && cur.done){ try{ localStorage.setItem('illu.autof.morning', d); }catch(e){} return; }
-      if(cur && cur.d === d && cur.by !== me() && Date.now() - Date.parse(cur.at || 0) < 40 * 60000) return;   // someone else is running it
+      if(cur && cur.d === d && cur.by !== me() && Date.now() - Date.parse(cur.at || 0) < 40 * 60000) return;   // someone else is running it (or just tried)
       const mine = {d, by: me(), at: new Date().toISOString(), n: Math.random().toString(36).slice(2, 8)};
       try{ await DB.doc('autof/morning').set(mine); }catch(e){ return; }
       await sleep(2500);
       try{ const b = typeof docOf === 'function' ? docOf(await DB.doc('autof/morning').get()) : mine; if(b && b.n !== mine.n) return; }catch(e){}
     }
     let ok = false;
+    try{ localStorage.setItem('illu.autof.tried', String(Date.now())); }catch(e){}
     try{ if(window.__illuBEmailUpdate) ok = await window.__illuBEmailUpdate({auto: true}); }catch(e){}
     if(ok){ try{ localStorage.setItem('illu.autof.morning', d); }catch(e){} }   // not signed in to Hiworks: tried again in 15 minutes
     try{ if(typeof DB !== 'undefined' && DB) await DB.doc('autof/morning').set({d, by: me(), at: new Date().toISOString(), done: !!ok}); }catch(e){}
   }
   if(can()){ setTimeout(morning, 90000); setInterval(morning, 15 * 60000); }
-  window.__illuAutoTest = {linksOf, hits, pickOwner, claim, morning, run, state: () => STATE};
+  window.__illuAutoTest = {linksOf, hits, pickOwner, otherModel, planTexts, claim, morning, run, state: () => STATE};
 })();

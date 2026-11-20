@@ -1541,6 +1541,8 @@
     /* the film keeps playing while the buttons around it are redrawn */
     if(h.includes('<!--v-->')){ const v = box.querySelector('video.d2slv'); if(v) v.remove(); box.innerHTML = h; if(v) box.insertBefore(v, box.firstChild); } else box.innerHTML = h;
     pic.classList.toggle('d2slon', !!cur);
+    /* 1.2.268: the next photos are fetched ahead, so ‹ › show them at once */
+    try{ const L2 = SL.photos || [], nn = L2.length; if(nn && window.__illuWarm) window.__illuWarm([SL.i, SL.i + 1, SL.i - 2].map(j => L2[((j % nn) + nn) % nn]).filter(x => x && x.cat !== 'Video' && !/\.(mp4|mov|webm)(\?|$)/i.test(x.url)).map(x => slImg(x.url, full ? 2000 : 900))); }catch(e){}
     /* full view: the thumbnails under the photo, and the profile link in the details */
     let strip = C.querySelector(':scope > .d2slstrip');
     if(full && n > 1){
@@ -2370,6 +2372,17 @@
     if(t.state === 'loading' || !t.list || t.list.length < 2){ ucTilePaint(u); return; }
     t.i = Math.max(0, Math.min(t.list.length - 1, t.i + d));
     document.querySelectorAll('.uc').forEach(x => { if(ucTileKey(x) === k) ucTilePaint(x); });
+    try{ const nx = t.list[t.i + 1]; if(nx && window.__illuWarm) window.__illuWarm([/^\/_blob\//.test(nx) ? nx : slImg(nx, 900)]); }catch(e){}   /* 1.2.268 */
+  }
+  /* 1.2.268: resting the mouse on a card for a moment reads her photo list ahead (addresses only, kept on this computer),
+     so ‹ › on the card and her slideshow start at once; one card at a time */
+  { let hvT = 0, hvBusy = false; const asked = new Set();
+    document.addEventListener('mouseover', e => {
+      const u = ucTileOf(e.target); if(!u || hvBusy) return; clearTimeout(hvT);
+      hvT = setTimeout(() => { const k = ucTileKey(u); if(!k || asked.has(k) || !u.matches(':hover') || !(window.illu && window.illu.modelPhotos) || window.illu.web) return;
+        const href = ucTileHref(u, k); if(!href) return; asked.add(k); hvBusy = true;
+        Promise.resolve(window.illu.modelPhotos(href)).catch(() => {}).then(() => { hvBusy = false; }); }, 450);
+    }, true);
   }
   document.addEventListener('click', e => {
     const b = e.target.closest && e.target.closest('[data-ucarr]'); if(!b) return;
@@ -3492,12 +3505,17 @@ body.d2max #d2bar{margin-top:0}
     return s.replace(/^https?:\/\//i, '').split('#')[0].split('?')[0];
   }
   const idOf = k => { let h = 0x811c9dc5; for(let i = 0; i < k.length; i++){ h ^= k.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return 'r' + h.toString(36) + k.length.toString(36); };
-  const keyOfImg = im => rkey(im.dataset.orig || im.getAttribute('src') || '');
+  /* 1.2.268: the key is worked out once per picture address and kept on the picture (it was worked out again for every
+     photo on the page every 0.7 s) */
+  const keyOfImg = im => { const u = im.dataset.orig || im.getAttribute('src') || ''; if(u.startsWith('data:')) return ''; if(im.__rku !== u){ im.__rku = u; im.__rk = rkey(u); } return im.__rk; };
   /* turned inside its own box: a quarter turn swaps width and height, so the picture is scaled to still fit (contain)
      or still fill (cover) the same box */
   function apply(im){
     if(!im || !im.isConnected) return;
     const r = ROT.get(keyOfImg(im)) || 0;
+    /* 1.2.268: a photo that is not turned (nearly all of them) is left alone without measuring it - the program
+       measured every photo on the page every 0.7 s whenever any photo anywhere had been turned */
+    if(!r && !im.dataset.rotd) return;
     const ew = im.offsetWidth, eh = im.offsetHeight;
     const sig = r + '|' + ew + 'x' + eh + '|' + im.naturalWidth;
     if(im.dataset.rotsig === sig) return;
@@ -3520,7 +3538,8 @@ body.d2max #d2bar{margin-top:0}
   }
   const SEL = '.d2card .litpic img, #illufv .fvimg, #illufv .fvt img, .d2slstrip img, .litpic img.agimg, .litpic.has > img, .ucimg img';
   function applyAll(){ if(!ROT.size && !document.querySelector('[data-rotd]')) return; document.querySelectorAll(SEL).forEach(apply); }
-  setInterval(applyAll, 700);
+  /* 1.2.268: a new picture is turned as soon as it loads (below); this backstop now looks every 3 s, not every 0.7 s */
+  setInterval(() => { if(!document.hidden) applyAll(); }, 3000);
   addEventListener('resize', () => { document.querySelectorAll('[data-rotsig]').forEach(im => { delete im.dataset.rotsig; }); applyAll(); });
   document.addEventListener('load', e => { if(e.target && e.target.tagName === 'IMG' && e.target.matches(SEL)){ delete e.target.dataset.rotsig; apply(e.target); } }, true);
   /* the picture the ⟲ ⟳ buttons turn: the photo shown in that viewer */

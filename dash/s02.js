@@ -804,8 +804,8 @@ const ONLINE = new Set();
      everyone watches that collection, so an ID counts as here until its last beat is
      more than two minutes old. This works for every signed-in ID that can save. */
 const ROOMON = new Set(), BEATS = new Map();
-const BEAT_MS = 30000, BEAT_LIVE = 150000;
-let beatPid = null, beatTimer = 0, beatWatch = null;
+const BEAT_MS = 60000, BEAT_LIVE = 150000;   /* 1.2.268: a beat a minute (was every 30 s) - half the saves, still shown within a minute */
+let beatPid = null, beatTimer = 0, beatWatch = null, lastBeatAt = 0;
 function mergeOnline(){
   ONLINE.clear();
   for(const p of ROOMON) ONLINE.add(p);
@@ -822,6 +822,8 @@ async function beat(){
     try{ await DB.doc('live/' + was).delete(); }catch(e){}
   }
   if(beatPid){                         // beat even behind other windows: still signed in
+    if(beatPid === was && Date.now() - lastBeatAt < 25000) return;   // 1.2.268: clicking between windows no longer saves a beat each time
+    lastBeatAt = Date.now();
     try{ await DB.doc('live/' + beatPid).set({at: Date.now()}); }catch(e){}
   }
 }
@@ -10962,9 +10964,12 @@ initLog();
   const esc2 = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   /* the wall time in a zone, as numbers - read from Intl, never from an offset table,
      so summer time is whatever the zone itself says it is today */
+  /* 1.2.268: one time-zone reader per city, kept - a new one was made for every clock every second */
+  const FMT = new Map();
   function partsIn(tz, d){
-    const f = new Intl.DateTimeFormat('en-US', {timeZone: tz, hourCycle: 'h23', weekday: 'short',
-      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'});
+    let f = FMT.get(tz);
+    if(!f){ f = new Intl.DateTimeFormat('en-US', {timeZone: tz, hourCycle: 'h23', weekday: 'short',
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'}); FMT.set(tz, f); }
     const o = {};
     for(const p of f.formatToParts(d)) o[p.type] = p.value;
     const h = (+o.hour) % 24;
@@ -11068,6 +11073,8 @@ initLog();
      translation watcher, which listens for nodes being added, is not woken every tick. */
   const setTxt = (el, v) => { if(el && el.firstChild && el.firstChild.nodeValue !== v) el.firstChild.nodeValue = v; };
   function tick(){
+    /* 1.2.268: the clocks are only worked out while they are on screen */
+    if(document.hidden || !host.getClientRects().length) return;
     const now = new Date();
     const home = partsIn('Asia/Seoul', now);
     host.querySelectorAll('.clk').forEach(c => {

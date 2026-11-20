@@ -16,6 +16,8 @@
      crawl/<agency id>   how it went: done / failed, counts, the reason
    A failed agency is not retried; it waits on the list in crawl/. */
 (function(){
+  /* 1.2.268: a name read from a link's words ('More information about May Tager') is saved as the name itself */
+  const cnm = n => { try{ return window.__illuCleanName ? window.__illuCleanName(n || '') : (n || ''); }catch(e){ return n || ''; } };
   'use strict';
   if(!window.illu || !window.illu.crawlProfile) return;
   const isOwner = () => { try{ return isAdmin(); }catch(e){ return false; } };
@@ -117,7 +119,7 @@
       L.step = 'finding boards';
       const found = [];
       const reread = [];
-      for(const b of brk){ const r = await TO(illu.crawlBoard(b.u), 600000); if(r && r.models && r.models.length >= 3) reread.push({u: b.u, d: b.d, g: b.g, t: b.t, ...(b.x ? {x: b.x} : {}), m: r.models.map(([h, n]) => [n || '', '|' + h])}); }
+      for(const b of brk){ const r = await TO(illu.crawlBoard(b.u), 600000); if(r && r.models && r.models.length >= 3) reread.push({u: b.u, d: b.d, g: b.g, t: b.t, ...(b.x ? {x: b.x} : {}), m: r.models.map(([h, n]) => [cnm(n), '|' + h])}); }
       if(!a.boards.length){
         const home = a.site || (a.domain ? 'https://' + a.domain : '');
         if(!home){ st.state = 'failed'; st.error = 'no website'; }
@@ -148,7 +150,7 @@
               const ms = (br && br.models || []).filter(([h]) => !have.has(h) && !OUT.test(h));
               if(ms.length < 3) continue;
               ms.forEach(([h]) => have.add(h));
-              found.push(Object.assign({u: c.u, d: c.d, g: c.g, t: c.t}, c.x ? {x: c.x} : {}, {m: ms.map(([h, n]) => [n || '', '|' + h])}));
+              found.push(Object.assign({u: c.u, d: c.d, g: c.g, t: c.t}, c.x ? {x: c.x} : {}, {m: ms.map(([h, n]) => [cnm(n), '|' + h])}));
             }
             /* 1.2.193 (user, 14 Nov 2026 - Perception Models: "There is no board to represent male / female ... Currently the
                site has 22 models on their board"): no board link at all, but the home page itself shows the models (a
@@ -157,7 +159,7 @@
               L.step = 'reading the home page as the board';
               const br = await TO(illu.crawlBoard(r.at || home), 600000);
               const ms = (br && br.models || []).filter(([h]) => !OUT.test(h));
-              if(ms.length >= 6) found.push({u: (br && br.at) || r.at || home, d: 'Our people', g: '?', t: 'unlabelled', x: 'model', m: ms.map(([h, n]) => [n || '', '|' + h])});
+              if(ms.length >= 6) found.push({u: (br && br.at) || r.at || home, d: 'Our people', g: '?', t: 'unlabelled', x: 'model', m: ms.map(([h, n]) => [cnm(n), '|' + h])});
             }
             if(!found.length){ st.state = 'failed'; st.error = cand.length ? 'boards found but no model links on them (' + cand.length + ')' : 'no Women / Men / New faces / Development / Talent / Model board found on the home page'; }
           }
