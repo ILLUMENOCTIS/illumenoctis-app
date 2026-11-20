@@ -63,6 +63,9 @@ css.textContent = `
 #illuusage.amber{background:#FFF4E0;color:#7A4B00;border-color:#F3D9A6}#illuusage.amber i{background:#E39B1B}
 #illuusage.red{background:#FDE8E8;color:#8A1C1C;border-color:#F3C2C2}#illuusage.red i{background:#D33A3A}
 #illuusage.float{position:fixed;left:84px;bottom:12px;z-index:2147483000;box-shadow:0 2px 8px rgba(0,0,0,.12)}@media (max-width:760px){#illuusage.float{left:10px;bottom:70px}}
+/* 1.2.266: while all is well (green) the floating status is only its dot, so it never covers a card; the words show on hover, and it is still a click away */
+#illuusage.float.green{padding:4px;gap:0;opacity:.8}#illuusage.float.green .t{display:none}
+#illuusage.float.green:hover,#illuusage.float.green:focus-visible{padding:2px 8px;gap:5px;opacity:1}#illuusage.float.green:hover .t,#illuusage.float.green:focus-visible .t{display:inline}
 #illuubar{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:2147483001;max-width:min(760px,calc(100vw - 32px));padding:9px 14px;border-radius:10px;font:500 13px/1.45 system-ui,-apple-system,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.18);display:flex;gap:12px;align-items:center}
 #illuubar.amber{background:#FFF4E0;color:#5C3A00;border:1px solid #F3D9A6}#illuubar.red{background:#FDE8E8;color:#701515;border:1px solid #F3C2C2}
 #illuubar button{font:600 12px system-ui,sans-serif;border-radius:7px;padding:4px 10px;cursor:pointer;border:1px solid currentColor;background:transparent;color:inherit;white-space:nowrap}
@@ -100,7 +103,7 @@ function paint() {
   const L = levels(), worst = Math.max(L.egress, L.db, L.files), st = NET.stats();
   NET.setTeamShare(L.team / LIM.egress);
   chip.className = (chip.classList.contains('float') ? 'float ' : '') + (st.braked || st.saver ? 'red' : col(worst));
-  chip.innerHTML = '<i></i>' + esc(T('Supabase ', 'Supabase ') + worst + '%');
+  chip.innerHTML = '<i></i><span class="t">' + esc(T('Supabase ', 'Supabase ') + worst + '%') + '</span>';
   /* banner */
   let msg = '', cls = '', key = '', resume = false;
   if (st.braked) { cls = 'red'; key = 'brake'; resume = true; msg = T('Downloads from Supabase are paused on this computer: it downloaded far more than normal (' + esc(st.braked.replace(/^(hour|day):/, '')) + ' in the last ' + (/^day/.test(st.braked) ? 'day' : 'hour') + '). The program keeps working from its own copy.', '이 컴퓨터의 Supabase 다운로드가 일시 중지되었습니다: 평소보다 훨씬 많이 다운로드했습니다 (' + esc(st.braked.replace(/^(hour|day):/, '')) + '). 프로그램은 저장된 사본으로 계속 작동합니다.'); }

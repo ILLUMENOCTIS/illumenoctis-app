@@ -4894,6 +4894,37 @@ async function copyPic(key, btn){
     flash('ok', '✓');
   }catch(err){ flash('bad', '!'); }
 }
+/* 1.2.266 (user, 20 Nov 2026: "There are a lot of bugs and errors from here" - cancelled cards showing a broken picture
+   with the model's name over it): a photo saved in the program ("/_blob/<id>") that this computer cannot get - it was
+   saved on a computer whose copy never reached Dropbox - falls back to her agency photo; with no agency photo the card
+   keeps its plain background (never the name in a broken-picture frame). */
+function blobFallbackSrc(key){
+  if(!key) return '';
+  let u = '';
+  try{ const P = window.__illuPhoto; const pm = P && P.PMAIN && P.PMAIN.get(key); u = (pm && pm.u) || (P && P.PLINK && P.PLINK.get(key)) || ''; }catch(e){}
+  try{ if(!u){ const f = litFacts({key}); if(f && f.photo && !/\/images\/[^\/]+\.(png|svg|gif)(\?|$)|logo|placeholder|no[-_ ]?image/i.test(f.photo)) u = f.photo; } }catch(e){}
+  return u;
+}
+document.addEventListener('error', e => {
+  const img = e.target;
+  if(!img || img.tagName !== 'IMG') return;
+  if(img.dataset.blobfb === '1'){ img.dataset.blobfb = '2'; img.alt = ''; img.style.visibility = 'hidden'; return; }   // the agency photo failed too
+  if(img.dataset.blobfb) return;
+  const src = img.getAttribute('src') || '';
+  if(!/\/_blob\//.test(src)) return;
+  img.dataset.blobfb = '1';
+  const cell = img.closest('[data-fbk]');
+  const host = img.closest('article.uc');
+  const key = (cell && cell.dataset.fbk) || (host && (host.dataset.uck || host.dataset.ivk)) || '';
+  let u = (cell && cell.dataset.fb) || blobFallbackSrc(key);
+  if(u && /^https?:/i.test(u)){
+    if(window.illu && window.illu.modelPhotos && !window.illu.web) u = 'illuimg://p/' + encodeURIComponent(u) + (/^https?:/i.test(key) ? '?r=' + encodeURIComponent(key) : '');
+    img.referrerPolicy = 'no-referrer';
+    img.src = u;
+    return;
+  }
+  img.alt = ''; img.style.visibility = 'hidden';
+}, true);
 function picCell(key, nm, src){
   const id = PICS.get(key);
   const drop = ASSETS ? ' data-pic="' + esc(key) + '" tabindex="0" role="button"' : '';
@@ -4901,8 +4932,10 @@ function picCell(key, nm, src){
   if(pre)
     return '<span class="litpic has picup"' + drop + ' title="Saving this photograph…">' +
       '<img src="' + esc(pre) + '" alt="' + esc(nm || '') + '" decoding="async"></span>';
+  /* 1.2.266: data-fbk / data-fb - if this saved photo cannot be found (never reached Dropbox), the card shows her
+     agency photo instead of a broken picture with her name in it */
   if(id)
-    return '<span class="litpic has"' + drop + ' title="Drop or paste another photograph ' +
+    return '<span class="litpic has"' + drop + ' data-fbk="' + esc(key) + '"' + (src ? ' data-fb="' + esc(src) + '"' : '') + ' title="Drop or paste another photograph ' +
       'to replace it">' + '<img src="' + esc(picURL(id)) + '" alt="' + esc(nm || '') +
       '" loading="lazy" decoding="async">' +
       picCopyBtn(key, false) +
