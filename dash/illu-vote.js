@@ -240,6 +240,7 @@
     const bb = {}; for(const [x, v] of Object.entries(bi)) if(v != null && v !== '') bb[x] = v;
     const r = Object.assign({key: k, nm: snap.nm || bi.nm || '', ag: snap.ag || bi.ag || '', href: snap.href || (/^https?:/i.test(k) ? k : '')}, bb, ii, {key: k});
     if(!r.nm && window.__illuSlugName) r.nm = window.__illuSlugName(r.href || k);
+    if(r.nm && window.__illuCleanName) r.nm = window.__illuCleanName(r.nm);   /* 1.2.267 */
     return r;
   }
   function signedIn(){ try{ if(!SIGNED()){ nudgeSignIn(); return false; } }catch(e){ return false; } return true; }

@@ -24,6 +24,9 @@
     return w.map(x => x.charAt(0).toUpperCase() + x.slice(1).toLowerCase()).join(' ').slice(0, 80);
   }
   window.__illuSlugName = slugName;
+  const LEAD = /^\s*(?:more\s+(?:info(?:rmation)?|details)\s+(?:about|on|for)|(?:view|see|open)\s+(?:the\s+)?(?:full\s+)?(?:profile|portfolio|book|model|details)(?:\s+(?:of|for))?|read\s+more\s+(?:about)?|discover|meet)\s*[:\-–—]?\s+/i;
+  function cleanName(n){ const s = String(n || ''); const c = s.replace(LEAD, '').trim(); return c.length >= 2 ? c : s; }
+  window.__illuCleanName = cleanName;
   /* the chosen names onto the Directory's own lists (AG boards), and the board's name back where a choice was cleared */
   function apply(){
     if(typeof AG === 'undefined' || !Array.isArray(AG)) return 0;
@@ -35,6 +38,9 @@
       const want = NM.get(k);
       if(want){ if(!ORIG.has(k)) ORIG.set(k, m[0] || ''); if(m[0] !== want){ m[0] = want; n++; } }
       else if(ORIG.has(k) && m[0] !== ORIG.get(k)){ m[0] = ORIG.get(k); n++; }
+      /* 1.2.267 (user, 20 Nov 2026 - Yuli Group cards named "MORE INFORMATION ABOUT NIVA ISAY"): the words of the
+         agency's link ("More information about", "View profile", …) are not part of her name */
+      { const cn = cleanName(m[0]); if(cn !== m[0] && cn){ m[0] = cn; n++; } }
       /* 1.2.264 (user: "name not showing up" - Julia Svensson, Le troch): a board row read with no name gets one from her page address */
       if(!String(m[0] || '').trim()){ const sn = slugName(href); if(sn){ m[0] = sn; n++; } }
     }
@@ -51,6 +57,15 @@
     try{ typeof refresh === 'function' && refresh(); }catch(e){}
     try{ window.__illuVoteRerender && window.__illuVoteRerender(); }catch(e){}
   }, 200); }
+  /* 1.2.267: booking cards made from such a row show her name without the link words (on screen; the card keeps what
+     was saved until someone saves it again) */
+  setInterval(() => {
+    try{
+      if(typeof BOOK === 'undefined') return;
+      let n = 0; for(const c of BOOK.values()) if(c && c.nm){ const cn = cleanName(c.nm); if(cn !== c.nm){ c.nm = cn; n++; } }
+      if(n){ try{ typeof renderBook === 'function' && renderBook(); }catch(e){} try{ window.__illuVoteRerender && window.__illuVoteRerender(); }catch(e){} }
+    }catch(e){}
+  }, 4000);
   /* boards read again (the crawler, the sign-in list) come with the board's names: put the chosen ones back */
   setInterval(() => { if((window.__illuAGv || 0) !== lastV) redraw(false); }, 3000);   /* 1.2.264: also for rows with no name */
   (function listen(){
