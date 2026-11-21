@@ -1062,7 +1062,7 @@
       ? cell(L('Mother agency', '마더 에이전시'), agH + favH) + cell(MO.foundAg ? L('Also at', '함께 소속') : L('Mother agency', '마더 에이전시'), (MO.foundAg ? alsoV + ' ' : '') + momBtn)
       : cell(L('Agency', '에이전시'), agH + favH) + cell(L('Mother agency', '마더 에이전시'), momBtn)) +
       cell(L('Based in', '지역'), H(place)) + cell(L('Gender', '성별'), sexH);
-    return '<div class="pnhd pnhdF"><div class="pnhm"><h2>' + (pg ? '<a class="pnnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(L('Open her page on the agency’s site', '에이전시 사이트에서 모델 페이지 열기')) + '">' + nmTxt + '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg></a>' : nmTxt) + (window.__illuNameEditHtml && sk && /^https?:/i.test(sk) ? window.__illuNameEditHtml(sk, a.nm || i.nm || '') : '') + '</h2>' +
+    return '<div class="pnhd pnhdF"><div class="pnhm"><h2' + ((n => n > 22 ? ' class="pnlong2"' : n > 13 ? ' class="pnlong"' : '')(String(nmTxt).replace(/<[^>]*>/g, '').length)) + '>' + (pg ? '<a class="pnnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(L('Open her page on the agency’s site', '에이전시 사이트에서 모델 페이지 열기')) + '">' + nmTxt + '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg></a>' : nmTxt) + (window.__illuNameEditHtml && sk && /^https?:/i.test(sk) ? window.__illuNameEditHtml(sk, a.nm || i.nm || '') : '') + '</h2>' +
       (tierL ? '<div class="pntags"><span class="pntag">' + H(tierL) + '</span></div>' : '') + '</div>' +
       '<div class="pnhbtns"><button type="button" class="pnfav' + (fav ? ' on' : '') + '" data-pnfav aria-pressed="' + fav + '" title="' + H(fav ? L('In My Favorites — click to remove', '내 즐겨찾기 — 누르면 뺍니다') : L('Add to My Favorites', '내 즐겨찾기에 추가')) + '">' + HEART + '</button>' +
       /* 1.2.261: send her card to a user (illu-cardsend.js) */
@@ -2986,6 +2986,8 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .pnhd.pnhdF{grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:2px 0 0}
 .pn2 .pnhdF .pnhm h2{font-size:21px;line-height:1.15;text-wrap:initial;overflow-wrap:normal;display:flex;align-items:center;flex-wrap:wrap;gap:2px 4px}
 .pn2 .pnhdF .pnhm h2 .pnnml{white-space:nowrap}
+.pn2 .pnhdF .pnhm h2.pnlong{font-size:17px}.pn2 .pnhdF .pnhm h2.pnlong2{font-size:15.5px}
+.pn2 .pnhdF .pnhm h2{display:block!important}.pn2 .pnhdF .pnhm h2 .pnnml{white-space:normal!important;display:inline}.pn2 .pnhdF .pnhm h2 .pnnml svg{display:inline-block;vertical-align:.35em;margin-left:3px}.pn2 .pnhdF .pnhm h2 .pnnmed{display:inline-flex;vertical-align:middle;margin-left:2px}
 .pn2 .pntags{margin-top:6px;display:flex;gap:6px}
 .pn2 .pntag{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;background:var(--tagbg,#EFE6F8);color:var(--tagfg,#5B3A8A);font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
 .pn2 .pnfg{margin:10px 0 8px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border:1px solid var(--line,#EFE7EF);border-radius:12px;overflow:hidden}
@@ -2994,7 +2996,7 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .pnfc:nth-child(n+3){border-top:1px solid var(--line,#F2EBF2)}
 .pn2 .pnfc small{display:block;font-size:10px;font-weight:600;letter-spacing:.07em;color:var(--faint,#A093A2);text-transform:uppercase;margin-bottom:3px}
 .pn2 .pnfv{display:flex;align-items:center;gap:5px;flex-wrap:nowrap;font-size:13.5px;min-width:0}
-.pn2 .pnfv .pnagl{flex:0 1 auto;min-width:0;font-weight:600;color:var(--acc,#6B2A67);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pn2 .pnfv .pnagl{flex:0 1 auto;min-width:0;font-weight:600;color:var(--acc,#6B2A67);text-decoration:none;white-space:normal;overflow-wrap:anywhere;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:100%;text-align:left;background:none;border:0;padding:0;font-size:inherit;font-family:inherit;cursor:pointer}
 .pn2 .pnfv .pnagfav{width:24px;height:24px;flex:none;margin:0!important}
 .pn2 .pnfv .pnmomset{font-size:13px;font-weight:600;padding:0;margin:0;min-height:0}
 .pn2 .pnfv .pnfn{color:var(--faint,#B3ABB8)}
