@@ -100,7 +100,9 @@ function flushKeep() {
   for (const [p, r] of PEND) { if (r) puts.push(r); else dels.push(p); }
   PEND.clear(); CACHE.apply(puts, dels);
 }
-function saveMeta() { if (!CACHE) return; CACHE.setMeta('sync', SYNC); CACHE.setMeta('complete', [...COMPLETE]); CACHE.setMeta('checked', Date.now()); }
+function saveMeta() { if (!CACHE) return; CACHE.setMeta('sync', SYNC); CACHE.setMeta('complete', [...COMPLETE]); CACHE.setMeta('checked', Date.now());
+  /* 1.2.269: the noted-but-not-yet-fetched changes survive a restart */
+  const dz = {}; for (const [k, v] of DIRTY) if (v && v.size) dz[k] = [...v].slice(0, 5000); CACHE.setMeta('dirty', dz); }
 try { addEventListener('pagehide', flushKeep); } catch (e) {}
 
 async function serverMark() {
@@ -187,9 +189,13 @@ function catchUp(why) {
       const have = mem ? mem.u : (CACHE ? ((await CACHE.getRow(r.path)) || {}).u : '');
       if (!have || tsKey(have) !== tsKey(r.updated_at)) need.push(r.path);
     }
-    if (need.length) await fetchPaths(need);
+    /* 1.2.269 (user, 21 Nov 2026: "what can we do to reduce the supabase current limit"): only what something on screen
+       is using is downloaded now; the rest is noted and fetched the moment it is read (as the live notes already did) */
+    const now = [], later2 = [];
+    for (const p of need) (watched(collOf(p), p) ? now : later2).push(p);
+    for (const p of later2) { const k = collOf(p); if (!DIRTY.has(k)) DIRTY.set(k, new Set()); DIRTY.get(k).add(p); }
+    if (now.length) await fetchPaths(now);
     for (const x of t.data || []) { max = later(max, x.deleted_at); applyRow(x.coll, x.path, null, 'SYNC'); }
-    for (const k of colls) DIRTY.delete(k);
     SYNC = qnow && Date.parse(qnow) > Date.parse(max || 0) ? qnow : max; saveMeta(); flushKeep();
     STAT.catchups++;
     return true;
@@ -205,6 +211,7 @@ const READY = (async () => {
     const [sync, comp, checked] = await Promise.all([CACHE.getMeta('sync'), CACHE.getMeta('complete'), CACHE.getMeta('checked')]);
     if (!sync || !Array.isArray(comp) || !checked || Date.now() - checked > 25 * 86400e3) { await CACHE.clearAll(); return; }
     SYNC = sync; for (const k of comp) COMPLETE.add(k);
+    try { const dz = await CACHE.getMeta('dirty'); if (dz && typeof dz === 'object') for (const [k, v] of Object.entries(dz)) if (Array.isArray(v) && v.length) DIRTY.set(k, new Set(v)); } catch (e) {}
     /* if the database can't be reached right now the program still opens on its own copy, and the
        catch-up is tried again every minute until it works */
     const ok = await catchUp('start');

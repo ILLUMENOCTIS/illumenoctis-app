@@ -52,6 +52,7 @@
       /* board sweeps first, single finds on top (they are newer and aimed at one model) */
       for(const x0 of (c.docs || c || [])){
         const x = docOf(x0); if(!x || !x.e) continue;
+        try{ PLB.set(x0.id || '', sig(x.e)); }catch(e){}
         const uses = new Map(); for(const u of Object.values(x.e)) uses.set(u, (uses.get(u) || 0) + 1);
         for(const [k, u] of Object.entries(x.e)) if(u && !expired(u) && uses.get(u) < 3 && !/dummy|no[-_ ]?image|placeholder|cover_error|default/i.test(u)) PLINK.set(k, u);
       }
@@ -273,6 +274,8 @@
   }
   /* one board page read: every model on it gets its picture, saved for everyone */
   const BPEND = new Set(), BREAD = new Map();
+  /* 1.2.269: a board read again with the same pictures is not saved again (each save is downloaded by every computer) */
+  const PLB = new Map(), sig = e => JSON.stringify(Object.keys(e).sort().map(k => [k, e[k]]));
   function readBoard(x, now){
     if(BREAD.has(x.id)) return BREAD.get(x.id);
     const keys = x.hrefs.map(normKey);
@@ -289,7 +292,8 @@
       if(!passing){ SWEPT.set(x.id, rec);
         try{ await DB.doc('psweep/' + x.id).set(rec); }catch(err){} }
       if(n){
-        try{ await DB.doc('plinkb/' + x.id).set({u: x.u, at: rec.at, e}); }catch(err){}
+        const sg = sig(e);
+        if(PLB.get(x.id) !== sg){ PLB.set(x.id, sg); try{ await DB.doc('plinkb/' + x.id).set({u: x.u, at: rec.at, e}); }catch(err){} }
         for(const [k, u] of Object.entries(e)){
           const had = PLINK.get(k); PLINK.set(k, u);
           if(had !== u) document.querySelectorAll('.litpic[data-pic="' + CSS.escape(k) + '"]').forEach(c => { if(!c.classList.contains('has') && !c.classList.contains('gotimg')) paintCell(k); });

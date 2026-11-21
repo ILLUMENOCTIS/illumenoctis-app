@@ -61,6 +61,15 @@
   const PRE = new Map();      // hash -> vpre doc {k, gty, amt, per, avf, avd, by, at}: guarantee + availability typed on a vote card before Booking (1.2.129)
   let ready = 0;
   let GALNOW = {};            // vpub/gal .c: {hash: {ps, sm}} the photos of the models with a booking card in Processing (1.2.176)
+  let PUBLOADED = false, PUBLOADING = null, LEASE = null;
+  /* the published pages, read once (from this computer's own copy plus whatever changed) */
+  function loadPub(){
+    if(PUBLOADED) return Promise.resolve();
+    if(PUBLOADING) return PUBLOADING;
+    const d = db(); if(!d) return Promise.resolve();
+    PUBLOADING = d.collection('vpub').get().then(s => { for(const x of (s.docs || [])){ const v = x.data() || {}; if(x.id === 'board') PUBNOW = Object.assign({}, v.c || {}); if(x.id === 'gal') GALNOW = Object.assign({}, v.c || {}); } PUBLOADED = true; }).catch(() => {}).finally(() => { PUBLOADING = null; });
+    return PUBLOADING;
+  }
   let PUBNOW = {};            // vpub/board .c: {hash: {ph, m}} what the phone vote page shows for each card (1.2.129)
   let DBX = null;
   function db(){ if(DBX) return DBX; try{ if(typeof DB !== 'undefined') DBX = DB; }catch(e){} return DBX; }
@@ -103,7 +112,13 @@
     d.collection('fav').onSnapshot(s => { FAV.clear(); for(const x of s.docs){ const v = x.data() || {}; const m = new Map(); for(const k in (v.e || {})) m.set(k, v.e[k]); FAV.set(x.id, m); } ready |= 1; changed(); }, () => {});
     d.collection('vote').onSnapshot(s => { VT.clear(); for(const x of s.docs){ const v = x.data() || {}; VT.set(x.id, {e: Object.assign({}, v.e || {}), t: Object.assign({}, v.t || {})}); } ready |= 2; changed(); }, () => {});
     d.collection('vopen').onSnapshot(s => { OPEN.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k) OPEN.set(x.id, v); } ready |= 4; changed(); }, () => {});
-    d.collection('vpub').onSnapshot(s => { for(const x of s.docs){ if(x.id === 'board'){ const v = x.data() || {}; PUBNOW = Object.assign({}, v.c || {}); } if(x.id === 'gal'){ const v = x.data() || {}; GALNOW = Object.assign({}, v.c || {}); } } }, () => {});
+    /* 1.2.269 (user, 21 Nov 2026: "what can we do to reduce the supabase current limit"): the two pages for phones
+       (vpub, 300 KB) were downloaded by every computer each time any computer saved them - on 20 Nov that was most of
+       the team's downloads. Now only phones keep them live; a computer reads them once, only when it needs them
+       (it is the one publishing, or a card's own folder can't be read here). Computers watch a tiny note instead
+       (vpubl/board: who publishes, when) so only one computer publishes at a time. */
+    if(window.illu && window.illu.web) d.collection('vpub').onSnapshot(s => { for(const x of s.docs){ if(x.id === 'board'){ const v = x.data() || {}; PUBNOW = Object.assign({}, v.c || {}); } if(x.id === 'gal'){ const v = x.data() || {}; GALNOW = Object.assign({}, v.c || {}); } } PUBLOADED = true; }, () => {});
+    else d.collection('vpubl').onSnapshot(s => { let v = null; for(const x of s.docs) if(x.id === 'board') v = x.data() || null; LEASE = v; }, () => {});
     d.collection('mother').onSnapshot(s => { MOM.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k && v.ag) MOM.set(x.id, v); } momBump(); changed(); }, () => {});
     d.collection('avail').onSnapshot(s => { AV.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k && v.t) AV.set(x.id, v); } changed(); }, () => {});
     d.collection('vpre').onSnapshot(s => { PRE.clear(); for(const x of s.docs){ const v = x.data(); if(v && v.k) PRE.set(x.id, v); } changed(); }, () => {});
@@ -1732,6 +1747,12 @@
   function publishBoard(){
     if(ready !== 7 || !me()) return;
     try{ if(!SIGNED()) return; }catch(e){ return; }
+    if(window.illu && window.illu.web) return;            // 1.2.269: phones read the pages, computers write them
+    /* 1.2.269: one computer publishes - the one named in vpubl/board; another takes over after 25 minutes without it */
+    const L = LEASE, lat = L ? Date.parse(L.at || 0) || 0 : 0, mine = !!(L && L.by === me());
+    if(!mine && L && Date.now() - lat < 25 * 60e3) return;
+    if(!PUBLOADED){ loadPub().then(() => { if(PUBLOADED) publishBoard(); }); return; }
+    if(!mine || Date.now() - lat > 10 * 60e3){ LEASE = {by: me(), at: nowIso()}; save('vpubl/board', LEASE); }
     const c = {};
     for(const st of allStates()){
       if(!st.open) continue;
@@ -1774,7 +1795,7 @@
     GALNOW = c; save('vpub/gal', {c, at: nowIso(), by: me()});
   }
   /* the published photos of a model (vote card first, then booking card) */
-  window.__illuPubGal = k => { if(!k) return null; const h = hash(k); const a = PUBNOW[h], b = GALNOW[h]; return (a && a.ps && a.ps.length) ? a : (b && b.ps && b.ps.length) ? b : null; };
+  window.__illuPubGal = k => { if(!k) return null; if(!PUBLOADED){ loadPub().then(() => { try{ window.__illuFvRepaint && window.__illuFvRepaint(); }catch(e){} }); return null; } const h = hash(k); const a = PUBNOW[h], b = GALNOW[h]; return (a && a.ps && a.ps.length) ? a : (b && b.ps && b.ps.length) ? b : null; };
 
   /* ---------- messages ---------- */
   const T = document.createElement('div'); T.id = 'ivtoast'; T.hidden = true; T.setAttribute('role', 'status');
