@@ -687,6 +687,17 @@
   /* ===== 1.2.129: one side panel for every expanded card (user, 10 Nov 2026: "make a universal same side panel")
      Top to bottom, the same everywhere except the Booking board's own cards: name, agency and board; the
      measurements; where she is (nothing yet / on the Team Vote / on the Booking board); the agency; notes; links. */
+  /* 1.2.274 (user: "it indicates South Africa, but it doesn't specify from which city" - Boss Models has Cape Town,
+     Johannesburg and Durban boards): when the agency has no city, the city her board is named after
+     ("Johannesburg - men - development") is where she is */
+  const DIVNOT = /^(men|women|male|female|man|woman|main|mainboard|main board|new ?faces?|development|dev|direct|image|talent|board|citizen|curve|curves|kids|all|mixed|models?|in town|online|special|commercial|classic|classics|editorial|lifestyle|fitness|petite|plus)$/i;
+  function divCity(div, ag, country){
+    const p = String(div || '').split(/\s+[-–—·|]\s+/)[0].trim();
+    if(!p || p === String(div || '').trim() || p.length > 30 || DIVNOT.test(p) || !/^[A-Z\u00C0-\u024F]/.test(p)) return '';
+    const lc = p.toLowerCase();
+    if(lc === String(ag || '').toLowerCase() || lc === String(country || '').toLowerCase()) return '';
+    return p;
+  }
   function factsOf(k){
     let i = {}, f = {};
     try{ if(typeof agIndex === 'function') agIndex(); }catch(e){}
@@ -704,7 +715,7 @@
     const sex = (a.f && a.f.g) || f.g, div = a.div || i.div || '', tier = (a.f && a.f.tier) || f.tier || i.t || '';
     const chips = [sex === 'F' ? L('Female', '여성') : sex === 'M' ? L('Male', '남성') : '', div, tier && tier !== 'unlabelled' && String(div).toLowerCase() !== String(tier).toLowerCase() ? tier : ''].filter(Boolean);
     const nf = t => /new ?face|development/i.test(t);
-    const place = [a.city, a.country].filter(Boolean).join(', ');
+    const place = [a.city || divCity(div, a.ag, a.country), a.country].filter(Boolean).join(', ');
     const F = Object.assign({}, f, a.f || {});
     const ms = [['ht', L('Height', '신장'), 'cm'], ['bu', L('Bust', '가슴'), 'cm'], ['wa', L('Waist', '허리'), 'cm'], ['hp', L('Hips', '엉덩이'), 'cm'], ['eu', L('Shoe EU', '신발 EU'), ''], ['us', L('Shoe US', '신발 US'), '']];
     const wt = c && c.wt !== '' && c.wt != null && !isNaN(parseFloat(c.wt)) ? parseFloat(c.wt) : null;
@@ -1020,7 +1031,7 @@
     const sex = F.g || (c && c.sex) || '';
     const tier = (a.f && a.f.tier) || f.tier || i.t || '';
     const TL = {newfaces: L('New faces', '뉴 페이스'), development: L('Development', '디벨롭먼트'), main: L('Main', '메인'), direct: L('Direct', '다이렉트')};
-    const place = [a.city || i.city, a.country || i.country].filter(Boolean).join(', ');
+    const place = [a.city || i.city || divCity(a.div || i.div, a.ag || i.ag, a.country || i.country), a.country || i.country].filter(Boolean).join(', ');
     /* 1.2.193: the sex can be set or changed here (illu-sex.js) - "Female ✎", "Male ✎" or "Choose F / M ✎" */
     let sk = ''; try{ sk = mkeyOf(k, c); }catch(e){}
     const sexLab = sex === 'F' ? L('Female', '여성') : sex === 'M' ? L('Male', '남성') : '';
@@ -1063,7 +1074,13 @@
       : cell(L('Agency', '에이전시'), agH + favH) + cell(L('Mother agency', '마더 에이전시'), momBtn)) +
       cell(L('Based in', '지역'), H(place)) + cell(L('Gender', '성별'), sexH);
     return '<div class="pnhd pnhdF"><div class="pnhm"><h2' + ((n => n > 22 ? ' class="pnlong2"' : n > 13 ? ' class="pnlong"' : '')(String(nmTxt).replace(/<[^>]*>/g, '').length)) + '>' + (pg ? '<a class="pnnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(L('Open her page on the agency’s site', '에이전시 사이트에서 모델 페이지 열기')) + '">' + nmTxt + '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg></a>' : nmTxt) + (window.__illuNameEditHtml && sk && /^https?:/i.test(sk) ? window.__illuNameEditHtml(sk, a.nm || i.nm || '') : '') + '</h2>' +
-      (tierL ? '<div class="pntags"><span class="pntag">' + H(tierL) + '</span></div>' : '') + '</div>' +
+      /* 1.2.274 (user: "there is enough space by Development to specify Johannesburg"): the board she was found on,
+         by its city when the board names one, opening that board on the agency's site */
+      (() => { const dv = a.div || i.div || '', bc = divCity(dv, a.ag || i.ag, a.country || i.country), bu = i.bu || '';
+        const gw = (/\b(women|female)\b/i.test(dv) ? L('Women', '여성') : /\b(men|male)\b/i.test(dv) ? L('Men', '남성') : '');
+        const bt = bc ? bc + (gw ? ' · ' + gw : '') : '';
+        const bTag = bt ? (bu && /^https?:/i.test(bu) ? '<a class="pntag pnbtag" href="' + H(bu) + '" target="_blank" rel="noopener" title="' + H(L('Open this board on the agency’s site', '에이전시 사이트에서 이 보드 열기') + ' · ' + dv) + '">' + H(bt) + ' ↗</a>' : '<span class="pntag pnbtag" title="' + H(dv) + '">' + H(bt) + '</span>') : '';
+        return tierL || bTag ? '<div class="pntags">' + (tierL ? '<span class="pntag">' + H(tierL) + '</span>' : '') + bTag + '</div>' : ''; })() + '</div>' +
       '<div class="pnhbtns"><button type="button" class="pnfav' + (fav ? ' on' : '') + '" data-pnfav aria-pressed="' + fav + '" title="' + H(fav ? L('In My Favorites — click to remove', '내 즐겨찾기 — 누르면 뺍니다') : L('Add to My Favorites', '내 즐겨찾기에 추가')) + '">' + HEART + '</button>' +
       /* 1.2.261: send her card to a user (illu-cardsend.js) */
       (window.__illuSendBtn ? window.__illuSendBtn(k) : '') + '</div></div>' +
@@ -2988,7 +3005,9 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .pnhdF .pnhm h2 .pnnml{white-space:nowrap}
 .pn2 .pnhdF .pnhm h2.pnlong{font-size:17px}.pn2 .pnhdF .pnhm h2.pnlong2{font-size:15.5px}
 .pn2 .pnhdF .pnhm h2{display:block!important}.pn2 .pnhdF .pnhm h2 .pnnml{white-space:normal!important;display:inline}.pn2 .pnhdF .pnhm h2 .pnnml svg{display:inline-block;vertical-align:.35em;margin-left:3px}.pn2 .pnhdF .pnhm h2 .pnnmed{display:inline-flex;vertical-align:middle;margin-left:2px}
-.pn2 .pntags{margin-top:6px;display:flex;gap:6px}
+.pn2 .pntags{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+.pn2 .pntags .pntag.pnbtag{background:var(--surf2,#F4F1F4);color:var(--ink2,#4A3F4A);text-decoration:none}
+.pn2 .pntags a.pntag.pnbtag:hover{color:var(--acc,#6B2A67)}
 .pn2 .pntag{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;background:var(--tagbg,#EFE6F8);color:var(--tagfg,#5B3A8A);font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
 .pn2 .pnfg{margin:10px 0 8px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border:1px solid var(--line,#EFE7EF);border-radius:12px;overflow:hidden}
 .pn2 .pnfc{padding:7px 11px 8px;min-width:0}

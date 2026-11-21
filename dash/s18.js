@@ -413,7 +413,11 @@ var ATLAS_CITY={"United Kingdom|London":[51.5085,-0.1257],"Czech Republic|Prague
       if(p) pts.push({nm, n, x: p[0], y: p[1]});
     }
     /* counts that would sit on top of each other on screen add up into one */
-    const rad = n => 9 + Math.sqrt(n) * 2.3;
+    /* 1.2.274 (user, phone: the bubbles covered the whole globe): sizes follow the map's width, so a phone map
+       gets bubbles in proportion instead of the computer's sizes; never wider than about a fifth of the map (phones only) */
+    const phz = (() => { try{ return matchMedia('(max-width:760px)').matches; }catch(e){ return false; } })();
+    const kz = phz ? Math.max(.4, Math.min(1, cw / 900)) : 1, rmax = phz ? Math.max(26, cw * .11) : 1e9;
+    const rad = n => Math.min(rmax, 6 + 3 * kz + Math.sqrt(n) * 2.3 * kz);
     const grp = [];
     for(const p of pts.sort((a, b) => b.n - a.n)){
       const g = grp.find(g => Math.hypot(g.x - p.x, g.y - p.y) / s < (rad(g.n) + rad(p.n)) * .92);

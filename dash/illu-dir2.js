@@ -816,9 +816,18 @@
     const byN = regs.slice().sort((p, q) => q.n - p.n);
     const az = regs.slice().sort((p, q) => COLL(p.r, q.r));
     const unBtn = un ? reg('Unknown', un).replace('<b>Unknown</b>', '<b>Region not stated</b>') : '';
-    const st = D2.startStyle;
+    /* 1.2.274 (user, phone: "go with P2"): on a phone the start screen is always the region tiles -
+       the biggest region on a wide tile, the rest two to a row with their count and top countries */
+    const phone = (() => { try{ return matchMedia('(max-width:760px)').matches; }catch(e){ return false; } })();
+    const st = phone ? 'p' : D2.startStyle;
     let body = '';
-    if(st === 'a'){
+    if(st === 'p'){
+      body = '<div class="d2pth"><b>Regions</b><span>' + total.toLocaleString() + ' agencies</span></div><div class="d2ptg">' +
+        byN.map((x, k) => '<button type="button" class="d2pt' + (k === 0 ? ' big' : '') + '" data-d2start="' + esc(x.r) + '"><span class="n">' + x.n.toLocaleString() + '</span><span class="r">' + esc(x.r) + '</span>' +
+          '<span class="c">' + x.cs.slice(0, k === 0 ? 3 : 2).map(([c, n]) => esc(c) + ' ' + n).join(' · ') + '</span></button>').join('') +
+        (un ? '<button type="button" class="d2pt un" data-d2start="Unknown"><span class="n">' + un.toLocaleString() + '</span><span class="r">Region not stated</span></button>' : '') +
+        '</div>' + allLink(total);
+    }else if(st === 'a'){
       body = '<h2>Where would you like to look?</h2><p>Pick a region, or jump straight to a country.</p><div class="d2sa">' +
         byN.map((x, k) => '<div class="d2sac' + (k === 0 && byN.length > 3 ? ' big' : '') + '"><button type="button" class="d2sah" data-d2start="' + esc(x.r) + '"><b>' + esc(x.r) + '</b><em>' + x.n.toLocaleString() + '</em></button>' +
           '<small>' + x.cs.length + (x.cs.length === 1 ? ' country' : ' countries') + '</small><div class="d2sach">' +
@@ -856,10 +865,13 @@
           (fav.length ? fav.map(a => agBtn(a)).join('') : '<p class="d2sdn">Press ♡ Favorite on an agency to keep it here.</p>') +
           '<h4>Or start by region</h4><div class="d2sdr">' + byN.map(x => reg(x.r, x.n)).join('') + unBtn + '</div>' + allLink(total) + '</div></div>';
     }else if(st === 'e'){
-      const POS = {'Europe': [50, 34], 'North America': [21, 36], 'Asia': [78, 40], 'South America': [30, 76], 'Africa': [53, 74], 'Oceania': [84, 78]};
+      const POS = {'Europe': [50, 34], 'North America': [21, 36], 'Asia': [78, 40], 'South America': [30, 76], 'Africa': [53, 74], 'Oceania': [84, 78], 'Middle East': [66, 58]};
+      /* 1.2.274 (user, phone: the region bubbles sat on top of each other): on a narrow screen they line up in a
+         wrapping cloud sized to the screen instead of the map positions */
+      const narrow = (main.clientWidth || innerWidth) < 640, kd = narrow ? Math.max(.42, Math.min(1, ((main.clientWidth || innerWidth) - 40) / 560)) : 1;
       const mx = byN.length ? byN[0].n : 1;
-      body = '<h2>Choose a region</h2><p>Each bubble is as big as the number of agencies there.</p><div class="d2se">' +
-        byN.map((x, k) => { const p = POS[x.r] || [12 + k * 14, 88]; const d = Math.round(64 + 150 * Math.sqrt(x.n / mx));
+      body = '<h2>Choose a region</h2><p>Each bubble is as big as the number of agencies there.</p><div class="d2se' + (narrow ? ' d2sew' : '') + '">' +
+        byN.map((x, k) => { const p = POS[x.r] || [12 + k * 14, 88]; const d = Math.round((narrow ? 74 : 64) * (narrow ? 1 : 1) + 150 * kd * Math.sqrt(x.n / mx));
           return '<button type="button" class="d2seb" data-d2start="' + esc(x.r) + '" style="left:' + p[0] + '%;top:' + p[1] + '%;width:' + d + 'px;height:' + d + 'px;--k:' + k + '"><b>' + esc(x.r) + '</b><s>' + x.n + '</s></button>'; }).join('') +
         '</div>' + (un ? '<p class="d2sen"><button type="button" class="d2all" data-d2start="Unknown">Region not stated · ' + un + '</button></p>' : '') + allLink(total);
     }else{
@@ -868,7 +880,7 @@
         '</div>' + allLink(total);
     }
     /* the layout switch sits in the start screen's top-right corner whatever the layout, so it never moves (user, 2026-11-04) */
-    main.innerHTML = styleSwitch().replace('class="d2sty"', 'class="d2sty d2styfix"') + '<div class="d2wrap d2start d2s-' + st + '"><div class="d2st">' + body + '</div></div>';
+    main.innerHTML = (phone ? '' : styleSwitch().replace('class="d2sty"', 'class="d2sty d2styfix"')) + '<div class="d2wrap d2start d2s-' + st + '"><div class="d2st">' + body + '</div></div>';
     /* a model chosen from the start screen: only her card, in the middle of the window */
     if(D2.open && D2.solo && D2.solo.key === D2.open){
       const m = D2.solo; D2.openM = m;
@@ -3249,6 +3261,20 @@ body.d2max #d2bar{margin-top:0}
 .d2sd .d2all{display:block;margin:14px auto 0}
 /* E */
 .d2se{position:relative;height:420px;margin-top:4px}
+.d2pth{display:flex;justify-content:space-between;align-items:baseline;margin:2px 2px 8px}.d2pth b{font-size:15px}.d2pth span{font-size:12.5px;color:var(--dim,#8F8794)}
+.d2ptg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.d2pt{display:flex;flex-direction:column;align-items:flex-start;text-align:left;min-width:0;background:var(--surf,#fff);border:1px solid var(--line,#EFE6EF);border-radius:16px;padding:12px 12px 11px;font:inherit;color:var(--ink,#1B141B);cursor:pointer}
+.d2pt:active{transform:scale(.98)}
+.d2pt .n{font-size:24px;font-weight:700;color:var(--acc,#6B2A67);line-height:1.1}
+.d2pt .r{font-size:13.5px;font-weight:600;margin-top:2px}
+.d2pt .c{font-size:11.5px;color:var(--dim,#8F8794);margin-top:6px;line-height:1.35}
+.d2pt.big{grid-column:1/-1;background:linear-gradient(135deg,#5E2A5A,#8A4A86);color:#fff;border:0}
+.d2pt.big .n{color:#fff;font-size:30px}.d2pt.big .c{color:#EBD8EA}
+.d2s-p .d2st{text-align:left;padding-top:4px}
+.d2se.d2sew{height:auto;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px 4px;margin-top:10px;padding:4px 0 8px}
+.d2se.d2sew .d2seb{position:static;transform:none;left:auto!important;top:auto!important;flex:none}
+.d2se.d2sew .d2seb:hover{transform:scale(1.04)}
+.d2se.d2sew .d2seb b{font-size:12px;line-height:1.15}.d2se.d2sew .d2seb s{font-size:17px}
 .d2seb{position:absolute;transform:translate(-50%,-50%);border:0;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;
   color:#fff;font:inherit;cursor:pointer;background:color-mix(in srgb,var(--acc) calc(100% - var(--k) * 11%),#fff);box-shadow:0 10px 24px -8px color-mix(in srgb,var(--acc) 55%,transparent);transition:transform .15s}
 .d2seb:hover{transform:translate(-50%,-50%) scale(1.06)}.d2seb b{font-size:13px;padding:0 6px}.d2seb s{text-decoration:none;font-size:20px;font-weight:600}

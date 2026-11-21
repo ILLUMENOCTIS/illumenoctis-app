@@ -388,7 +388,7 @@
     const n = ROWS.length, rep = ROWS.some(r => r.mine && r.st === 'replied'), nn = ROWS.filter(newMail).length;
     return '<div class="bemsw" role="tablist" aria-label="' + E(L('Today’s Board', '오늘의 보드')) + '">' +
       '<button type="button" role="tab" data-bemv="vote" aria-selected="' + (ST.v === 'vote') + '">' + L('Team Vote', '팀 투표') + '</button>' +
-      '<button type="button" role="tab" data-bemv="mail" aria-selected="' + (ST.v === 'mail') + '">' + I.mail + L('Booking Emails', '부킹 이메일') + ' <s>' + n + '</s>' + (nn ? '<b class="bemnewn" title="' + E(L(nn + (nn === 1 ? ' agency has' : ' agencies have') + ' a new email', '새 메일이 온 에이전시 ' + nn + '곳')) + '">' + nn + ' ' + L('new', '새 메일') + '</b>' : rep ? '<i class="bemdot" title="' + E(L('A reply came in', '답장이 왔습니다')) + '"></i>' : '') + '</button></div>';
+      '<button type="button" role="tab" data-bemv="mail" aria-selected="' + (ST.v === 'mail') + '">' + I.mail + '<span class="bemwt">' + L('<span class="bemwb">Booking </span>Emails', '부킹 이메일') + '</span>' + ' <s>' + n + '</s>' + (nn ? '<b class="bemnewn" title="' + E(L(nn + (nn === 1 ? ' agency has' : ' agencies have') + ' a new email', '새 메일이 온 에이전시 ' + nn + '곳')) + '">' + nn + ' ' + L('new', '새 메일') + '</b>' : rep ? '<i class="bemdot" title="' + E(L('A reply came in', '답장이 왔습니다')) + '"></i>' : '') + '</button></div>';
   }
   /* Today's main column: the tabs, then Team Vote as it was or the Booking Emails board */
   function wrap(){

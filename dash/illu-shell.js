@@ -365,6 +365,10 @@
     const h = new Date().getHours();
     return h < 12 ? L('Good morning', '좋은 아침입니다') : h < 18 ? L('Good afternoon', '좋은 오후입니다') : L('Good evening', '좋은 저녁입니다');
   }
+  function shortDate(){
+    const d = new Date();
+    try{ return isKO() ? d.toLocaleDateString('ko-KR', {month: 'long', day: 'numeric', weekday: 'short'}) : d.toLocaleDateString('en-GB', {weekday: 'short', day: 'numeric', month: 'short'}).replace(/,/g, '').toUpperCase(); }catch(e){ return dateLine(); }
+  }
   function dateLine(){
     try{ return new Date().toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {weekday: 'long', day: 'numeric', month: 'long'}); }catch(e){ return ''; }
   }
@@ -446,6 +450,9 @@
     const h =
       '<div class="shlay' + (ckOn ? '' : ' noclk') + '">' +
       '<div class="shclk' + (W.clk ? '' : ' noclk') + (W.map ? '' : ' nomap') + (ckOn ? '' : ' none') + '" id="shclk"></div>' +
+      /* 1.2.274 (user, phone: "I like D"): on a phone one compact line - short date, greeting, and the Processing count as a button */
+      '<div class="shhdph"><div class="shhdpt"><div class="shkick2">' + H(shortDate()) + '</div><b class="shgr2">' + H(greet() + (nm ? ', ' + nm + (isKO() ? '님' : '') : '')) + '</b></div>' +
+        '<button type="button" class="shpill" data-shgo="bk"><b>' + all + '</b> ' + H(L('in Processing', '진행 중')) + ' <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg></button></div>' +
       '<div class="shhead"><div><div class="shkick">' + H(dateLine()) + '</div><h2>' + H(greet() + (nm ? ', ' + nm + (isKO() ? '님' : '') : '')) + ' <span class="shsub2">— ' + H(sub) + '</span></h2></div>' +
         /* 1.2.264 (user: have the empty space beside the greeting say "MDI MODEL MANAGEMENT BOOKING") */
         '<div class="shbrand" aria-label="MDI Model Management Booking">MDI MODEL MANAGEMENT BOOKING</div></div>' +
