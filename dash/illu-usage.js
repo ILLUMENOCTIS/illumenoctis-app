@@ -98,7 +98,9 @@ function placeChip() {
   /* 1.2.270: in the left menu, just above the search button, when the menu is on screen; otherwise (phone) the small pill at the bottom */
   const foot = document.querySelector('#shrail .shfoot');
   const railOn = foot && foot.offsetParent !== null;
-  if (railOn) { if (chip.parentElement !== foot) foot.insertBefore(chip, foot.firstChild); chip.classList.remove('float'); chip.classList.add('rail'); }
+  if (railOn) { if (chip.parentElement !== foot) foot.insertBefore(chip, foot.firstChild); chip.classList.remove('float'); chip.classList.add('rail');
+    /* 1.2.271 (user, 21 Nov 2026: "I also don't see the Supabase usage"): if it does not show in the menu, it goes back to the corner */
+    const r = chip.getBoundingClientRect(); if (!r.width || !r.height || r.bottom > innerHeight + 2 || r.top < 0) { document.body.appendChild(chip); chip.classList.remove('rail'); chip.classList.add('float'); } }
   else { if (chip.parentElement !== document.body) document.body.appendChild(chip); chip.classList.remove('rail'); chip.classList.add('float'); }
 }
 function levels() {

@@ -72,9 +72,15 @@
     const R = REC(); if(!R) return;
     const keys = R.keys(); LASTV = R.ver();
     const seen = new Set();
-    for(const k of keys){
-      const i = R.of(k); if(!i || cancelled(k)) continue;
-      for(const [host, small] of targets(k)){ place(host, i, small, k); seen.add(host); }
+    /* 1.2.271 (the speed report from Paul's computer: this pass was the slowest job, up to 0.24 s): the cards on the page
+       are read once and matched to the email record, instead of searching the whole page once for every model on record */
+    const byKey = new Map();
+    for(const k of keys){ byKey.set(k, k); try{ const n = normKey(k); if(n && !byKey.has(n)) byKey.set(n, k); }catch(e){} }
+    const okK = new Map();
+    for(const u of document.querySelectorAll('article.uc[data-uck] > .ucimg')){
+      const k = byKey.get(u.parentElement.dataset.uck); if(!k) continue;
+      let ok = okK.get(k); if(ok === undefined){ const i = R.of(k); ok = i && !cancelled(k) ? i : null; okK.set(k, ok); }
+      if(ok){ place(u, ok, false, k); seen.add(u); }
     }
     for(const [host, small, k] of bookTargets()){ const i = R.of(k); if(i && !cancelled(k)){ place(host, i, small, k); seen.add(host); } }
     /* a card that no longer has an email on record (or was redrawn for another model) loses its marker */

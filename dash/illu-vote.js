@@ -1753,6 +1753,7 @@
     if(!mine && L && Date.now() - lat < 25 * 60e3) return;
     if(!PUBLOADED){ loadPub().then(() => { if(PUBLOADED) publishBoard(); }); return; }
     if(!mine || Date.now() - lat > 10 * 60e3){ LEASE = {by: me(), at: nowIso()}; save('vpubl/board', LEASE); }
+    try{ window.__illuVotePend && window.__illuVotePend(); }catch(e){}
     const c = {};
     for(const st of allStates()){
       if(!st.open) continue;
@@ -2290,7 +2291,7 @@
     const chip = (v, lab, n) => '<button type="button" class="ivchip' + ((VS.cwho || 'all') === v ? ' on' : '') + '" data-ivset="cwho=' + H(v) + '">' + lab + (n != null ? ' <span>' + n + '</span>' : '') + '</button>';
     const head = '<div class="ivhead"><span class="ivbig">' + allStates().filter(s => s.open).length + '</span><span class="ivkick">' + L('Faces up for the team vote', '팀 투표에 오른 얼굴') + '</span><span class="ivdot"></span>' +
       chip('all', L('Everyone', '모두')) + ppl.map(p => chip(p, capDisc(p) + H(pname(p)), all.filter(s => s.o.by === p).length)).join('') +
-      '<span class="ivsp"></span>' + (window.__illuSendSelBtn ? window.__illuSendSelBtn() : '') + '<button type="button" class="ivbtn ivshare" data-ivshare>' + SHAREI + L('Share vote link', '투표 링크 보내기') + '</button>' + (tab === 'to' ? seg('corder', [['old', L('Oldest first', '오래된 순')], ['new', L('Newest first', '최신 순')]]) : '') + '</div>' +
+      '<span class="ivsp"></span>' + remindBtn() + (tab === 'to' ? seg('corder', [['old', L('Oldest first', '오래된 순')], ['new', L('Newest first', '최신 순')]]) : '') + '</div>' +
       subTabs('vsub', tab, to.length, vd.length);
     const cw = st => '<div class="ivcw">' + mcard(st.k) + (tab === 'to' ? '<div class="ivcap">' + H(L('Sent by ', '보낸 사람: ') + pname(st.o.by) + ' · ' + when(st.o.at)) + '</div>' + stPill(st.k) : votedCap(st)) + offBox(st.k, st) + '</div>';
     const list = tab === 'to' ? to : vd;
@@ -2397,7 +2398,7 @@
        one row - the two tabs (they carry the counts), an ⓘ that opens the team note, Share vote link, Team Vote */
     return '<section class="ivtoday' + (all.length ? ' glow' : '') + '"><div class="ivrow ivth ivth2">' + subTabs('tsub', tab, all.length, vd.length, {appr: apWait.length, cxl: cxl.length}) + '<span class="ivsp"></span>' +
       '<details class="ivinfo"><summary title="' + H(L('How the Team Vote works', '팀 투표 방법')) + '" aria-label="' + H(L('How the Team Vote works', '팀 투표 방법')) + '">i</summary><p class="ivmut sm ivtnote">' + L('Team: ', '팀: ') + H(people().map(pname).join(', ')) + ' · ' + L('the majority decides; your vote stays private until everyone has voted.', '다수결 · 모두 투표할 때까지 내 선택은 나만 봅니다.') + (mineDone ? ' · ' + L('<b>' + mineDone + '</b> you voted on are waiting for the others.', '내가 투표한 <b>' + mineDone + '</b>건은 다른 사람을 기다립니다.') : '') + '</p></details>' +
-      (window.__illuSendSelBtn ? window.__illuSendSelBtn() : '') + '<button type="button" class="ivbtn ivshare ivtshare" data-ivshare>' + SHAREI + L('Share vote link', '투표 링크 보내기') + '</button>' +
+      remindBtn() +
       (lateN ? '' : '<button type="button" class="ivgo" data-ivgo="team">' + L('Team Vote', '팀 투표') + ' <span aria-hidden="true">→</span></button>') + '</div>' +
       (lateN ? '<div class="ivnowb"><span class="ivnbi">' + CLKI + '</span><div class="ivnbt"><b>' + L('Vote Now — ' + lateN + (lateN === 1 ? ' card needs' : ' cards need') + ' you', '지금 투표 — ' + lateN + '장이 내 투표를 기다립니다') + '</b><span>' + L('They have waited 3 hours or more. The team can’t decide without you.', '3시간 이상 기다렸습니다. 내 투표가 있어야 팀이 정할 수 있습니다.') + '</span></div><div class="ivnbb"><button type="button" data-ivset="tf=now">' + L('Show them', '보기') + '</button><button type="button" data-ivgo="team">' + L('Go to Team Vote', '팀 투표로 가기') + ' <span aria-hidden="true">→</span></button></div></div>' : '') +
       (tab === 'done' ? doneH : tab === 'appr' ? apprH : tab === 'cxl' ? cxlH : (all.length ? '<div class="ivtbar"><div class="ivtfs">' + chip('all', L('All', '전체')) + chip('now', L('Vote Now', '지금 투표')) + chip('today', L('Today', '오늘')) + chip('week', L('This week', '이번 주')) + chip('older', L('Older', '이전')) + '</div><span class="ivsp"></span>' +
@@ -2467,6 +2468,82 @@
       '<p class="ivshd sm">' + (SHNONE ? L('Tick at least one person. ', '한 명 이상 선택하세요. ') : L(SHSEL.size ? 'Only the people ticked are listed on the sign-in. ' : 'Everyone on the team is listed on the sign-in. ', SHSEL.size ? '선택한 사람만 로그인 목록에 나옵니다. ' : '팀 전원이 로그인 목록에 나옵니다. ')) + L('Paste it into KakaoTalk, WhatsApp or a text message.', '카카오톡, 왓츠앱, 문자에 붙여 넣으세요.') + '</p>' +
       '<textarea aria-hidden="true" tabindex="-1" class="ivsht"></textarea></div>';
   }
+  /* ---------- 1.2.271 Remind (user, 21 Nov 2026: "instead of sending a link to the USERS, I can send a notification, that
+     directs them to the voting board for them to see the model cards they haven't voted for" ... "let's do both and get rid
+     'send cards' and 'Share vote link'"):
+     - Remind (Team Vote and Today): a notification only to the people who still owe a vote, saying how many cards wait for
+       them; it opens Team Vote on "Waiting for my vote". Phones get a push alert, computers a note in the program.
+     - Every morning at 7:00 (Korea) the existing morning alert adds "N models are waiting for your vote" for each person
+       who has any (vpend/now, kept by the computer that publishes the board). ---------- */
+  const BELLI = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>';
+  function pendingMap(){
+    const m = {};
+    for(const st of allStates()){ if(!st.open) continue; for(const p of st.voters) if(!voteOf(p, st.k, st.round)) m[p] = (m[p] || 0) + 1; }
+    return m;
+  }
+  function remindBtn(){
+    const m = pendingMap(); delete m[me()];
+    const n = Object.keys(m).length;
+    return '<button type="button" class="ivbtn ivremind" data-ivremind' + (n ? '' : ' disabled') + ' title="' + H(n ? L('Send a reminder to the ' + n + (n === 1 ? ' person who has' : ' people who have') + ' not voted', '아직 투표하지 않은 ' + n + '명에게 알림 보내기') : L('Everyone has voted', '모두 투표했습니다')) + '">' + BELLI + L('Remind', '알림 보내기') + (n ? ' <b>' + n + '</b>' : '') + '</button>';
+  }
+  const REMK = 'illu.vrem.sent';
+  function remindDlg(){
+    const m = pendingMap(); delete m[me()];
+    const ids = Object.keys(m).sort((a, b) => m[b] - m[a]);
+    let dl = document.getElementById('ivremdlg'); if(dl) dl.remove();
+    dl = document.createElement('div'); dl.id = 'ivremdlg'; dl.setAttribute('role', 'dialog'); dl.setAttribute('aria-modal', 'true'); dl.setAttribute('aria-label', L('Remind to vote', '투표 알림'));
+    let last = 0; try{ last = +(localStorage.getItem(REMK) || 0); }catch(e){}
+    const wait = Math.ceil((10 * 60e3 - (Date.now() - last)) / 60e3);
+    dl.innerHTML = '<div class="ivrbox"><h3>' + BELLI + L('Remind to vote', '투표 알림 보내기') + '</h3>' +
+      (ids.length ? '<p class="ivrsub">' + L('Only the people who still owe a vote get it. It opens their Team Vote on the cards waiting for them.', '아직 투표하지 않은 사람에게만 갑니다. 열면 그 사람의 팀 투표 · 내 투표 대기 화면이 열립니다.') + '</p><ul class="ivrlist">' +
+        ids.map(p => '<li>' + disc(p, 'xs') + '<span>' + H(pname(p)) + '</span><b>' + m[p] + ' ' + L(m[p] === 1 ? 'card' : 'cards', '장') + '</b></li>').join('') + '</ul>' +
+        '<p class="ivrprev">“' + H(L(pname(me()) + ' is waiting for your vote on N models', pname(me()) + '님이 모델 N명에 대한 투표를 기다립니다')) + '”</p>'
+        : '<p class="ivrsub">' + L('Everyone has voted on every open card.', '열린 카드에 모두 투표했습니다.') + '</p>') +
+      '<div class="ivrbtns"><button type="button" class="ivbtn" data-ivrx>' + L('Cancel', '취소') + '</button>' +
+      (ids.length ? '<button type="button" class="ivbtn pri" data-ivrgo' + (last && wait > 0 ? ' disabled title="' + H(L('A reminder went out ' + Math.round((Date.now() - last) / 60e3) + ' min ago - again in ' + wait + ' min', Math.round((Date.now() - last) / 60e3) + '분 전에 보냈습니다 - ' + wait + '분 뒤에 다시')) + '"' : '') + '>' + L('Send reminder', '알림 보내기') + '</button>' : '') + '</div></div>';
+    document.body.appendChild(dl);
+    const go = dl.querySelector('[data-ivrgo]'); (go && !go.disabled ? go : dl.querySelector('[data-ivrx]')).focus();
+    dl.addEventListener('click', async e => {
+      if(e.target === dl || e.target.closest('[data-ivrx]')){ dl.remove(); return; }
+      const g = e.target.closest('[data-ivrgo]'); if(!g || g.disabled) return;
+      g.disabled = true; g.textContent = L('Sending…', '보내는 중…');
+      const to = {}; for(const p of ids) to[p] = m[p];
+      try{
+        await save('vrem/last', {by: me(), at: nowIso(), to, id: Math.random().toString(36).slice(2, 10)});
+        try{ localStorage.setItem(REMK, String(Date.now())); }catch(er){}
+        let sent = null;
+        try{ const r = await window.__illuSb.functions.invoke('illu-push', {body: {kind: 'remind'}}); sent = r && r.data; }catch(er){}
+        dl.remove();
+        say(L('Reminder sent to ' + ids.map(pname).join(', ') + (sent && sent.sent ? ' · ' + sent.sent + ' phone alert' + (sent.sent === 1 ? '' : 's') : ''), ids.map(pname).join(', ') + '에게 알림을 보냈습니다'));
+      }catch(er){ g.disabled = false; g.textContent = L('Send reminder', '알림 보내기'); }
+    });
+    dl.addEventListener('keydown', e => { if(e.key === 'Escape') dl.remove(); });
+  }
+  document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-ivremind]'); if(b){ e.preventDefault(); e.stopPropagation(); if(!signedIn()) return; remindDlg(); } }, true);
+  /* a reminder for me: a note in the program (computers) - the phone alert comes from the push */
+  function openMyVotes(){ VS.vsub = 'to'; VS.tsub = 'to'; saveVS(); try{ window.__illuGo && window.__illuGo('team'); }catch(e){} changed(); }
+  const SEENK = 'illu.vrem.seen';
+  function remindSeen(v){
+    if(!v || !v.to || !v.at || v.by === me()) return;
+    const n = v.to[me()]; if(!n) return;
+    let seen = ''; try{ seen = localStorage.getItem(SEENK) || ''; }catch(e){}
+    if(seen && seen >= v.at) return;
+    try{ localStorage.setItem(SEENK, v.at); }catch(e){}
+    if(Date.now() - Date.parse(v.at) > 12 * 3600e3) return;          // an old one, from before this computer was on
+    const still = pendingMap()[me()] || 0;
+    say(L(pname(v.by) + ' is waiting for your vote on ' + (still || n) + ((still || n) === 1 ? ' model' : ' models'), pname(v.by) + '님이 모델 ' + (still || n) + '명에 대한 투표를 기다립니다'), openMyVotes, null, L('Vote now', '지금 투표'));
+  }
+  setTimeout(() => { const d = db(); if(d) d.doc('vrem/last').onSnapshot(x => { try{ remindSeen(x && x.exists ? x.data() : null); }catch(e){} }, () => {}); }, 4000);
+  /* a notification tap opens …#team: straight to the cards waiting for me */
+  function hashGo(){ if(location.hash === '#team'){ try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){} setTimeout(openMyVotes, 600); } }
+  addEventListener('hashchange', hashGo); setTimeout(hashGo, 1500);
+  /* for the 7:00 alert: who owes how many votes (saved only when it changes, by the computer that publishes the board) */
+  let PENDSAVED = null;
+  window.__illuVotePend = () => {
+    const m = pendingMap(), sg = stab(m);
+    if(PENDSAVED === null){ PENDSAVED = ''; db() && db().doc('vpend/now').get().then(x => { const v = x && x.exists ? x.data() : null; PENDSAVED = v ? stab(v.e || {}) : ''; window.__illuVotePend(); }).catch(() => {}); return; }
+    if(sg === PENDSAVED) return; PENDSAVED = sg; save('vpend/now', {e: m, at: nowIso()});
+  };
   document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-ivshare]'); if(b){ e.preventDefault(); e.stopPropagation(); shareDraw(); } }, true);
   window.__illuShareVote = shareDraw;
   const css = document.createElement('style');
@@ -2690,6 +2767,18 @@ p.pnag{cursor:default}
 .ivdisc{width:22px;height:22px;border-radius:50%;flex:none;display:inline-grid;place-items:center;font-style:normal;font-size:10px;font-weight:700;background:var(--idbg);color:var(--idfg)}
 .ivdisc.xs{width:18px;height:18px;font-size:9px;vertical-align:-4px}.ivdisc.lg{width:38px;height:38px;font-size:15px}
 .ivround{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surf);margin-bottom:8px}
+.ivremind{display:inline-flex;align-items:center;gap:7px}.ivremind svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linejoin:round;stroke-linecap:round}
+.ivremind b{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:#E8590C;color:#fff;font-size:11.5px;display:inline-grid;place-items:center}
+.ivremind:disabled{opacity:.5;cursor:default}
+#ivremdlg{position:fixed;inset:0;z-index:9700;background:rgba(24,14,28,.38);display:grid;place-items:center;padding:16px}
+#ivremdlg .ivrbox{background:var(--surf,#fff);color:var(--ink,#211c26);border-radius:16px;width:min(420px,100%);padding:20px 22px 16px;box-shadow:0 20px 60px rgba(0,0,0,.28)}
+#ivremdlg h3{display:flex;align-items:center;gap:9px;margin:0 0 6px;font-size:17px;color:var(--acc,#5A2C57)}#ivremdlg h3 svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linejoin:round;stroke-linecap:round}
+#ivremdlg .ivrsub{margin:0 0 12px;color:var(--mut,#6f6875);font-size:13px;line-height:1.45}
+#ivremdlg .ivrlist{list-style:none;margin:0 0 12px;padding:0;border:1px solid var(--line,#eee);border-radius:12px;max-height:240px;overflow:auto}
+#ivremdlg .ivrlist li{display:flex;align-items:center;gap:10px;padding:9px 12px;font-size:14px}#ivremdlg .ivrlist li+li{border-top:1px solid var(--line,#eee)}
+#ivremdlg .ivrlist li span{flex:1;font-weight:600}#ivremdlg .ivrlist li b{font-weight:600;color:#C2410C;font-size:13px}
+#ivremdlg .ivrprev{margin:0 0 14px;padding:9px 12px;border-radius:10px;background:var(--wash,#f6f1f6);font-size:12.5px;color:var(--mut,#6f6875)}
+#ivremdlg .ivrbtns{display:flex;justify-content:flex-end;gap:8px}#ivremdlg .ivbtn.pri{background:var(--acc,#5A2C57);border-color:var(--acc,#5A2C57);color:#fff}#ivremdlg .ivbtn.pri:disabled{opacity:.55}
 .ivbtn{min-height:34px;padding:0 14px;border-radius:9px;border:1px solid var(--line);background:var(--surf);font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
 .ivbtn.pri{background:var(--acc);border-color:var(--acc);color:#fff}.ivbtn.wide{width:100%}
 .ivbtn:hover{border-color:var(--acc)}

@@ -49,13 +49,16 @@
   const keepSel = () => { try{ localStorage.setItem('illu.csend.list', JSON.stringify(SEL.slice(0, 60))); }catch(e){} };
   const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
   let HINT = 0;
-  window.__illuSendBtn = k => '<button type="button" class="pnfav pnsend" data-cssend="' + E(k) + '" title="' + E(L('Send only her card to a user', '이 카드만 사용자에게 보내기')) + '" aria-label="' + E(L('Send only her card to a user', '이 카드만 사용자에게 보내기')) + '">' + SENDI + '</button>';
+  /* 1.2.271 (user, 21 Nov 2026: "get rid 'send cards' and 'Share vote link'" - a reminder notification replaces them): the
+     buttons and the send list are gone; links already sent (#cards=) still open */
+  const OFF = true;
+  window.__illuSendBtn = k => OFF ? '' : '<button type="button" class="pnfav pnsend" data-cssend="' + E(k) + '" title="' + E(L('Send only her card to a user', '이 카드만 사용자에게 보내기')) + '" aria-label="' + E(L('Send only her card to a user', '이 카드만 사용자에게 보내기')) + '">' + SENDI + '</button>';
   const rowInner = k => { const on = SEL.includes(k), n = SEL.length;
     return '<button type="button" class="cspick' + (on ? ' on' : '') + '" data-cspick="' + E(k) + '" aria-pressed="' + on + '"><span class="csbox">' + CHECK + '</span>' + E(on ? L('On the send list', '보낼 목록에 있음') : L('Add to send list', '보낼 목록에 추가')) + '</button>' +
       (n ? '<button type="button" class="cslist" data-csgo>' + SENDI + E(L('Send ' + n + (n === 1 ? ' card' : ' cards') + '…', n + '장 보내기…')) + '</button>' : ''); };
-  window.__illuSendRow = k => '<div class="pnsendrow" data-csrow="' + E(k) + '">' + rowInner(k) + '</div>';
+  window.__illuSendRow = k => OFF ? '' : '<div class="pnsendrow" data-csrow="' + E(k) + '">' + rowInner(k) + '</div>';
   const selBtnInner = () => SENDI + E(L('Send cards', '카드 보내기')) + (SEL.length ? ' <s class="csn">' + SEL.length + '</s>' : '');
-  window.__illuSendSelBtn = () => '<button type="button" class="ivbtn ivshare csselb' + (SEL.length ? ' on' : '') + '" data-csmode title="' + E(L('The cards on your send list (add a card from its side panel)', '보낼 목록의 카드 (카드 옆 패널에서 추가)')) + '">' + selBtnInner() + '</button>';
+  window.__illuSendSelBtn = () => OFF ? '' : '<button type="button" class="ivbtn ivshare csselb' + (SEL.length ? ' on' : '') + '" data-csmode title="' + E(L('The cards on your send list (add a card from its side panel)', '보낼 목록의 카드 (카드 옆 패널에서 추가)')) + '">' + selBtnInner() + '</button>';
   function sync(){
     document.querySelectorAll('[data-csrow]').forEach(r => { r.innerHTML = rowInner(r.dataset.csrow); });
     document.querySelectorAll('[data-csmode]').forEach(b => { b.innerHTML = selBtnInner(); b.classList.toggle('on', !!SEL.length); });
@@ -64,6 +67,7 @@
   function toggle(k){ const i = SEL.indexOf(k); if(i >= 0) SEL.splice(i, 1); else SEL.push(k); keepSel(); sync(); }
   function tray(){
     let t = document.getElementById('cstray');
+    if(OFF){ if(t) t.remove(); return; }
     const hint = Date.now() < HINT;
     if(!SEL.length && !hint){ if(t) t.remove(); return; }
     if(!t){ t = document.createElement('div'); t.id = 'cstray'; t.setAttribute('role', 'region'); t.setAttribute('aria-label', L('Send list', '보낼 목록')); document.body.appendChild(t); }
