@@ -710,7 +710,7 @@
     const wt = c && c.wt !== '' && c.wt != null && !isNaN(parseFloat(c.wt)) ? parseFloat(c.wt) : null;
     if(wt != null) ms.push(['wt', L('Weight', '몸무게'), 'kg']);
     return '<div class="pnid"><h2>' + H(a.nm || i.nm || '') + '</h2>' +
-      (a.ag ? (a.agRef ? '<button type="button" class="pnag" data-pnag="' + H(a.agRef) + '" title="' + H(L('Open this agency in the Directory', '디렉터리에서 이 에이전시 열기')) + '">' + H(a.ag) + ' ›</button>' : '<p class="pnag">' + H(a.ag) + '</p>') : '') +
+      (a.ag ? (a.agRef ? '<button type="button" class="pnag" data-pnag="' + H(a.agRef) + '" title="' + H(ag + ' · ' + L('Open this agency in the Directory', '디렉터리에서 이 에이전시 열기')) + '">' + H(a.ag) + ' ›</button>' : '<p class="pnag">' + H(a.ag) + '</p>') : '') +
       (place ? '<p class="pnpl">' + H(place) + '</p>' : '') +
       (chips.length ? '<div class="pnchips">' + chips.map(t => '<span class="pnchip' + (nf(t) ? ' nf' : '') + '">' + H(t) + '</span>').join('') + '</div>' : '') + '</div>' +
       '<div class="pnms' + (ms.length > 6 ? ' seven' : '') + '">' + ms.map(([key, l, u]) => { const v = key === 'wt' ? wt : num(F[key]); return '<div' + (v == null ? ' class="no"' : '') + '><small>' + H(l) + '</small><b>' + (v == null ? '–' : H(v) + (u ? '<em>' + u + '</em>' : '')) + '</b></div>'; }).join('') + '</div>' +
@@ -1033,28 +1033,41 @@
     /* 1.2.232 (user, 17 Nov 2026: "this is supposed to be to the agency main page link. not a direct link to the model on the
        website. that's what the name is for."): the agency name opens the agency's main page; her name opens her page */
     const agSite = (() => { let d = ''; try{ d = agDomOf(a, ag, href); }catch(e){} if(d) return 'https://' + d; try{ return href ? new URL(href).origin : ''; }catch(e){ return ''; } })();
-    let agH = ag ? (agSite ? '<a class="pnagl" href="' + H(agSite) + '" target="_blank" rel="noopener" title="' + H(L('The agency’s website', '에이전시 웹사이트')) + '">' + H(ag) + ' ↗</a>'
-      : (a.agRef ? '<button type="button" class="pnagl" data-pnag="' + H(a.agRef) + '" title="' + H(L('Open this agency in the Directory', '디렉터리에서 이 에이전시 열기')) + '">' + H(ag) + ' ›</button>' : '<span class="pnagl">' + H(ag) + '</span>')) : '';
+    let agH = ag ? (agSite ? '<a class="pnagl" href="' + H(agSite) + '" target="_blank" rel="noopener" title="' + H(ag + ' · ' + L('The agency’s website', '에이전시 웹사이트')) + '">' + H(ag) + ' ↗</a>'
+      : (a.agRef ? '<button type="button" class="pnagl" data-pnag="' + H(a.agRef) + '" title="' + H(L('Open this agency in the Directory', '디렉터리에서 이 에이전시 열기')) + '">' + H(ag) + ' ›</button>' : '<span class="pnagl" title="' + H(ag) + '">' + H(ag) + '</span>')) : '';
     /* 1.2.211 / 1.2.231: her mother agency is her primary agency - named first; its name (and her name) open her page there,
        or its site when she isn't found on its boards; the agency she was found at follows as "also at", with her page there */
     const MO = motherInfo(k, ag);
-    let mom = !!MO, also = '', pgM = '';
+    let mom = !!MO, also = '', pgM = '', alsoV = '';
     if(MO){
       pgM = MO.page;
       /* 1.2.232: the mother agency's name opens its main page; her name opens her page there (else the page she was found on) */
       agH = MO.site ? '<a class="pnagl" href="' + H(MO.site) + '" target="_blank" rel="noopener" title="' + H(L('Her mother agency’s website', '마더 에이전시 웹사이트')) + '">' + H(MO.ag) + ' ↗</a>' : '<span class="pnagl">' + H(MO.ag) + '</span>';
       if(MO.foundAg){ let fs = ''; try{ fs = MO.foundPage ? new URL(MO.foundPage).origin : ''; }catch(e){} try{ const h = MO.foundPage ? new URL(MO.foundPage).hostname.replace(/^www\./, '').toLowerCase() : ''; const hit = h && AG.find(x => String(x.domain || '').replace(/^www\./, '').toLowerCase() === h); if(hit) fs = 'https://' + hit.domain; }catch(e){}
-        also = '<p class="pnalso">' + L('also at ', '함께 소속: ') + (fs ? '<a href="' + H(fs) + '" target="_blank" rel="noopener">' + H(MO.foundAg) + ' ↗</a>' : H(MO.foundAg)) + '</p>'; }
+        also = '<p class="pnalso">' + L('also at ', '함께 소속: ') + (fs ? '<a href="' + H(fs) + '" target="_blank" rel="noopener">' + H(MO.foundAg) + ' ↗</a>' : H(MO.foundAg)) + '</p>';
+        alsoV = fs ? '<a class="pnagl" href="' + H(fs) + '" target="_blank" rel="noopener">' + H(MO.foundAg) + ' ↗</a>' : '<span>' + H(MO.foundAg) + '</span>'; }
     }
     /* 1.2.168 (user, 13 Nov 2026): her name opens her page on the agency's site */
     const pg = pgM || href || (/^https?:\/\//i.test(k || '') && !/instagram\.com/i.test(k) ? k : '');
     const nmTxt = H(a.nm || i.nm || '');
-    return '<div class="pnhd"><div class="pnth">' + pic + '</div><div class="pnhm"><h2>' + (pg ? '<a class="pnnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(L('Open her page on the agency’s site', '에이전시 사이트에서 모델 페이지 열기')) + '">' + nmTxt + '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg></a>' : nmTxt) + (window.__illuNameEditHtml && sk && /^https?:/i.test(sk) ? window.__illuNameEditHtml(sk, a.nm || i.nm || '') : '') /* 1.2.247: ✎ edit her name (illu-mname.js) */ + '</h2>' +
-      '<div class="pnagr">' + agH + (MO ? agFavBtn(Object.assign({}, a, MO.dom ? {agRef: MO.dom} : {}), MO.ag, '') : agFavBtn(a, ag, href)) + (mom ? '<span class="pnmom">' + L('Mother', '마더') + '</span>' : '') + '</div>' + also +
-      (meta ? '<p class="pnmeta">' + meta + '</p>' : '') + momBox(k, a) + '</div>' +
+    /* 1.2.272 (user, 22 Nov 2026 - approved demo "F condensed"): her name (with ↗ her page and ✎), the board as a small tag,
+       then her details in a small grid - Agency (or Mother agency) · Mother agency (or Also at) · Based in · Gender. The empty
+       photo box is gone (her large photo is right beside the panel). */
+    const favH = MO ? agFavBtn(Object.assign({}, a, MO.dom ? {agRef: MO.dom} : {}), MO.ag, '') : agFavBtn(a, ag, href);
+    const mb = momBox(k, a), editing = MOMED.has(k);
+    const momBtn = editing ? '' : mb.replace(/>(Set mother agency|마더 에이전시 지정)</, '>+ ' + L('Set', '지정') + '<').replace(/>(Change mother agency|마더 에이전시 변경)</, '>' + L('Change', '변경') + '<');
+    const tierL = TL[tier] || (tier && tier !== 'unlabelled' ? tier : '');
+    const cell = (lab, v) => '<div class="pnfc"><small>' + lab + '</small><div class="pnfv">' + (v || '<span class="pnfn">–</span>') + '</div></div>';
+    const cells = (MO
+      ? cell(L('Mother agency', '마더 에이전시'), agH + favH) + cell(MO.foundAg ? L('Also at', '함께 소속') : L('Mother agency', '마더 에이전시'), (MO.foundAg ? alsoV + ' ' : '') + momBtn)
+      : cell(L('Agency', '에이전시'), agH + favH) + cell(L('Mother agency', '마더 에이전시'), momBtn)) +
+      cell(L('Based in', '지역'), H(place)) + cell(L('Gender', '성별'), sexH);
+    return '<div class="pnhd pnhdF"><div class="pnhm"><h2>' + (pg ? '<a class="pnnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(L('Open her page on the agency’s site', '에이전시 사이트에서 모델 페이지 열기')) + '">' + nmTxt + '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg></a>' : nmTxt) + (window.__illuNameEditHtml && sk && /^https?:/i.test(sk) ? window.__illuNameEditHtml(sk, a.nm || i.nm || '') : '') + '</h2>' +
+      (tierL ? '<div class="pntags"><span class="pntag">' + H(tierL) + '</span></div>' : '') + '</div>' +
       '<div class="pnhbtns"><button type="button" class="pnfav' + (fav ? ' on' : '') + '" data-pnfav aria-pressed="' + fav + '" title="' + H(fav ? L('In My Favorites — click to remove', '내 즐겨찾기 — 누르면 뺍니다') : L('Add to My Favorites', '내 즐겨찾기에 추가')) + '">' + HEART + '</button>' +
       /* 1.2.261: send her card to a user (illu-cardsend.js) */
       (window.__illuSendBtn ? window.__illuSendBtn(k) : '') + '</div></div>' +
+      '<div class="pnfg">' + cells + '</div>' + (editing ? '<div class="pnmomwrap">' + mb + '</div>' : '') +
       /* 1.2.262 (user: "I would actually prefer it to be somewhere on the sidepanel of the card"): choose her for sending */
       (window.__illuSendRow ? window.__illuSendRow(k) : '') +
       (a.readNote || '');
@@ -1354,7 +1367,8 @@
     const st = stateOf(k), fav = myFav().has(k);
     const facts = factsOf(k), aa = Object.assign({facts}, a);
     return '<div class="mx pn pn2" data-mxk="' + H(k) + '" data-mxab="' + H(JSON.stringify({nm: a.nm || '', ag: a.ag || '', city: a.city || '', country: a.country || ''})) + '">' +
-      pnHead(k, aa, c, fav) + pnMeas(k, aa, c) + pnStatus(k, aa, c, st, can, nm) + pnGuar(k, c, can) + pnAgency(k, aa) + pnTabs(k, c, nm, can)   /* 1.2.191 (user, 14 Nov 2026): no "Agency said" on the panel */ + pnAdmin(k, aa, c) + '</div>';
+      /* 1.2.272 (user, 22 Nov 2026: "let's have the team vote below the notes") */
+      pnHead(k, aa, c, fav) + pnMeas(k, aa, c) + pnGuar(k, c, can) + pnAgency(k, aa) + pnTabs(k, c, nm, can) + pnStatus(k, aa, c, st, can, nm)   /* 1.2.191 (user, 14 Nov 2026): no "Agency said" on the panel */ + pnAdmin(k, aa, c) + '</div>';
   }
   document.addEventListener('click', e => {
     const t = e.target.closest && e.target.closest('.mx [data-ptab],.mx [data-pedit]'); if(!t) return;
@@ -2969,6 +2983,23 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .pn2 .mxpf textarea{min-width:0;border:1px solid var(--line);border-radius:9px;padding:7px 9px;font:inherit;font-size:13px;background:var(--surf,#fff);color:var(--ink);resize:vertical}
 .mx.pn2{display:flex;flex-direction:column;gap:0}
 .pn2 .pnhd{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:12px;align-items:start;padding:2px 0 12px}
+.pn2 .pnhd.pnhdF{grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:2px 0 0}
+.pn2 .pnhdF .pnhm h2{font-size:21px;line-height:1.15;text-wrap:initial;overflow-wrap:normal;display:flex;align-items:center;flex-wrap:wrap;gap:2px 4px}
+.pn2 .pnhdF .pnhm h2 .pnnml{white-space:nowrap}
+.pn2 .pntags{margin-top:6px;display:flex;gap:6px}
+.pn2 .pntag{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:6px;background:var(--tagbg,#EFE6F8);color:var(--tagfg,#5B3A8A);font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pn2 .pnfg{margin:10px 0 8px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border:1px solid var(--line,#EFE7EF);border-radius:12px;overflow:hidden}
+.pn2 .pnfc{padding:7px 11px 8px;min-width:0}
+.pn2 .pnfc:nth-child(odd){border-right:1px solid var(--line,#F2EBF2)}
+.pn2 .pnfc:nth-child(n+3){border-top:1px solid var(--line,#F2EBF2)}
+.pn2 .pnfc small{display:block;font-size:10px;font-weight:600;letter-spacing:.07em;color:var(--faint,#A093A2);text-transform:uppercase;margin-bottom:3px}
+.pn2 .pnfv{display:flex;align-items:center;gap:5px;flex-wrap:nowrap;font-size:13.5px;min-width:0}
+.pn2 .pnfv .pnagl{flex:0 1 auto;min-width:0;font-weight:600;color:var(--acc,#6B2A67);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pn2 .pnfv .pnagfav{width:24px;height:24px;flex:none;margin:0!important}
+.pn2 .pnfv .pnmomset{font-size:13px;font-weight:600;padding:0;margin:0;min-height:0}
+.pn2 .pnfv .pnfn{color:var(--faint,#B3ABB8)}
+.pn2 .pnfv .gmn{vertical-align:baseline}.pn2 .pnfv .gmv{font-size:13.5px;gap:4px;border-bottom:1px dashed var(--line2,#CDB8CC);padding-bottom:1px}
+.pn2 .pnmomwrap{margin:0 0 10px}
 .pn2 .pnth{width:64px;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:var(--wash,#EDE3EE)}
 .pn2 .pnth .litpic,.pn2 .pnth img{display:block;width:100%;height:100%;object-fit:cover;pointer-events:none}
 .pn2 .pnth button,.pn2 .pnth .picx,.pn2 .pnth .piccp{display:none!important}

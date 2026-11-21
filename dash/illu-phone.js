@@ -71,12 +71,7 @@
   #clocks .clk.phedit .ckp{display:flex!important;gap:6px;margin-top:6px!important;position:static!important}
   #clocks .clk.phedit .ckp select{flex:1;min-width:0;font-size:13px}
   .shclk,.ckrow{height:auto!important;min-height:0!important}
-  /* New Face & Development: two clear choices */
-  #pane-arr [role=tablist]{display:flex!important;gap:6px!important;padding:4px!important;border-radius:14px!important;background:var(--wash,#F3EEF5)!important;border:0!important}
-  #pane-arr [data-rctab]{flex:1 1 0;min-width:0;white-space:normal!important;line-height:1.2!important;padding:9px 8px!important;border-radius:11px!important;font-size:13.5px!important;
-    border:1.5px solid color-mix(in srgb,var(--acc,#5A2C57) 35%,transparent)!important;background:var(--surf,#fff)!important;color:var(--acc,#5A2C57)!important;text-align:center}
-  #pane-arr [data-rctab][aria-selected="true"]{background:var(--acc,#5A2C57)!important;color:#fff!important;border-color:var(--acc,#5A2C57)!important;box-shadow:0 4px 12px -6px rgba(60,20,60,.6)}
-  #pane-arr [data-rctab] s{text-decoration:none;opacity:.75}
+  /* New Face & Development: the compact header (1.2.272) is styled in illu-dir2.js */
   #pane-arr.rcphone .rcclr{display:none!important}
   #pane-arr.rcphone .rcph .rcclr{display:inline-flex!important}
   /* full screen: a bar with Back at the top */

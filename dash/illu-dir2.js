@@ -2510,15 +2510,15 @@
     const subSeg = '<div class="rc2seg" role="group" aria-label="Board type">' + [['both', 'Both'], ['newfaces', 'New faces'], ['development', 'Development']].map(([k, l]) => '<button type="button" data-rcnf="' + k + '" aria-pressed="' + (RC.nfSub === k) + '">' + l + '</button>').join('') + '</div>';
     const body2 = !ready ? body
       : tab === 'kor' ? (list.length ? '<p class="rc2note">The best 9 by the Korean-market bands (women ' + KB().F.ht.join('–') + ' cm, men ' + KB().M.ht.join('–') + ' cm, plus bust, waist and hips). Green figures are inside the band. New picks shows the next 9.</p><div class="rc2grid">' + list.map(m => tile2(m, true)).join('') + '</div>' : '<div class="d2empty"><p>Nothing left to suggest for the Korean market under these filters. Change the filters, or press New picks to start again from the top.</p></div>')
-      : tab === 'nf' ? (PH ? '' : '<div class="rc2bar"><span class="rc2note">' + nfN.toLocaleString() + ' models with a photo on New face and Development boards' + (fon ? ' match your filters' : '') + ' · your newest picks first · under 18s are never shown</span></div>') +
+      : tab === 'nf' ? '' +
           (RC.nfGot === 0 ? '<p class="rcall">You have now seen all ' + nfN.toLocaleString() + ' models that match' + (fon ? ' these filters' : '') + ' — no new ones to pick. Change the filters, or press Clear history to start again.</p>'
             : RC.nfGot > 0 && RC.nfGot < 60 && RC.nfPg === 0 ? '<p class="rcall">Only ' + RC.nfGot + ' model' + (RC.nfGot === 1 ? '' : 's') + ' you have not seen yet' + (fon ? ' with these filters' : '') + ' — here they are. Older picks are on the next pages.</p>' : '') +
           (list.length ? '<div class="rc2grid">' + list.map(m => tile2(m)).join('') + '</div>' + (nfPages > 1 ? '<nav class="rc2pg" aria-label="Pages"><button type="button" class="rcnb" data-rcpg="' + (RC.nfPg - 1) + '"' + (RC.nfPg ? '' : ' disabled') + '>‹ Previous</button><span>Page <b>' + (RC.nfPg + 1).toLocaleString() + '</b> of ' + nfPages.toLocaleString() + ' · ' + (RC.nfPg * 60 + 1).toLocaleString() + '–' + (RC.nfPg * 60 + list.length).toLocaleString() + ' of ' + nfN.toLocaleString() + '</span><button type="button" class="rcnb" data-rcpg="' + (RC.nfPg + 1) + '"' + (RC.nfPg < nfPages - 1 ? '' : ' disabled') + '>Next page ›</button></nav>' : '') : '<div class="d2empty"><p>No model on these boards matches your filters.</p></div>')
       : body + (strip.length ? '<section class="rc2nf" aria-label="From New face and Development boards"><div class="rc2bar"><div><b>From New face &amp; Development boards</b><span class="rc2note">' + nfN.toLocaleString() + ' models · ' + nfF.toLocaleString() + ' New face · ' + (nfN - nfF).toLocaleString() + ' Development</span></div>' + subSeg + '<button type="button" class="rcnb" data-rctab="nf">See all</button></div><div class="rc2strip">' + strip.map(m => tile2(m)).join('') + '</div></section>' : '');
     const G0 = $('.d2body'), gTop = G0 ? G0.scrollTop : 0;
     const tabs = '<div class="rc2seg rc2tabs" role="tablist" aria-label="Lists">' +
-      [['you', 'For you', ready ? ms.length : ''], ['nf', 'New faces & Development', ready ? nfN.toLocaleString() : '']].map(([k, l, n]) =>
-        '<button type="button" role="tab" data-rctab="' + k + '" aria-selected="' + (tab === k) + '">' + esc(l) + (n !== '' ? ' <s>' + n + '</s>' : '') + '</button>').join('') + '</div>';
+      [['you', 'For you', ready ? ms.length : '', sub], ['nf', PH ? 'New faces & Dev' : 'New faces & Development', ready ? nfN.toLocaleString() : '', nfN.toLocaleString() + ' models with a photo on New face and Development boards · your newest picks first · under 18s are never shown']].map(([k, l, n, ti]) =>
+        '<button type="button" role="tab" data-rctab="' + k + '" aria-selected="' + (tab === k) + '" title="' + esc(ti || '') + '">' + esc(l) + (n !== '' ? ' <s>' + n + '</s>' : '') + '</button>').join('') + '</div>';
     const sub2 = tab === 'you' ? sub : tab === 'kor' ? 'Measured models from the whole Directory that best fit the Korean-market bands' : 'Models on the agencies\' New face and Development boards';
     const NFL = {both: 'Both', newfaces: 'New faces', development: 'Development'};
     /* Both / New faces / Development: a list that opens and closes (phone row; on the PC beside the two tabs - user, 12 Nov 2026) */
@@ -2527,20 +2527,25 @@
     const clearH = !ready ? '' : RC.clearAsk
       ? '<span class="rcclr ask" role="group" aria-label="Clear history"><span>Clear all your picks and start fresh?</span><button type="button" class="rcclry" data-rcclear>Clear</button><button type="button" class="rcclrn" data-rcclearno>Cancel</button></span>'
       : '<button type="button" class="rcclr" data-rcclear title="Forget every pick shown to you (For you and New faces &amp; Development) and start fresh">Clear history</button>';
-    const phRow = !PH ? '' : '<div class="rcph">' +
-      '<button type="button" class="rcphb" data-rcfull aria-pressed="' + !!RC.full + '" aria-label="' + (RC.full ? 'Exit full screen' : 'Full screen') + '" title="' + (RC.full ? 'Exit full screen' : 'Full screen') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (RC.full ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>') + '</svg></button>' +
-      '<span class="rcper" role="group" aria-label="Cards in a row">' + [1, 2].map(n => '<button type="button" data-rcper="' + n + '" aria-pressed="' + (rcPer() === n) + '" aria-label="' + n + (n === 1 ? ' card' : ' cards') + ' in a row" title="' + n + (n === 1 ? ' card' : ' cards') + ' in a row"><svg viewBox="0 0 24 24" aria-hidden="true">' + (n === 1 ? '<rect x="5" y="4" width="14" height="16" rx="2"/>' : '<rect x="3" y="4" width="7.5" height="16" rx="1.5"/><rect x="13.5" y="4" width="7.5" height="16" rx="1.5"/>') + '</svg></button>').join('') + '</span>' +
-      '<span class="rcsp"></span>' +
-      ddH +
-      '<button type="button" class="rcbtn" data-rcref' + (!ready || !pool.length ? ' disabled' : '') + '>New picks</button>' + clearH + '</div>';
+    /* 1.2.272 (user, 22 Nov 2026 - approved demo A, "go with A" ... "make it for pc and mobile version"): a compact header on
+       the phone and the computer - the two lists as one slim switch, then one row of small buttons: full screen, cards in a row
+       (phone), Both / New faces / Development, the page arrows (For you, computer), and on the right Clear history (an icon,
+       it asks first) and New picks. The title and the explanation lines are gone (the title is in the top bar; the
+       explanation is on the switch when the mouse rests on it). */
+    const ICO = {fs: RC.full ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', clr: '<path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v5h5"/>', np: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>'};
+    const fsB = '<button type="button" class="rcphb" data-rcfull aria-pressed="' + !!RC.full + '" aria-label="' + (RC.full ? 'Exit full screen' : 'Full screen') + '" title="' + (RC.full ? 'Exit full screen (Esc)' : 'Full screen') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICO.fs + '</svg></button>';
+    const perB = !PH ? '' : '<span class="rcper" role="group" aria-label="Cards in a row">' + [1, 2].map(n => '<button type="button" data-rcper="' + n + '" aria-pressed="' + (rcPer() === n) + '" aria-label="' + n + (n === 1 ? ' card' : ' cards') + ' in a row" title="' + n + (n === 1 ? ' card' : ' cards') + ' in a row"><svg viewBox="0 0 24 24" aria-hidden="true">' + (n === 1 ? '<rect x="6" y="4" width="12" height="16" rx="2"/>' : '<rect x="3.5" y="4" width="7.5" height="16" rx="2"/><rect x="13" y="4" width="7.5" height="16" rx="2"/>') + '</svg></button>').join('') + '</span>';
+    const navB = PH || !(tab === 'you' && RC.sets && RC.sets.length > 1) ? '' : '<div class="rcnav" role="group" aria-label="Your picks, newest first">' +
+        '<button type="button" class="rcnb" data-rcstep="1"' + (RC.at < RC.sets.length - 1 ? '' : ' disabled') + ' title="Newer picks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>' +
+        '<span class="rcset">Page <b>' + (RC.sets.length - RC.at) + '</b> of ' + RC.sets.length + '</span>' +
+        '<button type="button" class="rcnb" data-rcstep="-1"' + (RC.at > 0 ? '' : ' disabled') + ' title="Older picks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></div>';
+    const clrB = !ready ? '' : '<button type="button" class="rcphb rcclri' + (RC.clearAsk ? ' on' : '') + '" ' + (RC.clearAsk ? 'data-rcclearno' : 'data-rcclear') + ' aria-pressed="' + !!RC.clearAsk + '" aria-label="Clear history" title="Clear history - forget every pick shown to you (For you and New faces &amp; Development) and start fresh"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICO.clr + '</svg></button>';
+    const askRow = ready && RC.clearAsk ? '<div class="rcask" role="group" aria-label="Clear history"><span>Clear all your picks and start fresh?</span><button type="button" class="rcclry" data-rcclear>Clear</button><button type="button" class="rcclrn" data-rcclearno>Cancel</button></div>' : '';
+    const npB = '<button type="button" class="rcbtn rcnp" data-rcref' + (!ready || !pool.length ? ' disabled' : '') + ' title="' + (tab === 'kor' ? 'Show the next 9 for the Korean market' : tab === 'nf' ? 'Draw the New face and Development models in a new order' : 'Show ' + RN + ' models you have not been shown yet') + '">' + (PH ? '' : '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICO.np + '</svg>') + 'New picks</button>';
+    const tools = '<div class="rctools">' + fsB + perB + ddH + navB + '<span class="rcsp"></span>' + clrB + npB + '</div>';
     pane.classList.toggle('rcper1', PH && rcPer() === 1); pane.classList.toggle('rcper2', PH && rcPer() === 2); pane.classList.toggle('rcphone', PH);
-    pane.innerHTML = '<div class="rcwrap"><div class="rchd"><div>' + (PH ? '' : '<h2>' + (isKo() ? '뉴페이스 & 디벨롭먼트' : 'New Face &amp; Development') + '</h2>') + (PH ? tabs : '<div class="rctabrow">' + tabs + ddH + '</div>') + (PH ? phRow : '<p>' + esc(sub2) + '</p>' + (tab === 'you' ? '<p class="rcprog">' + esc(prog) + '</p>' : '')) + (tab === 'you' && RC.restarted ? '<p class="rcall">You had seen every model that matches — this set starts a new round, in a new order.</p>' : '') + '</div>' +
-      '<button type="button" class="illufs" data-rcfull aria-pressed="' + !!RC.full + '" title="' + (RC.full ? 'Exit full screen (Esc)' : 'Show New Face & Development on the whole screen') + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + (RC.full ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>') + '</svg><span>' + (RC.full ? 'Exit full screen' : 'Full screen') + '</span></button>' +
-      (tab === 'you' && RC.sets && RC.sets.length > 1 ? '<div class="rcnav" role="group" aria-label="Your picks, newest first">' +
-        '<button type="button" class="rcnb" data-rcstep="1"' + (RC.at < RC.sets.length - 1 ? '' : ' disabled') + ' title="Newer picks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Newer</span></button>' +
-        '<span class="rcset">Page <b>' + (RC.sets.length - RC.at) + '</b> of ' + RC.sets.length + (RC.at === RC.sets.length - 1 ? ' · newest' : '') + '</span>' +
-        '<button type="button" class="rcnb" data-rcstep="-1"' + (RC.at > 0 ? '' : ' disabled') + ' title="Older picks"><span>Older</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></div>' : '') +
-      '<button type="button" class="rcbtn" data-rcref' + (!ready || !pool.length ? ' disabled' : '') + ' title="' + (tab === 'kor' ? 'Show the next 9 for the Korean market' : tab === 'nf' ? 'Draw the New face and Development models in a new order' : 'Show ' + RN + ' models you have not been shown yet') + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>New picks</button>' + clearH + '</div>' +
+    pane.innerHTML = '<div class="rcwrap"><div class="rchd rchdA">' + tabs + tools + askRow +
+      (tab === 'you' && RC.restarted ? '<p class="rcall">You had seen every model that matches — this set starts a new round, in a new order.</p>' : '') + '</div>' +
       '<div class="d2body rcbody">' + body2 + pop + '</div></div>';
     try{ if(typeof countEl !== 'undefined' && countEl) countEl.textContent = ms.length ? ms.length + (isKo() ? '명' : ' models') : ''; }catch(e){}
     const vn = document.getElementById('vn-arr'); if(vn) vn.textContent = '';
@@ -2630,6 +2635,44 @@
     if(e.target.closest('[data-rcdd]')){ e.preventDefault(); RC.ddOpen = !RC.ddOpen; recoRender(); return; }
     if(e.target.closest('[data-d2close]') || (e.target.classList && e.target.classList.contains('d2body') && D2.open)){ closeCard(); return; }
   });
+  /* 1.2.272: the compact header (demo A) - phone and computer */
+  { const st = document.createElement('style'); st.id = 'rcAcss'; st.textContent = `
+  #pane-arr .rchd.rchdA{display:flex!important;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 16px 10px!important}
+  #pane-arr .rchdA .rc2tabs{display:inline-flex!important;flex-direction:row!important;flex-wrap:nowrap!important;gap:2px!important;padding:3px!important;margin:0!important;border:0!important;border-radius:999px!important;background:var(--surf2,#F3EDF3)!important;box-shadow:none!important;width:auto!important}
+  #pane-arr .rchd.rchdA > .rc2tabs{flex:none!important}
+  #pane-arr .rchdA .rc2tabs button{flex:0 1 auto!important;width:auto!important;min-height:0!important;height:34px!important;padding:0 13px!important;border:0!important;border-radius:999px!important;background:transparent!important;color:var(--mut,#6D6577)!important;font:600 13px/1 var(--sans,Inter,system-ui,sans-serif)!important;white-space:nowrap!important;box-shadow:none!important;display:inline-flex!important;align-items:center;justify-content:center;gap:5px}
+  #pane-arr .rchdA .rc2tabs button[aria-selected="true"]{background:var(--surf,#fff)!important;color:var(--acc,#5A2C57)!important;box-shadow:0 1px 3px rgba(40,10,40,.16)!important}
+  #pane-arr .rchdA .rc2tabs s{text-decoration:none;font-weight:500;color:var(--mut,#9a8a9b);opacity:.85}
+  #pane-arr .rchdA .rctools{display:flex;align-items:center;gap:7px;flex:1 1 auto;min-width:0;position:relative;z-index:6}
+  #pane-arr .rchdA .rctools .rcsp{flex:1}
+  #pane-arr .rchdA .rcphb{width:36px!important;height:36px!important;border-radius:11px!important;border:1px solid var(--line,#E7E2EC);background:var(--surf,#fff);display:grid;place-items:center;cursor:pointer;color:var(--acc,#5A2C57);padding:0;flex:none}
+  #pane-arr .rchdA .rcphb svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  #pane-arr .rchdA .rcphb[aria-pressed="true"]{background:var(--accbg,#F3ECF3);border-color:var(--acc,#5A2C57)}
+  #pane-arr .rchdA .rcper{height:36px!important;border-radius:11px!important}
+  #pane-arr .rchdA .rcper button{border-radius:8px!important}
+  #pane-arr .rchdA .rcddb{height:36px!important;border-radius:11px!important}
+  #pane-arr .rchdA .rcnp{height:36px!important;border-radius:999px!important;padding:0 15px!important;white-space:nowrap;flex:none;box-shadow:none!important;display:inline-flex;align-items:center;gap:6px}
+  #pane-arr .rchdA .rcnp svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  #pane-arr .rchdA .rcnav{display:flex;align-items:center;gap:6px;margin:0}
+  #pane-arr .rchdA .rcnav .rcnb{width:32px;height:32px;padding:0;display:grid;place-items:center}
+  #pane-arr .rchdA .rcnav .rcnb span{display:none}
+  #pane-arr .rchdA .rcset{font-size:12.5px;color:var(--mut,#6D6577);white-space:nowrap}
+  #pane-arr .rchdA .rcask{flex-basis:100%;display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 12px;border-radius:12px;background:var(--accbg,#F6EEF5);font:500 13px var(--sans,Inter,system-ui,sans-serif);color:var(--ink,#211C26)}
+  #pane-arr .rchdA .rcask span{flex:1;min-width:160px}
+  #pane-arr .rchdA .rcask button{height:30px;padding:0 12px;border-radius:999px;border:1px solid var(--line,#E7E2EC);background:var(--surf,#fff);font:600 12.5px var(--sans,Inter,system-ui,sans-serif);cursor:pointer}
+  #pane-arr .rchdA .rcask .rcclry{background:var(--acc,#5A2C57);border-color:var(--acc,#5A2C57);color:#fff}
+  #pane-arr .rchdA .rcall{flex-basis:100%;margin:0}
+  /* phone: the switch fills the width, the buttons go on one row under it */
+  #pane-arr.rcphone .rchd.rchdA{flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;gap:9px!important;height:auto!important}
+  #pane-arr.rcphone .rchd.rchdA > *{flex:none!important}
+  #pane-arr.rcphone .rchdA .rc2tabs{display:flex!important;width:100%!important;box-sizing:border-box}
+  #pane-arr.rcphone .rchdA .rc2tabs button{flex:1 1 0!important;padding:0 8px!important}
+  #pane-arr.rcphone .rchd.rchdA > .rctools{display:flex!important;flex-direction:row!important;align-items:center!important;gap:6px!important;flex:none!important;width:100%!important}
+  #pane-arr.rcphone .rchd.rchdA > .rc2tabs{flex-direction:row!important}
+  #pane-arr.rcphone .rchd.rchdA > .rcask{display:flex!important;flex-direction:row!important;flex-wrap:wrap!important;align-items:center!important;gap:8px!important;width:auto!important;box-sizing:border-box}
+  #pane-arr .rchdA .rcask{background:#F6EEF5!important}
+  #pane-arr.rcphone .rchdA .rcnp{padding:0 13px!important}
+  `; document.head.appendChild(st); }
   /* the tab's name */
   (function nameTab(){
     const b = document.getElementById('v-arr'); if(!b){ setTimeout(nameTab, 300); return; }
