@@ -35,7 +35,7 @@
   #abphsearch{flex:none}
   /* the usage pill: a small dot in the corner while all is well (it covered buttons); the words show again when it is amber or red */
   #illuusage.float{left:auto!important;right:8px!important;bottom:calc(68px + env(safe-area-inset-bottom,0px))!important;z-index:55!important}
-  #illuusage.float.green{font-size:0!important;padding:5px!important;gap:0!important;opacity:.85}
+  #illuusage.float.green{font-size:9.5px!important;padding:2px 7px!important;gap:4px!important;opacity:.9}   /* 1.2.270: says Supabase */
   body.d2carding #illuusage.float,body.rcfull #illuusage.float{display:none!important}
   /* "Download this list" in the top bar: a small ↓ button on a phone (the title had no room) */
   #appbar #abtools{flex:0 0 auto!important;min-width:max-content!important;overflow:visible!important}

@@ -57,8 +57,8 @@
   const planTexts = P => [P.title || '', ...(P.groups || []).map(g => g.name || ''), ...(P.groups || []).flatMap(g => (g.files || []).slice(0, 200).map(f => (f.sub || '') + ' ' + (f.name || '')))];
   /* another model named in the files (a first name of a model on the same agency's boards, or on any booking card) while
      hers appears nowhere: returns that name, else '' */
-  function otherModel(c, texts){
-    if(texts.some(t => hits(c, t))) return '';
+  function otherModel(c, texts, any){
+    if(!any && texts.some(t => hits(c, t))) return '';
     const mine = new Set(words(c.nm));
     const t = ' ' + texts.map(x => words(x).join(' ')).join(' ') + ' ';
     const host = (() => { try{ return new URL(c.k).hostname.replace(/^www\./, ''); }catch(e){ return ''; } })();
@@ -68,6 +68,15 @@
     try{ for(const x of BOOK.values()){ const w = words(x && x.nm)[0]; if(w && w.length >= 4 && !mine.has(w)) names.add(w); } }catch(e){}
     for(const n of names) if(t.includes(' ' + n + ' ')) return n.charAt(0).toUpperCase() + n.slice(1);
     return '';
+  }
+  /* 1.2.270: is this package clearly hers? (see run) */
+  function sureOf(owner, P, emails){
+    const pt = planTexts(P), other = otherModel(owner, pt);
+    const inPack = pt.some(x => hits(owner, x));
+    const mails = (emails || []).map(e => (e.subject || '') + ' ' + (e.summary || '') + ' ' + String(e.text || e.body || '').slice(0, 4000));
+    const inMail = mails.some(x => hits(owner, x)), otherMail = otherModel(owner, mails, true);
+    const anyName = otherModel(owner, pt, true);
+    return {other, sure: inPack || (!anyName && inMail && !otherMail)};
   }
   function pickOwner(cards, texts){
     const sc = cards.map(c => texts.reduce((a, t) => Math.max(a, hits(c, t)), 0));
@@ -174,11 +183,17 @@
         /* 1.2.268 (user, 20 Nov 2026: "There are also photos and videos of a different model in Illia's card" - a Mazer
            package of KARYNA, sent in the ILLIA email thread, was saved into Illia's folder): before saving, the files must
            not name another model while never naming her. If they do, nothing is saved and the link asks who it is for. */
+        /* 1.2.270 (user, 21 Nov 2026: "Just because they have the same agency name, does not make them the same models"):
+           material is saved only when it is clearly hers - her name is in the package (title, folders or file names), or,
+           for a package that names nobody, in the email that carried the link (and no other model is named there).
+           Anything else waits and asks who it is for; nothing is saved by guessing. */
         if(owner && P && P.ok){
-          const other = otherModel(owner, planTexts(P));
-          if(other){
-            mark(owner, t.u, {at, by: me(), st: 'which', title: P.title || '', why: L('the files are named ' + other + ', not ' + (owner.nm || ''), '파일 이름이 ' + other + '입니다 (' + (owner.nm || '') + ' 아님)'), with: [owner.id]});
-            res.which++; tell({at, st: 'which', nm: owner.nm || '', cid: owner.id, title: P.title || '', why: other});
+          const {other, sure} = sureOf(owner, P, list.filter(o => o.c.id === owner.id).map(o => o.e));
+          if(other || !sure){
+            const why = other ? L('the files are named ' + other + ', not ' + (owner.nm || ''), '파일 이름이 ' + other + '입니다 (' + (owner.nm || '') + ' 아님)')
+              : L('her name is not in the files - check who this is for', '파일에 이 모델 이름이 없습니다 - 누구 자료인지 확인하세요');
+            mark(owner, t.u, {at, by: me(), st: 'which', title: P.title || '', why, with: [owner.id]});
+            res.which++; tell({at, st: 'which', nm: owner.nm || '', cid: owner.id, title: P.title || '', why: other || ''});
             continue;
           }
         }
@@ -232,5 +247,5 @@
     try{ if(typeof DB !== 'undefined' && DB) await DB.doc('autof/morning').set({d, by: me(), at: new Date().toISOString(), done: !!ok}); }catch(e){}
   }
   if(can()){ setTimeout(morning, 90000); setInterval(morning, 15 * 60000); }
-  window.__illuAutoTest = {linksOf, hits, pickOwner, otherModel, planTexts, claim, morning, run, state: () => STATE};
+  window.__illuAutoTest = {linksOf, hits, pickOwner, otherModel, planTexts, sureOf, claim, morning, run, state: () => STATE};
 })();
