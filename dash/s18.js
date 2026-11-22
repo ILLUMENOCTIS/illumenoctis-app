@@ -137,7 +137,9 @@ var ATLAS_CITY={"United Kingdom|London":[51.5085,-0.1257],"Czech Republic|Prague
 
   /* ---------- map ---------- */
   function build(){
-    if(built) return;
+    if(built) return true;
+    /* 1.2.278: the world shapes are in their own file on the phone (not inside the page, which is read at every start) */
+    if(!document.getElementById('atltopo')){ if(window.__illuTopo) window.__illuTopo().then(() => { try{ const p = document.getElementById('pane-atl'); if(p && !p.hidden){ window.atlasShown ? window.atlasShown() : render(); } }catch(e){} }); return false; }
     built = true;
     const topo = JSON.parse(document.getElementById('atltopo').textContent);
     const ctab = JSON.parse(document.getElementById('atlctab').textContent);
@@ -670,7 +672,7 @@ var ATLAS_CITY={"United Kingdom|London":[51.5085,-0.1257],"Czech Republic|Prague
   }
   function render(){
     if(!document.getElementById('pane-atl') || document.getElementById('pane-atl').hidden) return;
-    build();
+    if(build() === false) return;
     const rs = rows();
     RS = rs;
     PINS = pinList(rs);
@@ -1136,7 +1138,7 @@ var ATLAS_CITY={"United Kingdom|London":[51.5085,-0.1257],"Czech Republic|Prague
     if(r) setTimeout(() => go('region', r), calm ? 0 : 400);
   };
   window.atlasShown = function(){
-    build();
+    if(build() === false) return;
     loadPref();
     render();
     requestAnimationFrame(() => go(S.lv, S.lv === 'region' ? S.r : S.c, 0));

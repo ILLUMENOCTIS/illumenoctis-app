@@ -62,7 +62,7 @@ self.addEventListener('message', e => {
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
   if (u.origin === self.location.origin && u.pathname.startsWith('/_blob/')) { e.respondWith(blob(decodeURIComponent(u.pathname.slice(7)), +(u.searchParams.get('w') || 0), e.request)); return; }
-  if (e.request.method === 'GET' && u.origin === self.location.origin && /^[\d.]+$/.test(u.searchParams.get('v') || '') && /\.(js|css|webmanifest)$/.test(u.pathname)) { e.respondWith(versioned(e.request)); return; }
+  if (e.request.method === 'GET' && u.origin === self.location.origin && /^[\d.]+$/.test(u.searchParams.get('v') || '') && /\.(js|css|json|webmanifest)$/.test(u.pathname)) { e.respondWith(versioned(e.request)); return; }
   if (e.request.mode !== 'navigate') return;
   e.respondWith(fetch(e.request).then(r => {
     if (r.ok && new URL(e.request.url).pathname.endsWith('/index.html')) { const c = r.clone(); caches.open(START).then(x => x.put(e.request, c)).catch(() => {}); }

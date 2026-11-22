@@ -89,6 +89,7 @@
   let GEO = null;
   function geo(){
     if(GEO) return GEO;
+    if(!document.getElementById('atltopo2') && !document.getElementById('atltopo')){ if(window.__illuTopo) window.__illuTopo().then(() => { try{ if(typeof VIEW !== 'undefined' && VIEW === 'ana' && window.__illuAnaDraw) window.__illuAnaDraw(); }catch(e){} }); return {ok: false, paths: [], byName: new Map(), region: new Map()}; }
     GEO = {ok: false, paths: [], byName: new Map(), region: new Map()};
     try{
       const lib = window.ATLASLIB || (typeof ATLASLIB !== 'undefined' ? ATLASLIB : null);

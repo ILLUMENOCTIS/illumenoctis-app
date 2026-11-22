@@ -1870,7 +1870,7 @@
      everything is written - so the page is laid out once a second instead of once per card. Nothing runs while the
      window is hidden or no vote card is on screen. */
   function tick(){
-    if(document.hidden) return;
+    if(document.hidden || !document.documentElement.classList.contains('shready')) return;
     const vis = [];
     document.querySelectorAll('.vmk[data-at]').forEach(b => { const uc = b.closest('.uc'); if(uc && uc.offsetParent) vis.push([b, uc]); });
     /* the glow speeds (reads the animations before anything is written) */
@@ -3198,7 +3198,10 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
       if(g.__cw !== cw){ g.__cw = cw; g.style.setProperty('--ivcw', cw + 'px'); }
     }
   }
-  let fitT = 0; const fitSoon = () => { if(!fitT) fitT = requestAnimationFrame(() => { fitT = 0; fitGrids(); }); };
+  /* 1.2.278 (start-up speed): not while the program is still loading (it measured every grid ~40 times); once when it is shown */
+  const RDY = () => document.documentElement.classList.contains('shready');
+  let fitT = 0; const fitSoon = () => { if(!fitT && RDY()) fitT = requestAnimationFrame(() => { fitT = 0; fitGrids(); }); };
+  try{ new MutationObserver(() => { if(RDY()) fitSoon(); }).observe(document.documentElement, {attributes: true, attributeFilter: ['class']}); }catch(e){}
   try{ new MutationObserver(fitSoon).observe(document.body, {childList: true, subtree: true}); }catch(e){}
   addEventListener('resize', () => { zRead(); fitSoon(); });
   zRead(); setInterval(zRead, 3000);

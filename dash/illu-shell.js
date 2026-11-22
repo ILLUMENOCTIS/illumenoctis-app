@@ -522,7 +522,7 @@
   /* the panel reaches down to the bottom of the window; its halves scroll on their own */
   function sizeSide(){
     const sd = pane && pane.querySelector('#shside'); if(!sd) return;
-    if(innerWidth <= 1100){ sd.style.height = ''; return; }
+    if(matchMedia('(max-width:1100px)').matches){ if(sd.style.height) sd.style.height = ''; return; }
     let sp = sd.parentElement; while(sp && sp !== document.body && !/(auto|scroll)/.test(getComputedStyle(sp).overflowY)) sp = sp.parentElement;
     const top = sd.getBoundingClientRect().top + (sp && sp !== document.body ? sp.scrollTop : scrollY) - (sp && sp !== document.body ? sp.getBoundingClientRect().top : 0);
     const vh = sp && sp !== document.body ? sp.clientHeight : innerHeight;
@@ -963,7 +963,11 @@ html[data-theme="dark"] .shtoday .shad.d,html[data-theme="dim"] .shtoday .shad.d
     try{ if(!localStorage.getItem('illu.shck')){ localStorage.setItem('illu.shck', '1'); const ab = document.getElementById('abck'); if(ab && !B.classList.contains('ckmin')) ab.click(); } }catch(e){}
     showToday();
     /* 1.2.139: the current design is drawn - take the start-up screen away (index.html head) */
-    requestAnimationFrame(() => requestAnimationFrame(() => { document.documentElement.classList.add('shready'); setTimeout(() => { const b = document.getElementById('illuboot'); if(b) b.remove(); }, 400); }));
+    /* 1.2.278 (user, phone: "the mobile start-up of the app has some bugs when loading"): the start-up screen stays until
+       every part of the program has loaded - before, it went away while the later parts (the phone layout among them)
+       were still loading, so a half-built page showed for a few seconds */
+    const reveal = () => requestAnimationFrame(() => requestAnimationFrame(() => { document.documentElement.classList.add('shready'); setTimeout(() => { const b = document.getElementById('illuboot'); if(b) b.remove(); }, 400); }));
+    if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { try{ if(showing) renderToday(); }catch(e){} reveal(); }, {once: true}); else reveal();
     /* the data arrives a little after the page: draw Today again as it lands */
     [800, 2500, 6000, 12000].forEach(t => setTimeout(() => { if(showing) renderToday(); }, t));
   }

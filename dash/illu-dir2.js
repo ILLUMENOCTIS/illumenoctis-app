@@ -2435,8 +2435,9 @@
   /* a redrawn card keeps the photo it was on */
   setInterval(() => { if(!TS.size) return; document.querySelectorAll('.uc').forEach(u => { const t = TS.get(ucTileKey(u)); if(t && (t.i || t.state !== 'ok')) ucTilePaint(u); }); }, 600);
   let ucFitT = 0;
-  const ucFitAll = () => { ucFitT = 0; document.querySelectorAll('.uc .ucmx:not(.tight):not(.none)').forEach(e => { if(e.scrollWidth > e.clientWidth + 1) e.classList.add('tight'); }); };
-  try{ new MutationObserver(() => { if(!ucFitT) ucFitT = requestAnimationFrame(ucFitAll); }).observe(document.body, {childList: true, subtree: true}); }catch(e){}
+  const ucFitAll = () => { ucFitT = 0; if(!document.documentElement.classList.contains('shready')) return; document.querySelectorAll('.uc .ucmx:not(.tight):not(.none)').forEach(e => { if(e.scrollWidth > e.clientWidth + 1) e.classList.add('tight'); }); };
+  try{ new MutationObserver(() => { if(!ucFitT && document.documentElement.classList.contains('shready')) ucFitT = requestAnimationFrame(ucFitAll); }).observe(document.body, {childList: true, subtree: true}); }catch(e){}
+  try{ new MutationObserver(() => { if(document.documentElement.classList.contains('shready') && !ucFitT) ucFitT = requestAnimationFrame(ucFitAll); }).observe(document.documentElement, {attributes: true, attributeFilter: ['class']}); }catch(e){}
   addEventListener('resize', () => { document.querySelectorAll('.uc .ucmx.tight').forEach(e => e.classList.remove('tight')); ucFitAll(); });
   /* the card's words (board, no measurements) follow the language switch */
   try{ new MutationObserver(() => { try{ if(VIEW === 'arr') recoRender(); else if(VIEW === 'dir') refresh(); }catch(e){} }).observe(document.documentElement, {attributes: true, attributeFilter: ['lang']}); }catch(e){}
@@ -2457,7 +2458,12 @@
       '<span class="rc2m">' + (ht == null ? '<span>height not given</span>' : fig('', ht, band.ht) + fig('B', bu, band.bu) + fig('W', wa, band.wa) + fig('H', hp, band.hp) + (eu == null ? '' : '<span>' + eu + ' EU</span>')) + '</span>' +
       lamps(m.key, m.nm, meta, m.href) + '</div></article>';
   }
+  /* 1.2.278 (start-up speed): the program always opens on Today, so this page is not drawn while the program is still
+     loading (it was drawn about 10 times, each time measuring the screen); it is drawn once, when it is opened */
+  const READY = () => document.documentElement.classList.contains('shready');
+  try{ new MutationObserver(() => { if(READY() && RC.pend){ RC.pend = false; if(VIEW === 'arr') recoRender(); } }).observe(document.documentElement, {attributes: true, attributeFilter: ['class']}); }catch(e){}
   function recoRender(){
+    if(!READY()){ RC.pend = true; return; }
     const pane = document.getElementById('pane-arr'); if(!pane) return;
     const ready = typeof measState === 'undefined' || measState === 'ready' || measState === 'off';
     if(typeof measState !== 'undefined' && measState === 'idle') try{ loadMeas(); }catch(e){}
