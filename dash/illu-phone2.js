@@ -7,7 +7,9 @@
      row of its own; "Booking Emails" reads "Emails" on a phone ("R1").
    - Directory: search and one Filters button; the other controls (MDI Agency Contacts, Region, Country, ...,
      Maximize, Sort, Download) open in a sheet from the bottom. The start screen is region tiles ("P2", illu-dir2.js).
-   - Atlas map: the count bubbles are sized to the phone's map (s18.js). */
+   - Atlas map: the count bubbles are sized to the phone's map (s18.js).
+   1.2.275: no greeting (the Processing count is on the Booking button), "1 new" as a small number on the Emails tab,
+   the Team Vote order as a ⇅ button in the chip row, and the Emails header as option C. */
 (function(){
   'use strict';
   const PH = () => { try{ return matchMedia('(max-width:760px)').matches; }catch(e){ return false; } };
@@ -31,7 +33,8 @@
   #pane-today{padding-top:2px!important}
   #pane-today .shlay{row-gap:4px!important}
   #pane-today .shhead{display:none!important}
-  #pane-today .shhdph{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 8px;min-width:0}
+  /* 1.2.275: the greeting line is gone on phones; the Processing count is on the Booking button */
+  #pane-today .shhdph{display:none!important}
   .shhdpt{min-width:0}
   .shkick2{font-size:11px;letter-spacing:.1em;color:var(--dim,#8F8794);font-weight:600}
   .shgr2{display:block;font-size:19px;font-weight:700;color:var(--ink,#141014);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -68,6 +71,50 @@
   #d2phsheet .d2phb .d2sort{width:100%;align-items:center;gap:8px}
   #d2phsheet .d2phb .d2sort select{flex:1;min-width:0}
   #d2phsheet .d2phdl{width:100%;justify-content:center;height:40px;border-radius:12px;border:1px solid var(--line,#EADFEA);background:none;font:inherit;font-size:14px;color:var(--ink,#3B2F3B);margin-top:6px;cursor:pointer}
+
+  /* ==== 1.2.275 (user, 22 Nov 2026) ==== */
+  /* Processing count on the Booking button (bottom bar) */
+  #shrail .shnv[data-shv="g-opus"].has .shdot[data-n]:not([data-n="0"]){top:2px!important;right:6px!important;min-width:18px!important;width:auto!important;height:18px!important;border-radius:9px!important;background:var(--acc,#6B2A67);border:2px solid var(--surf,#fff);padding:0 4px;box-sizing:border-box;display:grid!important;place-items:center;animation:none!important}
+  #shrail .shnv[data-shv="g-opus"].has .shdot[data-n]:not([data-n="0"])::after{content:attr(data-n);color:#fff;font:700 10.5px/1 Inter,system-ui,sans-serif}
+  #shrail .shnv[data-shv="g-opus"].beacon .shdot[data-n]:not([data-n="0"]){background:#E3BE72}
+  #shrail .shnv[data-shv="g-opus"].beacon .shdot[data-n]:not([data-n="0"])::after{color:#3a2a06}
+  /* "1 new" becomes a small number on the Emails tab's envelope */
+  .bemsw button{position:relative}
+  .bemsw .bemnewn{position:absolute!important;top:1px;left:12px;min-width:15px!important;height:15px!important;padding:0 4px!important;margin:0!important;border-radius:8px!important;font-size:0!important;line-height:15px!important;text-align:center;box-shadow:0 0 0 2px var(--surf,#fff);z-index:2}
+  .bemsw .bemnewn::before{content:attr(data-n);font-size:10px;font-weight:700}
+  .bemwrap .bemsw{padding-right:96px}
+  /* Team Vote: the order is a small ⇅ button at the end of the chips, one row on every phone */
+  #pane-today .ivtbar{flex-wrap:nowrap!important;align-items:center!important;gap:clamp(5px,1.6vw,8px)!important}
+  #pane-today .ivtbar .ivtfs{flex:1 1 auto!important;min-width:0!important;overflow-x:auto!important;flex-wrap:nowrap!important;scrollbar-width:none;gap:3px!important;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 14px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 14px),transparent)}
+  #pane-today .ivtbar .ivtfs::-webkit-scrollbar{display:none}
+  #pane-today .ivtbar .ivtfs>*{padding:0 clamp(4px,1.9vw,8px)!important;font-size:clamp(10px,3.25vw,12.5px)!important;height:34px!important;gap:clamp(2px,1vw,4px)!important;flex:none!important;white-space:nowrap!important}
+  #pane-today .ivtbar .ivtfs>.ivtfz{display:none!important}
+  #pane-today .ivtbar .ivsp{display:none!important}
+  #pane-today .ivtbar .ivts{flex:none!important;width:clamp(34px,10vw,40px)!important;min-width:clamp(34px,10vw,40px)!important;height:36px!important;padding:0!important;border-radius:11px!important;color:transparent!important;-webkit-appearance:none;appearance:none;background:var(--surf,#fff) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B2A67' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4'/%3E%3C/svg%3E") center/18px no-repeat!important;border:1px solid var(--line,#EADFEA)!important}
+  #pane-today .ivtbar .ivts option{color:var(--ink,#1B141B)}
+  /* Emails header (option C): number tiles, search + ↻, Mine / Everyone, then All / Reply in / No reply yet as tabs */
+  #bem .bemtools{display:flex!important;flex-wrap:wrap!important;gap:8px!important;margin:2px 0 8px!important}
+  #bem .bemtools .bemsp{display:none!important}
+  #bem .bemtot{order:1;width:100%;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px!important}
+  #bem .bemtot span{display:flex;flex-direction:column;align-items:center;background:var(--chip,#FAF7FA);border:1px solid var(--line,#F0E7F0);border-radius:12px;padding:7px 4px;font-size:11px;color:var(--dim,#8F8794);min-width:0}
+  #bem .bemtot span b{font-size:18px;line-height:1.2}
+  #bem .bemsearch{order:2;flex:1 1 calc(100% - 48px)!important;min-width:0!important;max-width:calc(100% - 48px)!important;height:40px;border-radius:12px;box-sizing:border-box}
+  #bem .bemupd{order:3;flex:none;width:40px;height:40px;padding:0!important;justify-content:center;border-radius:12px!important;font-size:0!important;gap:0!important;border-color:var(--line,#EADFEA)!important}
+  #bem .bemupd svg{width:17px!important;height:17px!important}
+  #bem .bemwhos{order:4;flex:1 1 200px!important;min-width:0;display:flex!important;border-radius:12px;height:40px;box-sizing:border-box;align-items:stretch}
+  #bem .bemwhos button{flex:1 1 0!important;justify-content:center!important;font-size:14px!important;padding:0 6px!important;min-width:0}
+  #bem .bemrep{display:none!important}
+  #bem .bemfdd{order:5;display:block!important;flex:none}
+  #bem .bemfddb{height:40px;border-radius:12px;border:1px solid var(--line,#EADFEA);background:var(--surf,#fff);padding:0 10px;display:flex;align-items:center;gap:4px;font:inherit;font-size:14px;color:var(--ink,#3B2F3B);cursor:pointer;white-space:nowrap}
+  #bem .bemfddb[aria-expanded="true"]{border-color:var(--acc,#6B2A67);background:var(--accsoft,#F3ECF3)}
+  #bem .bemfddb svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+  #bem .bemfddl{position:absolute;right:0;top:46px;z-index:30;min-width:190px;background:var(--surf,#fff);border:1px solid var(--line,#E7E2EC);border-radius:12px;box-shadow:0 14px 34px rgba(20,10,30,.18);padding:6px;display:flex;flex-direction:column;gap:2px}
+  #bem .bemfddl button{border:0;background:none;border-radius:8px;padding:10px 12px;font:inherit;font-size:14px;color:var(--ink,#211C26);text-align:left;display:flex;justify-content:space-between;gap:16px;cursor:pointer}
+  #bem .bemfddl button s{text-decoration:none;color:var(--dim,#8F8794);font-weight:600}
+  #bem .bemfddl button[aria-selected="true"]{background:var(--acc,#6B2A67);color:#fff;font-weight:600}
+  #bem .bemfddl button[aria-selected="true"] s{color:#EBD8EA}
+  #bem .bemhint .bemlive,#bem .bemhint .bemhtxt{display:none!important}
+  #bem .bemhint{margin:0!important}
   #d2bar.d2phon{z-index:9000!important}
   #d2phsheet.on{bottom:var(--d2phnav,0px)!important}
   #d2phsheet .fpscroll{display:flex!important;flex-wrap:wrap!important;gap:8px!important;overflow:visible!important;width:100%;mask-image:none!important;-webkit-mask-image:none!important}

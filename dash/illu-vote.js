@@ -2409,7 +2409,7 @@
     let list = all.filter(x => inF(tf, x));
     if(ts === 'new') list.sort((a, b) => a.h - b.h); else list.sort((a, b) => (ts === 'urg' ? ((b.h >= 3) - (a.h >= 3)) : 0) || (b.h - a.h));
     const mineDone = allStates().filter(s => s.open && s.mine).length;
-    const chip = (f, lab) => '<button type="button" class="ivtf' + (f === 'now' ? ' hot' : '') + '" data-ivset="tf=' + f + '" aria-pressed="' + (tf === f) + '">' + (f === 'now' ? '<i></i>' : '') + lab + ' <s>' + all.filter(x => inF(f, x)).length + '</s></button>';
+    const chip = (f, lab) => { const n = all.filter(x => inF(f, x)).length; return '<button type="button" class="ivtf' + (f === 'now' ? ' hot' : '') + (!n && f !== 'all' && tf !== f ? ' ivtfz' : '') + '" data-ivset="tf=' + f + '" aria-pressed="' + (tf === f) + '">' + (f === 'now' ? '<i></i>' : '') + lab + ' <s>' + n + '</s></button>'; };
     const opt = (v, lab) => '<option value="' + v + '"' + (ts === v ? ' selected' : '') + '>' + lab + '</option>';
     setTimeout(tick, 0);
     const tab = ['done', 'appr', 'cxl'].includes(VS.tsub) ? VS.tsub : 'to', vd = myVoted().filter(gw), vn = Math.max(24, +VS.vn || 24);

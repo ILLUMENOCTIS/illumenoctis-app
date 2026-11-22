@@ -370,8 +370,13 @@
   function board(){
     const p = pool();
     return '<div class="bemtools"><label class="bemsearch">' + I.search + '<input type="search" data-bemq placeholder="' + E(L('Search agency or model', '에이전시 또는 모델 검색')) + '" value="' + E(ST.q) + '"></label>' +
-        '<div class="bemseg" role="group" aria-label="' + E(L('Whose emails', '누구의 메일')) + '"><button type="button" data-bemwho="me" aria-pressed="' + (ST.who === 'me') + '">' + L('Mine', '내 메일') + ' <s>' + ROWS.filter(r => r.mine).length + '</s></button><button type="button" data-bemwho="all" aria-pressed="' + (ST.who === 'all') + '">' + L('Everyone', '전체') + ' <s>' + ROWS.length + '</s></button></div>' +
-        '<div class="bemseg" role="group" aria-label="' + E(L('Replies', '답장')) + '"><button type="button" data-bemf="any" aria-pressed="' + (ST.f === 'any') + '">' + L('All', '전체') + '</button><button type="button" data-bemf="replied" aria-pressed="' + (ST.f === 'replied') + '">' + L('Reply in', '답장 옴') + ' <s>' + p.filter(r => r.recv).length + '</s></button><button type="button" data-bemf="open" aria-pressed="' + (ST.f === 'open') + '">' + L('No reply yet', '답장 없음') + ' <s>' + p.filter(r => !r.recv).length + '</s></button></div>' +
+        '<div class="bemseg bemwhos" role="group" aria-label="' + E(L('Whose emails', '누구의 메일')) + '"><button type="button" data-bemwho="me" aria-pressed="' + (ST.who === 'me') + '">' + L('Mine', '내 메일') + ' <s>' + ROWS.filter(r => r.mine).length + '</s></button><button type="button" data-bemwho="all" aria-pressed="' + (ST.who === 'all') + '">' + L('Everyone', '전체') + ' <s>' + ROWS.length + '</s></button></div>' +
+        '<div class="bemseg bemrep" role="group" aria-label="' + E(L('Replies', '답장')) + '"><button type="button" data-bemf="any" aria-pressed="' + (ST.f === 'any') + '">' + L('All', '전체') + '</button><button type="button" data-bemf="replied" aria-pressed="' + (ST.f === 'replied') + '">' + L('Reply in', '답장 옴') + ' <s>' + p.filter(r => r.recv).length + '</s></button><button type="button" data-bemf="open" aria-pressed="' + (ST.f === 'open') + '">' + L('No reply yet', '답장 없음') + ' <s>' + p.filter(r => !r.recv).length + '</s></button></div>' +
+        /* 1.2.275 (user, phone: option C "with the All button beside" Mine / Everyone): All / Reply in / No reply yet as a
+           list that opens and closes - shown on phones only (on the computer the row of three stays) */
+        (() => { const FL = {any: L('All', '전체'), replied: L('Reply in', '답장 옴'), open: L('No reply yet', '답장 없음')}, FN = {any: '', replied: p.filter(r => r.recv).length, open: p.filter(r => !r.recv).length};
+          return '<span class="bemfdd"><button type="button" class="bemfddb" data-bemfdd aria-haspopup="listbox" aria-expanded="' + !!ST.fdd + '">' + FL[ST.f] + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + (ST.fdd ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6') + '"/></svg></button>' +
+            (ST.fdd ? '<span class="bemfddl" role="listbox" aria-label="' + E(L('Replies', '답장')) + '">' + Object.keys(FL).map(k => '<button type="button" role="option" data-bemf="' + k + '" aria-selected="' + (ST.f === k) + '">' + FL[k] + (FN[k] !== '' ? '<s>' + FN[k] + '</s>' : '') + '</button>').join('') + '</span>' : '') + '</span>'; })() +
         '<span class="bemsp"></span><div class="bemtot">' + totals() + '</div>' + updBtn() + '</div>' +
       '<div class="bemhint"><span class="bemlive"></span><span class="bemhtxt">' + L('Every model inquiry you send from Hiworks is added here automatically — newest activity on top.', 'Hiworks로 보낸 모델 문의는 자동으로 추가됩니다 — 최근 활동이 맨 위.') + '</span><span class="bemupdmsg" id="bemupdmsg">' + updMsg() + '</span></div>' +
       '<div class="bemlist" id="bemlist">' + list() + '</div><div id="bemrem">' + remPanel() + '</div>';
@@ -388,7 +393,7 @@
     const n = ROWS.length, rep = ROWS.some(r => r.mine && r.st === 'replied'), nn = ROWS.filter(newMail).length;
     return '<div class="bemsw" role="tablist" aria-label="' + E(L('Today’s Board', '오늘의 보드')) + '">' +
       '<button type="button" role="tab" data-bemv="vote" aria-selected="' + (ST.v === 'vote') + '">' + L('Team Vote', '팀 투표') + '</button>' +
-      '<button type="button" role="tab" data-bemv="mail" aria-selected="' + (ST.v === 'mail') + '">' + I.mail + '<span class="bemwt">' + L('<span class="bemwb">Booking </span>Emails', '부킹 이메일') + '</span>' + ' <s>' + n + '</s>' + (nn ? '<b class="bemnewn" title="' + E(L(nn + (nn === 1 ? ' agency has' : ' agencies have') + ' a new email', '새 메일이 온 에이전시 ' + nn + '곳')) + '">' + nn + ' ' + L('new', '새 메일') + '</b>' : rep ? '<i class="bemdot" title="' + E(L('A reply came in', '답장이 왔습니다')) + '"></i>' : '') + '</button></div>';
+      '<button type="button" role="tab" data-bemv="mail" aria-selected="' + (ST.v === 'mail') + '">' + I.mail + '<span class="bemwt">' + L('<span class="bemwb">Booking </span>Emails', '부킹 이메일') + '</span>' + ' <s>' + n + '</s>' + (nn ? '<b class="bemnewn" data-n="' + nn + '" title="' + E(L(nn + (nn === 1 ? ' agency has' : ' agencies have') + ' a new email', '새 메일이 온 에이전시 ' + nn + '곳')) + '">' + nn + ' ' + L('new', '새 메일') + '</b>' : rep ? '<i class="bemdot" title="' + E(L('A reply came in', '답장이 왔습니다')) + '"></i>' : '') + '</button></div>';
   }
   /* Today's main column: the tabs, then Team Vote as it was or the Booking Emails board */
   function wrap(){
@@ -405,6 +410,7 @@
   }
   wrap();
   function draw(){ try{ window.__illuTodayRender && window.__illuTodayRender(); }catch(e){} }
+  document.addEventListener('click', e => { if(ST.fdd && !(e.target.closest && e.target.closest('.bemfdd'))){ ST.fdd = false; draw(); } }, true);
   /* the list only (typing in the search box keeps its place) */
   window.__illuBEmailRedraw = () => { if(document.getElementById('bemlist')) drawList(); };
   function drawList(){ const l = document.getElementById('bemlist'); if(!l){ draw(); return; } ROWS = build(); l.innerHTML = list(); const t = document.querySelector('#bem .bemtot'); if(t) t.innerHTML = totals(); const rp = document.getElementById('bemrem'); if(rp) rp.innerHTML = remPanel(); }
@@ -602,7 +608,8 @@
     const sm = t.closest('.bemrem > summary'); if(sm){ e.preventDefault(); e.stopPropagation(); ST.remOpen = !ST.remOpen; const d = sm.parentElement; d.open = ST.remOpen; return; }
     const mc = t.closest('[data-bemmc]'); if(mc){ e.preventDefault(); e.stopPropagation(); pick(mc); return; }
     const w = t.closest('[data-bemwho]'); if(w){ e.stopPropagation(); ST.who = w.dataset.bemwho; keep(); draw(); return; }
-    const f = t.closest('[data-bemf]'); if(f){ e.stopPropagation(); ST.f = f.dataset.bemf; draw(); return; }
+    const fd = t.closest('[data-bemfdd]'); if(fd){ e.stopPropagation(); ST.fdd = !ST.fdd; draw(); return; }
+    const f = t.closest('[data-bemf]'); if(f){ e.stopPropagation(); ST.f = f.dataset.bemf; ST.fdd = false; draw(); return; }
     const tv = t.closest('[data-bemtv]'); if(tv){ e.stopPropagation(); const it = tv.closest('[data-bemrow]'); if(it){ ST.tv[it.dataset.bemrow] = tv.dataset.bemtv; drawList(); } return; }
     if(t.closest('.bemthread')) return;
     const it = t.closest('[data-bemrow]'); if(it && t.closest('.bemrw')){ e.stopPropagation(); const k = it.dataset.bemrow; if(ST.open.has(k)) ST.open.delete(k); else { ST.open.add(k); seenRow(ROWS.find(x => x.key === k)); try{ const tb = document.querySelector('.bemwrap [data-bemv="mail"]'); if(tb){ const w = document.createElement('div'); w.innerHTML = tabs(); const nb = w.querySelector('[data-bemv="mail"]'); if(nb) tb.innerHTML = nb.innerHTML; } }catch(err){} } drawList(); }
@@ -627,6 +634,7 @@
 .bemsw .bemdot{width:7px;height:7px;border-radius:50%;background:#2e8b57}
 .bem{container-type:inline-size;min-width:0}
 .bemtools{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;margin:4px 0 10px}
+.bemfdd{display:none;position:relative}
 .bemseg{display:inline-flex;gap:2px;background:var(--chip,rgba(0,0,0,.04));border:1px solid var(--line);border-radius:11px;padding:3px}
 .bemseg button{border:0;background:none;padding:6px 11px;border-radius:8px;font:inherit;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;color:inherit}
 .bemseg button s{text-decoration:none;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}

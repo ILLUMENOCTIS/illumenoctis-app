@@ -2114,6 +2114,9 @@
   try{ RC.tab = localStorage.getItem('illu.rctab') || 'you'; RC.nfSub = localStorage.getItem('illu.rcnfsub') || 'both'; }catch(e){ RC.tab = 'you'; RC.nfSub = 'both'; }
   /* 1.2.117 (user, 9 Nov 2026): the Korean market list is gone from Suggestiones - anyone left on it goes to For you */
   if(!['you', 'nf'].includes(RC.tab)) RC.tab = 'you';
+  /* 1.2.275 (user, 22 Nov 2026: "Let's also get rid of the 'For you' Board. We will only keep the New Faces & Development boards"):
+     the page shows the New face & Development boards only */
+  RC.tab = 'nf';
   RC.nfN = 60; RC.nfPg = 0; RC.nfSeed = 1; RC.krSeen = new Set(); RC.krCur = null; RC.krKey = '';
   const NFT = ['newfaces', 'development'];
   function nfPool(){
@@ -2497,7 +2500,7 @@
     const pgOf = i => !nfNew.length ? nfOld.slice(i * 60, i * 60 + 60) : i === 0 ? nfNew : nfOld.slice((i - 1) * 60, i * 60);
     const nfPages = Math.max(1, (nfNew.length ? 1 : 0) + Math.ceil(nfOld.length / 60)); if(RC.nfPg >= nfPages) RC.nfPg = nfPages - 1; if(!(RC.nfPg >= 0)) RC.nfPg = 0;
     if(tab === 'nf') list = pgOf(RC.nfPg).filter(m => !hidM(m));
-    if(tab === 'you') strip = nfAll.slice(0, 12);
+    if(tab === 'you' && false) strip = nfAll.slice(0, 12);
     const every = list.concat(strip.filter(m => !list.some(x => x.key === m.key)));
     RC.disp = list;
     if(D2.open && !every.some(m => m.key === D2.open)) D2.open = '';
@@ -2528,9 +2531,10 @@
           (list.length ? '<div class="rc2grid">' + list.map(m => tile2(m)).join('') + '</div>' + (nfPages > 1 ? '<nav class="rc2pg" aria-label="Pages"><button type="button" class="rcnb" data-rcpg="' + (RC.nfPg - 1) + '"' + (RC.nfPg ? '' : ' disabled') + '>‹ Previous</button><span>Page <b>' + (RC.nfPg + 1).toLocaleString() + '</b> of ' + nfPages.toLocaleString() + ' · ' + (RC.nfPg * 60 + 1).toLocaleString() + '–' + (RC.nfPg * 60 + list.length).toLocaleString() + ' of ' + nfN.toLocaleString() + '</span><button type="button" class="rcnb" data-rcpg="' + (RC.nfPg + 1) + '"' + (RC.nfPg < nfPages - 1 ? '' : ' disabled') + '>Next page ›</button></nav>' : '') : '<div class="d2empty"><p>No model on these boards matches your filters.</p></div>')
       : body + (strip.length ? '<section class="rc2nf" aria-label="From New face and Development boards"><div class="rc2bar"><div><b>From New face &amp; Development boards</b><span class="rc2note">' + nfN.toLocaleString() + ' models · ' + nfF.toLocaleString() + ' New face · ' + (nfN - nfF).toLocaleString() + ' Development</span></div>' + subSeg + '<button type="button" class="rcnb" data-rctab="nf">See all</button></div><div class="rc2strip">' + strip.map(m => tile2(m)).join('') + '</div></section>' : '');
     const G0 = $('.d2body'), gTop = G0 ? G0.scrollTop : 0;
-    const tabs = '<div class="rc2seg rc2tabs" role="tablist" aria-label="Lists">' +
+    const tabs0 = '<div class="rc2seg rc2tabs" role="tablist" aria-label="Lists">' +
       [['you', 'For you', ready ? ms.length : '', sub], ['nf', PH ? 'New faces & Dev' : 'New faces & Development', ready ? nfN.toLocaleString() : '', nfN.toLocaleString() + ' models with a photo on New face and Development boards · your newest picks first · under 18s are never shown']].map(([k, l, n, ti]) =>
         '<button type="button" role="tab" data-rctab="' + k + '" aria-selected="' + (tab === k) + '" title="' + esc(ti || '') + '">' + esc(l) + (n !== '' ? ' <s>' + n + '</s>' : '') + '</button>').join('') + '</div>';
+    const tabs = '<span class="rc2cnt" title="' + esc(nfN.toLocaleString() + ' models with a photo on New face and Development boards · your newest picks first · under 18s are never shown') + '">' + (ready ? '<b>' + nfN.toLocaleString() + '</b> ' : '') + 'models</span>';
     const sub2 = tab === 'you' ? sub : tab === 'kor' ? 'Measured models from the whole Directory that best fit the Korean-market bands' : 'Models on the agencies\' New face and Development boards';
     const NFL = {both: 'Both', newfaces: 'New faces', development: 'Development'};
     /* Both / New faces / Development: a list that opens and closes (phone row; on the PC beside the two tabs - user, 12 Nov 2026) */
@@ -2591,6 +2595,7 @@
     '.rchd .rc2tabs{margin:6px 0 4px}' +
     '.rchd .rctabrow{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:6px 0 4px}.rchd .rctabrow .rc2tabs{margin:0}' +
     '#pane-arr:not(.rcphone) .rcdd{position:relative;flex:none}' +
+    '#pane-arr.rcphone .rc2cnt{display:none!important}#pane-arr .rc2cnt{flex:none;font-size:13.5px;color:var(--dim,#7A6E7A);white-space:nowrap;padding:0 4px}#pane-arr .rc2cnt b{color:var(--ink,#211C26);font-weight:700}' +
     '#pane-arr:not(.rcphone) .rcddb{height:42px;border-radius:11px;border:1px solid var(--line,#e3dde8);background:var(--surf,#fff);padding:0 12px;display:flex;align-items:center;gap:6px;font:600 13px var(--sans,Inter,system-ui,sans-serif);color:var(--acc,#5A2C57);cursor:pointer;white-space:nowrap}' +
     '#pane-arr:not(.rcphone) .rcddb[aria-expanded="true"]{border-color:var(--acc,#5A2C57);background:var(--accbg,#F3ECF3)}' +
     '#pane-arr:not(.rcphone) .rcddb svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}' +

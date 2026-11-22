@@ -119,6 +119,8 @@
   function paintRail(){
     if(!rail.firstChild || rail.dataset.lang !== String(isKO())){ rail.innerHTML = railHTML(); rail.dataset.lang = String(isKO()); }
     const wait = window.__illuVoteWaiting ? window.__illuVoteWaiting() : 0;
+    /* 1.2.275 (user, phone: the greeting is gone, the Processing count shows on the Booking button) */
+    let procN = 0; try{ procN = [...BOOK.values()].filter(x => !(x.st === 'done' || x.st === 'canc')).length; }catch(e){}
     rail.querySelectorAll('.shnv[data-shv]').forEach(b => {
       const v = b.dataset.shv, gi = GROUPS[v];
       b.hidden = gi ? !gi.tabs.some(exists) : !exists(v);
@@ -131,6 +133,7 @@
       b.classList.toggle('beacon', beacon);
       b.title = beacon ? L(wait + ' waiting for your vote', '내 투표 대기 ' + wait) : '';
       const e = b.querySelector('.shnc'); if(e.textContent !== c) e.textContent = c;
+      if(v === 'g-opus'){ const sd = b.querySelector('.shdot'); if(sd && sd.dataset.n !== String(procN)) sd.dataset.n = String(procN); }
       const on = gi ? gi.tabs.includes(page) : v === page;
       if(b.classList.contains('on') !== on){ b.classList.toggle('on', on); if(on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }
     });
