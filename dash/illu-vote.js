@@ -2322,7 +2322,9 @@
     const chip = (v, lab, n) => '<button type="button" class="ivchip' + ((VS.cwho || 'all') === v ? ' on' : '') + '" data-ivset="cwho=' + H(v) + '">' + lab + (n != null ? ' <span>' + n + '</span>' : '') + '</button>';
     const head = '<div class="ivhead"><span class="ivbig">' + allStates().filter(s => s.open).length + '</span><span class="ivkick">' + L('Faces up for the team vote', '팀 투표에 오른 얼굴') + '</span><span class="ivdot"></span>' +
       chip('all', L('Everyone', '모두')) + ppl.map(p => chip(p, capDisc(p) + H(pname(p)), all.filter(s => s.o.by === p).length)).join('') +
-      '<span class="ivsp"></span>' + remindBtn() + (tab === 'to' ? seg('corder', [['old', L('Oldest first', '오래된 순')], ['new', L('Newest first', '최신 순')]]) : '') + '</div>' +
+      ddList('cwhodd', pick ? H(pname(pick)) : L('Everyone', '모두'), '', [['cwho=all', L('Everyone', '모두'), allStates().filter(s => s.open).length, !pick]].concat(ppl.map(p => ['cwho=' + H(p), capDisc(p) + H(pname(p)), all.filter(s => s.o.by === p).length, pick === p]))) +
+      '<span class="ivsp"></span>' + remindBtn() + (tab === 'to' ? seg('corder', [['old', L('Oldest first', '오래된 순')], ['new', L('Newest first', '최신 순')]]) +
+        '<select class="ivts ivcos" data-ivcorder aria-label="' + H(L('Order', '순서')) + '"><option value="old"' + ((VS.corder || 'old') === 'old' ? ' selected' : '') + '>' + L('Oldest first', '오래된 순') + '</option><option value="new"' + (VS.corder === 'new' ? ' selected' : '') + '>' + L('Newest first', '최신 순') + '</option></select>' : '') + '</div>' +
       subTabs('vsub', tab, to.length, vd.length);
     const cw = st => '<div class="ivcw">' + mcard(st.k) + (tab === 'to' ? '<div class="ivcap">' + H(L('Sent by ', '보낸 사람: ') + pname(st.o.by) + ' · ' + when(st.o.at)) + '</div>' + stPill(st.k) : votedCap(st)) + offBox(st.k, st) + '</div>';
     const list = tab === 'to' ? to : vd;
@@ -2333,6 +2335,19 @@
   /* 1.2.202 (user, 16 Nov 2026, approved demo "Today's Board vote bar" style 2 - Quiet switch): a light grey track, the
      chosen tab a white raised button, counts in grey - orange when something needs me (votes waiting, Approved cards
      waiting for the final confirmation). Today's Board also gets Approved and Cancelled. */
+  /* 1.2.276 (user, phone): a list button that opens and closes, used instead of rows that slide sideways.
+     items: [setting, label, count, selected]; VS[key] holds whether it is open. Shown on phones only (CSS). */
+  function ddList(key, cur, n, items){
+    const open = VS[key] === '1';
+    return '<span class="ivdd" data-ivdd="' + key + '"><button type="button" class="ivddb" data-ivset="' + key + '=' + (open ? '' : '1') + '" aria-haspopup="listbox" aria-expanded="' + open + '">' + cur + (n !== '' && n != null ? ' <b>' + n + '</b>' : '') +
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + (open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6') + '"/></svg></button>' +
+      (open ? '<span class="ivddl" role="listbox">' + items.map(([set, lab, c, on]) => '<button type="button" role="option" class="ivddo" data-ivset="' + set + '" aria-selected="' + !!on + '">' + lab + (c !== '' && c != null ? '<b>' + c + '</b>' : '') + '</button>').join('') + '</span>' : '') + '</span>';
+  }
+  function subDD(key, tab, nTo, nDone, more){
+    const it = [['to', L('Waiting for my vote', '내 투표 대기'), nTo], ['done', L('I voted', '내가 투표한 카드'), nDone]].concat(more ? [['appr', L('Approved', '승인'), more.appr], ['cxl', L('Cancelled', '취소'), more.cxl]] : []);
+    const cur = it.find(x => x[0] === tab) || it[0];
+    return ddList(key + 'dd', cur[1], cur[2], it.map(x => [key + '=' + x[0], x[1], x[2], x[0] === tab]));
+  }
   function subTabs(key, tab, nTo, nDone, more){
     const b = (v, lab, n, hot) => '<button type="button" role="tab" data-ivset="' + key + '=' + v + '" aria-selected="' + (tab === v) + '">' + lab + ' <b' + (hot && n > 0 ? ' class="hot"' : '') + '>' + n + '</b></button>';
     return '<div class="ivsub qsw" role="tablist">' + b('to', L('Waiting for my vote', '내 투표 대기'), nTo, true) + b('done', L('I voted', '내가 투표한 카드'), nDone) +
@@ -2427,7 +2442,7 @@
     /* 1.2.138 (user, 11 Nov 2026: "this part is taking up too much space. Don't need that Waiting for your vote. I already
        have the golden bar telling me. the [team] description should be able to viewed by clicking/touching"):
        one row - the two tabs (they carry the counts), an ⓘ that opens the team note, Share vote link, Team Vote */
-    return '<section class="ivtoday' + (all.length ? ' glow' : '') + '"><div class="ivrow ivth ivth2">' + subTabs('tsub', tab, all.length, vd.length, {appr: apWait.length, cxl: cxl.length}) + '<span class="ivsp"></span>' +
+    return '<section class="ivtoday' + (all.length ? ' glow' : '') + '"><div class="ivrow ivth ivth2">' + subTabs('tsub', tab, all.length, vd.length, {appr: apWait.length, cxl: cxl.length}) + subDD('tsub', tab, all.length, vd.length, {appr: apWait.length, cxl: cxl.length}) + '<span class="ivsp"></span>' +
       '<details class="ivinfo"><summary title="' + H(L('How the Team Vote works', '팀 투표 방법')) + '" aria-label="' + H(L('How the Team Vote works', '팀 투표 방법')) + '">i</summary><p class="ivmut sm ivtnote">' + L('Team: ', '팀: ') + H(people().map(pname).join(', ')) + ' · ' + L('the majority decides; your vote stays private until everyone has voted.', '다수결 · 모두 투표할 때까지 내 선택은 나만 봅니다.') + (mineDone ? ' · ' + L('<b>' + mineDone + '</b> you voted on are waiting for the others.', '내가 투표한 <b>' + mineDone + '</b>건은 다른 사람을 기다립니다.') : '') + '</p></details>' +
       remindBtn() +
       (lateN ? '' : '<button type="button" class="ivgo" data-ivgo="team">' + L('Team Vote', '팀 투표') + ' <span aria-hidden="true">→</span></button>') + '</div>' +
@@ -2449,6 +2464,15 @@
     });
   };
   window.__illuVoteCast = (k, v) => cast(k, v);
+  document.addEventListener('change', e => { const s = e.target.closest && e.target.closest('select[data-ivcorder]'); if(!s) return; VS.corder = s.value; saveVS(); try{ const pg = PAGES.get('team'); if(pg) pg.render(); }catch(er){} });
+  document.addEventListener('click', e => {
+    const open = ['tsubdd', 'cwhodd'].filter(k => VS[k] === '1'); if(!open.length) return;
+    const t = e.target, inDD = t.closest && t.closest('.ivdd');
+    if(inDD && !(t.closest('.ivddo'))) return;          // the list button itself: its own setting opens / closes it
+    for(const k of open) VS[k] = '';
+    saveVS();
+    if(!inDD){ try{ window.__illuTodayRender && window.__illuTodayRender(); }catch(er){} try{ const pg = PAGES.get('team'); if(pg && document.querySelector('#pane-team .ivdd')) pg.render(); }catch(er){} }
+  }, true);
   document.addEventListener('change', e => { const s = e.target.closest && e.target.closest('select[data-ivsort]'); if(!s) return; VS.ts = s.value; saveVS(); try{ window.__illuTodayRender && window.__illuTodayRender(); }catch(er){} });
   window.__illuVoteToggleHook = (el, e) => { const b = e.target.closest('[data-ivset]'); if(b){ const sv = b.dataset.ivset, ix = sv.indexOf('='), kk = sv.slice(0, ix), v = sv.slice(ix + 1); VS[kk] = v; if(kk === 'tf') delete VS.tn; saveVS(); return true; } const ph = phOf(e); if(ph){ const a = ph.closest('[data-ivk]'); if(a){ openFull(a.dataset.ivk, ph); return true; } } return false; };
 

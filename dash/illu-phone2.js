@@ -9,7 +9,9 @@
      Maximize, Sort, Download) open in a sheet from the bottom. The start screen is region tiles ("P2", illu-dir2.js).
    - Atlas map: the count bubbles are sized to the phone's map (s18.js).
    1.2.275: no greeting (the Processing count is on the Booking button), "1 new" as a small number on the Emails tab,
-   the Team Vote order as a ⇅ button in the chip row, and the Emails header as option C. */
+   the Team Vote order as a ⇅ button in the chip row, and the Emails header as option C.
+   1.2.276: ↗ on the Team Vote tab (no separate button), Waiting / I voted / Approved / Cancelled as one list button,
+   the Team Vote board's count · Everyone ▾ · Remind (· ⇅ order) in one line, and the top tab rows fitted to the screen. */
 (function(){
   'use strict';
   const PH = () => { try{ return matchMedia('(max-width:760px)').matches; }catch(e){ return false; } };
@@ -17,7 +19,7 @@
   const L = (en, ko) => KO() ? ko : en;
 
   const css = `
-.shhdph,#d2phflt,#d2phsheet,#d2phveil{display:none}
+.shhdph,#d2phflt,#d2phsheet,#d2phveil,.ivdd,.ivcos{display:none}
 .bemwrap{position:relative}
 @media (max-width:760px){
   /* ---- top bar (E1) ---- */
@@ -115,6 +117,47 @@
   #bem .bemfddl button[aria-selected="true"] s{color:#EBD8EA}
   #bem .bemhint .bemlive,#bem .bemhint .bemhtxt{display:none!important}
   #bem .bemhint{margin:0!important}
+
+  /* ==== 1.2.276 (user, 22 Nov 2026: "C + 2 + A", and the tab rows must fit) ==== */
+  /* C: an ↗ on the Team Vote tab opens the board; the separate "Team Vote →" button goes */
+  .bemtvgo{display:inline-grid!important;place-items:center;width:20px;height:20px;margin-left:6px;border-radius:6px;background:var(--accsoft,#F3ECF3);color:var(--acc,#6B2A67);font-size:12px;line-height:1}
+  .bemwrap .ivrow.ivth>.ivgo{display:none!important}
+  /* list buttons (shared) */
+  .ivdd{position:relative;display:block!important}
+  .ivddb{width:100%;height:40px;border-radius:12px;border:1px solid var(--line,#EADFEA);background:var(--surf,#fff);display:flex;align-items:center;gap:6px;padding:0 12px;font:inherit;font-size:14px;font-weight:600;color:var(--ink,#1B141B);cursor:pointer;white-space:nowrap}
+  .ivddb[aria-expanded="true"]{border-color:var(--acc,#6B2A67)}
+  .ivddb b{color:#C2410C;font-weight:700}
+  .ivddb svg{margin-left:auto;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex:none}
+  .ivddl{position:absolute;left:0;right:0;top:46px;z-index:40;background:var(--surf,#fff);border:1px solid var(--line,#E7E2EC);border-radius:12px;box-shadow:0 14px 34px rgba(20,10,30,.18);padding:6px;display:flex;flex-direction:column;gap:2px;min-width:190px}
+  .ivddo{border:0;background:none;border-radius:8px;padding:11px 12px;font:inherit;font-size:14.5px;color:var(--ink,#211C26);text-align:left;display:flex;align-items:center;gap:8px;cursor:pointer}
+  .ivddo b{margin-left:auto;color:var(--dim,#8F8794);font-weight:600}
+  .ivddo[aria-selected="true"]{background:var(--acc,#6B2A67);color:#fff;font-weight:600}
+  .ivddo[aria-selected="true"] b{color:#fff}
+  /* 2: Today - Waiting for my vote / I voted / Approved / Cancelled as one list button */
+  .bemwrap .ivrow.ivth{flex-wrap:nowrap!important;align-items:center!important;gap:8px!important}
+  .bemwrap .ivrow.ivth>.ivsub{display:none!important}
+  .bemwrap .ivrow.ivth>.ivdd{flex:1 1 auto;min-width:0}
+  /* A: Team Vote board - count, Everyone ▾ and Remind in one line */
+  #pane-team .ivhead{flex-wrap:nowrap!important;align-items:center!important;gap:8px!important}
+  #pane-team .ivhead>.ivchip,#pane-team .ivhead>.ivdot,#pane-team .ivhead>.ivseg{display:none!important}
+  #pane-team .ivhead>.ivbig{flex:none}
+  #pane-team .ivhead>.ivkick{flex:1 1 auto;min-width:0;white-space:normal!important;line-height:1.25;font-size:10.5px!important}
+  #pane-team .ivhead>.ivsp{display:none!important}
+  #pane-team .ivhead>.ivdd{flex:none}
+  #pane-team .ivhead>.ivdd .ivddb{width:auto;background:var(--accsoft,#F6EEF5);border-color:#D9C4D8;color:var(--acc,#5A2C57);padding:0 10px 0 12px;gap:6px}
+  #pane-team .ivhead>.ivdd .ivddl{left:auto;right:0}
+  #pane-team .ivhead>.ivremind{flex:none;font-size:0!important;padding:0 9px!important;height:40px!important;min-height:40px!important;gap:3px!important;border-radius:12px!important}
+  #pane-team .ivhead>.ivremind b{font-size:11.5px!important}
+  #pane-team .ivhead>.ivremind svg{width:17px!important;height:17px!important}
+  #pane-team .ivhead>.ivcos{display:block!important;flex:none;width:40px;min-width:40px;height:40px;padding:0;border-radius:12px;color:transparent;-webkit-appearance:none;appearance:none;background:var(--surf,#fff) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B2A67' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4'/%3E%3C/svg%3E") center/18px no-repeat;border:1px solid var(--line,#EADFEA)}
+  #pane-team .ivhead>.ivcos option{color:var(--ink,#1B141B)}
+  /* the two tab rows at the top of a page fit the screen (no sliding, nothing cut off) */
+  #shsub:not(:has(> :nth-child(6))){display:flex!important;overflow:hidden!important;gap:0!important}
+  #shsub:not(:has(> :nth-child(6))) > *{flex:1 1 auto!important;min-width:0!important;justify-content:center!important;padding-left:clamp(2px,1vw,8px)!important;padding-right:clamp(2px,1vw,8px)!important;font-size:clamp(11.5px,3.5vw,14.5px)!important;gap:clamp(3px,1vw,6px)!important;white-space:nowrap!important}
+  #shsub:not(:has(> :nth-child(6))) > * svg{display:none!important}
+  #shsub2:not(:has(> :nth-child(5))){display:flex!important;overflow:hidden!important;gap:2px!important}
+  #shsub2:not(:has(> :nth-child(5))) > button{flex:1 1 auto!important;min-width:0!important;justify-content:center!important;padding-left:clamp(3px,1.2vw,8px)!important;padding-right:clamp(3px,1.2vw,8px)!important;font-size:clamp(10.5px,3.15vw,13.5px)!important;gap:clamp(2px,1vw,5px)!important;white-space:nowrap!important}
+  #shsub2:not(:has(> :nth-child(5))) > button em{font-size:clamp(10px,2.9vw,12px)!important;padding:0 clamp(3px,1.2vw,6px)!important}
   #d2bar.d2phon{z-index:9000!important}
   #d2phsheet.on{bottom:var(--d2phnav,0px)!important}
   #d2phsheet .fpscroll{display:flex!important;flex-wrap:wrap!important;gap:8px!important;overflow:visible!important;width:100%;mask-image:none!important;-webkit-mask-image:none!important}

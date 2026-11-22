@@ -392,7 +392,7 @@
   function tabs(){
     const n = ROWS.length, rep = ROWS.some(r => r.mine && r.st === 'replied'), nn = ROWS.filter(newMail).length;
     return '<div class="bemsw" role="tablist" aria-label="' + E(L('Today’s Board', '오늘의 보드')) + '">' +
-      '<button type="button" role="tab" data-bemv="vote" aria-selected="' + (ST.v === 'vote') + '">' + L('Team Vote', '팀 투표') + '</button>' +
+      '<button type="button" role="tab" data-bemv="vote" aria-selected="' + (ST.v === 'vote') + '">' + L('Team Vote', '팀 투표') + '<span class="bemtvgo" data-bemtvgo role="link" aria-label="' + E(L('Open the Team Vote board', '팀 투표 보드 열기')) + '" title="' + E(L('Open the Team Vote board', '팀 투표 보드 열기')) + '">↗</span></button>' +
       '<button type="button" role="tab" data-bemv="mail" aria-selected="' + (ST.v === 'mail') + '">' + I.mail + '<span class="bemwt">' + L('<span class="bemwb">Booking </span>Emails', '부킹 이메일') + '</span>' + ' <s>' + n + '</s>' + (nn ? '<b class="bemnewn" data-n="' + nn + '" title="' + E(L(nn + (nn === 1 ? ' agency has' : ' agencies have') + ' a new email', '새 메일이 온 에이전시 ' + nn + '곳')) + '">' + nn + ' ' + L('new', '새 메일') + '</b>' : rep ? '<i class="bemdot" title="' + E(L('A reply came in', '답장이 왔습니다')) + '"></i>' : '') + '</button></div>';
   }
   /* Today's main column: the tabs, then Team Vote as it was or the Booking Emails board */
@@ -594,6 +594,7 @@
   /* ---------- clicks ---------- */
   document.addEventListener('click', e => {
     const t = e.target; if(!t.closest) return;
+    const tg = t.closest('[data-bemtvgo]'); if(tg){ e.preventDefault(); e.stopPropagation(); try{ window.__illuGo ? window.__illuGo('team') : setView('team'); }catch(er){} return; }
     const tab = t.closest('[data-bemv]');
     if(tab){ e.preventDefault(); e.stopPropagation(); ST.v = tab.dataset.bemv; keep(); if(ST.v === 'mail') loadHw(true); draw(); return; }
     const ub = t.closest('.bemundo [data-bemrestore]'); if(ub){ e.preventDefault(); e.stopPropagation(); restore(ub.dataset.bemrestore); return; }
@@ -635,6 +636,7 @@
 .bem{container-type:inline-size;min-width:0}
 .bemtools{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;margin:4px 0 10px}
 .bemfdd{display:none;position:relative}
+.bemtvgo{display:none}
 .bemseg{display:inline-flex;gap:2px;background:var(--chip,rgba(0,0,0,.04));border:1px solid var(--line);border-radius:11px;padding:3px}
 .bemseg button{border:0;background:none;padding:6px 11px;border-radius:8px;font:inherit;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;color:inherit}
 .bemseg button s{text-decoration:none;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
