@@ -2346,7 +2346,10 @@
   function subDD(key, tab, nTo, nDone, more){
     const it = [['to', L('Waiting for my vote', '내 투표 대기'), nTo], ['done', L('I voted', '내가 투표한 카드'), nDone]].concat(more ? [['appr', L('Approved', '승인'), more.appr], ['cxl', L('Cancelled', '취소'), more.cxl]] : []);
     const cur = it.find(x => x[0] === tab) || it[0];
-    return ddList(key + 'dd', cur[1], cur[2], it.map(x => [key + '=' + x[0], x[1], x[2], x[0] === tab]));
+    /* 1.2.279 (user, phone: "B"): nothing waiting - the button says so, and the empty box below is not shown */
+    const done0 = cur[0] === 'to' && !cur[2];
+    const h = ddList(key + 'dd', cur[1], done0 ? '0 · ' + L('all caught up', '모두 완료') + ' ✓' : cur[2], it.map(x => [key + '=' + x[0], x[1], x[2], x[0] === tab]));
+    return done0 ? h.replace('<b>', '<b class="ivok">') : h;
   }
   function subTabs(key, tab, nTo, nDone, more){
     const b = (v, lab, n, hot) => '<button type="button" role="tab" data-ivset="' + key + '=' + v + '" aria-selected="' + (tab === v) + '">' + lab + ' <b' + (hot && n > 0 ? ' class="hot"' : '') + '>' + n + '</b></button>';
@@ -2451,7 +2454,7 @@
         '<select class="ivts" data-ivsort aria-label="' + H(L('Order', '순서')) + '">' + opt('urg', L('Most urgent first', '급한 순')) + opt('new', L('Newest first', '최신 순')) + opt('old', L('Oldest first', '오래된 순')) + '</select></div>' : '') +
       (list.length ? '<div class="ivgrid tight ivtg">' + list.slice(0, tn).map(x => '<div class="ivcw">' + mcard(x.k) + offBox(x.k, x.st) + '</div>').join('') + '</div>' +
           (list.length > tn ? '<button type="button" class="ivmore" data-ivset="tn=' + (tn + 24) + '">' + L('Show ' + Math.min(24, list.length - tn) + ' more · ' + (list.length - tn) + ' left', Math.min(24, list.length - tn) + '장 더 보기 · ' + (list.length - tn) + '장 남음') + '</button>' : '')
-        : '<div class="ivempty sm">' + (all.length ? L('Nothing here — try another filter.', '여기에는 없습니다 — 다른 필터를 눌러 보세요.') : L('You are all caught up — nothing is waiting for your vote.', '모두 처리했습니다 — 내 투표를 기다리는 카드가 없습니다.')) + '</div>')) + '</section>';
+        : '<div class="ivempty sm' + (all.length ? '' : ' ivempty0') + '">' + (all.length ? L('Nothing here — try another filter.', '여기에는 없습니다 — 다른 필터를 눌러 보세요.') : L('You are all caught up — nothing is waiting for your vote.', '모두 처리했습니다 — 내 투표를 기다리는 카드가 없습니다.')) + '</div>')) + '</section>';
   }
   window.__illuVoteToday = todayBox;
   /* 1.2.114: the pop-up alerts (illu-alerts.js) ask which open votes need me; null until every vote has loaded */

@@ -137,6 +137,9 @@
   .bemwrap .ivrow.ivth{flex-wrap:nowrap!important;align-items:center!important;gap:8px!important}
   .bemwrap .ivrow.ivth>.ivsub{display:none!important}
   .bemwrap .ivrow.ivth>.ivdd{flex:1 1 auto;min-width:0}
+  /* 1.2.279: nothing waiting - said in the button (green), no empty box */
+  .bemwrap .ivddb b.ivok{color:#1E8E5A}
+  #pane-today .ivempty0{display:none!important}
   /* A: Team Vote board - count, Everyone ▾ and Remind in one line */
   #pane-team .ivhead{flex-wrap:nowrap!important;align-items:center!important;gap:8px!important}
   #pane-team .ivhead>.ivchip,#pane-team .ivhead>.ivdot,#pane-team .ivhead>.ivseg{display:none!important}
