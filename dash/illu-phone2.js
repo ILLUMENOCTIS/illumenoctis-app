@@ -151,13 +151,15 @@
   #pane-team .ivhead>.ivremind svg{width:17px!important;height:17px!important}
   #pane-team .ivhead>.ivcos{display:block!important;flex:none;width:40px;min-width:40px;height:40px;padding:0;border-radius:12px;color:transparent;-webkit-appearance:none;appearance:none;background:var(--surf,#fff) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B2A67' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4'/%3E%3C/svg%3E") center/18px no-repeat;border:1px solid var(--line,#EADFEA)}
   #pane-team .ivhead>.ivcos option{color:var(--ink,#1B141B)}
-  /* the two tab rows at the top of a page fit the screen (no sliding, nothing cut off) */
-  #shsub:not(:has(> :nth-child(6))){display:flex!important;overflow:hidden!important;gap:0!important}
-  #shsub:not(:has(> :nth-child(6))) > *{flex:1 1 auto!important;min-width:0!important;justify-content:center!important;padding-left:clamp(2px,1vw,8px)!important;padding-right:clamp(2px,1vw,8px)!important;font-size:clamp(11.5px,3.5vw,14.5px)!important;gap:clamp(3px,1vw,6px)!important;white-space:nowrap!important}
-  #shsub:not(:has(> :nth-child(6))) > * svg{display:none!important}
-  #shsub2:not(:has(> :nth-child(5))){display:flex!important;overflow:hidden!important;gap:2px!important}
-  #shsub2:not(:has(> :nth-child(5))) > button{flex:1 1 auto!important;min-width:0!important;justify-content:center!important;padding-left:clamp(3px,1.2vw,8px)!important;padding-right:clamp(3px,1.2vw,8px)!important;font-size:clamp(10.5px,3.15vw,13.5px)!important;gap:clamp(2px,1vw,5px)!important;white-space:nowrap!important}
-  #shsub2:not(:has(> :nth-child(5))) > button em{font-size:clamp(10px,2.9vw,12px)!important;padding:0 clamp(3px,1.2vw,6px)!important}
+  /* the two tab rows at the top of a page fit the screen (no sliding, nothing cut off).
+     1.2.277: only rows the page shows ([hidden] rows stay hidden - 1.2.276 showed the Team Vote rows on every page),
+     and only rows of 4 tabs or fewer (Atlas's 5 tabs keep sliding) */
+  #shsub:not([hidden]):not(:has(> :nth-child(5))){display:flex!important;overflow:hidden!important;gap:0!important}
+  #shsub:not([hidden]):not(:has(> :nth-child(5))) > *{flex:1 1 auto!important;min-width:0!important;justify-content:center!important;padding-left:clamp(2px,1vw,8px)!important;padding-right:clamp(2px,1vw,8px)!important;font-size:clamp(11.5px,3.5vw,14.5px)!important;gap:clamp(3px,1vw,6px)!important;white-space:nowrap!important}
+  #shsub:not([hidden]):not(:has(> :nth-child(5))) > * svg{display:none!important}
+  #shsub2:not([hidden]):not(:has(> :nth-child(5))){display:flex!important;overflow:hidden!important;gap:2px!important}
+  #shsub2:not([hidden]):not(:has(> :nth-child(5))) > button{flex:1 1 auto!important;min-width:0!important;justify-content:center!important;padding-left:clamp(3px,1.2vw,8px)!important;padding-right:clamp(3px,1.2vw,8px)!important;font-size:clamp(10.5px,3.15vw,13.5px)!important;gap:clamp(2px,1vw,5px)!important;white-space:nowrap!important}
+  #shsub2:not([hidden]):not(:has(> :nth-child(5))) > button em{font-size:clamp(10px,2.9vw,12px)!important;padding:0 clamp(3px,1.2vw,6px)!important}
   #d2bar.d2phon{z-index:9000!important}
   #d2phsheet.on{bottom:var(--d2phnav,0px)!important}
   #d2phsheet .fpscroll{display:flex!important;flex-wrap:wrap!important;gap:8px!important;overflow:visible!important;width:100%;mask-image:none!important;-webkit-mask-image:none!important}
