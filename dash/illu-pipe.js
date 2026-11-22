@@ -15,7 +15,11 @@
   const get = (k, d) => { try{ const v = localStorage.getItem(k); return v == null ? d : v; }catch(e){ return d; } };
   const set = (k, v) => { try{ localStorage.setItem(k, v); }catch(e){} };
   /* 1.2.105 (user, 8 Nov 2026): only the new board - the old Cards view is gone */
-  const S = {on: true, tab: get(TABK, 'proc'), mine: get(MINEK, '0') === '1'};
+  const S = {on: true, tab: get(TABK, 'proc'), mine: get(MINEK, '0') === '1', ph: +get('illu.bkpipeph', '-1')};
+  /* 1.2.280 (user, 22 Nov 2026, phone demo "B3"): on a phone, Processing shows five stage boxes with their counts; tap one to
+     list its cards; swipe a card to the left to move it to the next stage (the same move as dragging it on the computer) */
+  const PHB = () => { try{ return matchMedia('(max-width:760px)').matches; }catch(e){ return false; } };
+  const SHORT = [['Email', '이메일'], ['Guarantee', '개런티'], ['Contract', '계약'], ['Visa', '비자'], ['Flight', '항공권']];
 
   const SNAME = {o: ['Not started', '시작 전'], y: ['In process', '진행 중'], g: ['Done', '완료']};
   const lightOf = (c, k) => { const st = (c.s && c.s[k]) || {}; return (st.p === 'g' || st.p === 'y') ? st.p : (st.d ? 'g' : ''); };
@@ -79,7 +83,17 @@
       '<div class="bpright"><button type="button" class="bpchip' + (S.mine ? ' on' : '') + '" data-bpmine aria-pressed="' + S.mine + '">' + L('Only mine', '내 카드만') + '</button>' +
       '</div></div>';
     if(S.on){
-      if(S.tab === 'proc'){
+      if(S.tab === 'proc' && PHB()){
+        const at = i => P.filter(c => Math.min(stageIdx(c), 4) === i);
+        if(!(S.ph >= 0 && S.ph <= 4)){ S.ph = 0; for(let i = 0; i < 5; i++) if(at(i).length){ S.ph = i; break; } }
+        const i = S.ph, list = at(i);
+        h += '<div class="bpfun" role="tablist">' + STG.map((x, j) => '<button type="button" role="tab" class="bpfs' + (j === i ? ' on' : '') + '" aria-selected="' + (j === i) + '" data-bpph="' + j + '"><b>' + at(j).length + '</b><span>' + H(L(SHORT[j][0], SHORT[j][1])) + '</span></button>').join('') + '</div>';
+        h += '<div class="bpsect"><b>' + (i + 1) + ' · ' + H(L(STG[i][1], STG[i][2])) + '</b><span>' + H(L(list.length + (list.length === 1 ? ' card' : ' cards'), list.length + '개 카드')) + (list.length ? ' · ' + H(i < 4 ? L('swipe ← to move', '← 밀어서 다음 단계') : L('swipe ← when done', '끝나면 ← 밀기')) : '') + '</span></div>';
+        h += list.length ? '<div class="bpphl">' + list.map(c => '<div class="bpsw"><div class="bpund" aria-hidden="true">' + H(i < 4 ? L('Move to ', '다음: ') + L(STG[i + 1][1], STG[i + 1][2]) + ' →' : L('Flight done ✓', '항공권 완료 ✓')) + '</div>' + cardHTML(c, i).replace('draggable="true"', 'draggable="false" data-bpsw="' + H(c.id) + '"') + '</div>').join('') + '</div>'
+          : '<p class="bpempty">' + H(i === 0 ? L('New cards start here', '새 카드는 여기서 시작합니다') : L('No cards at this stage', '이 단계에 카드가 없습니다')) + '</p>';
+        const allDone = P.filter(c => stageIdx(c) >= 5);
+        if(allDone.length) h += '<p class="bpnote">' + H(L(allDone.length + ' card(s) have every stage done and are still in Processing — open one and press COMPLETED.', allDone.length + '개 카드가 모든 단계를 마쳤지만 아직 진행 중입니다 — 카드를 열어 완료를 누르세요.')) + '</p>';
+      }else if(S.tab === 'proc'){
         h += '<div class="bpcols">' + STG.map(([k, en, ko], i) => {
           const list = P.filter(c => Math.min(stageIdx(c), 4) === i);
           return '<section class="bpcol" data-bpcol="' + i + '"><div class="bpch"><span>' + (i + 1) + ' · ' + H(L(en, ko)) + '</span><s>' + list.length + '</s></div>' +
@@ -200,6 +214,48 @@
     if(t.dataset.bpc) openCard(t.dataset.bpc);
   });
   document.addEventListener('keydown', e => { const t = e.target.closest && e.target.closest('#bkpipe [data-bpc]'); if(t && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); openCard(t.dataset.bpc); } });
+  /* ---- 1.2.280 phone: stage boxes, swipe to move, undo ---- */
+  let swUndo = null, swT = 0, swDone = 0;
+  function swToast(t, undo){
+    let n = document.getElementById('bpphtoast'); if(!n){ n = document.createElement('div'); n.id = 'bpphtoast'; n.setAttribute('role', 'status'); document.body.appendChild(n); }
+    n.innerHTML = '<span>' + H(t) + '</span>' + (undo ? '<button type="button" data-bpundo>' + H(L('Undo', '되돌리기')) + '</button>' : '');
+    n.hidden = false; clearTimeout(swT); swT = setTimeout(() => { n.hidden = true; swUndo = null; }, 6000);
+  }
+  function swMove(bid){
+    const c = BOOK.get(bid); if(!c) return;
+    try{ if(typeof SIGNED === 'function' && !SIGNED()){ nudgeSignIn(); render(); return; } }catch(e){}
+    const i = Math.min(stageIdx(c), 4), prev = JSON.parse(JSON.stringify(c.s || {}));
+    moveTo(bid, i + 1);
+    swUndo = {bid, prev};
+    swToast(i < 4 ? L((c.nm || '') + ' moved to ' + STG[i + 1][1], (c.nm || '') + ' → ' + STG[i + 1][2]) : L((c.nm || '') + ': every stage done — open the card and press COMPLETED', (c.nm || '') + ': 모든 단계 완료 — 카드를 열어 완료를 누르세요'), true);
+  }
+  document.addEventListener('click', e => {
+    const u = e.target.closest && e.target.closest('#bpphtoast [data-bpundo]');
+    if(u){ e.preventDefault(); const x = swUndo; swUndo = null; const n = document.getElementById('bpphtoast'); if(n) n.hidden = true; if(!x) return; const c = BOOK.get(x.bid); if(!c) return;
+      c.s = x.prev; try{ saveBook(x.bid, true); }catch(er){} try{ renderBook(); }catch(er){ render(); } return; }
+    const b = e.target.closest && e.target.closest('#bkpipe [data-bpph]'); if(!b) return;
+    e.preventDefault(); S.ph = +b.dataset.bpph; set('illu.bkpipeph', String(S.ph)); render();
+  });
+  /* a swipe is not a tap on the card */
+  document.addEventListener('click', e => { if(Date.now() - swDone < 450 && e.target.closest && e.target.closest('#bkpipe .bpsw')){ e.preventDefault(); e.stopPropagation(); } }, true);
+  let sw = null;
+  document.addEventListener('pointerdown', e => { const c = e.target.closest && e.target.closest('#bkpipe [data-bpsw]'); if(!c || (e.pointerType === 'mouse' && e.button !== 0)) return; sw = {c, id: c.dataset.bpsw, x: e.clientX, y: e.clientY, dx: 0, on: false, pid: e.pointerId}; });
+  document.addEventListener('pointermove', e => {
+    if(!sw || e.pointerId !== sw.pid) return;
+    const dx = e.clientX - sw.x, dy = e.clientY - sw.y;
+    if(!sw.on){ if(Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)){ sw = null; return; } if(dx > -8) return; sw.on = true; sw.c.classList.add('bpswing'); try{ sw.c.setPointerCapture(sw.pid); }catch(er){} }
+    sw.dx = Math.min(0, dx); sw.c.style.transform = 'translateX(' + sw.dx + 'px)';
+    const u = sw.c.previousElementSibling; if(u) u.classList.toggle('go', sw.dx < -sw.c.offsetWidth * 0.35);
+  });
+  const swEnd = e => {
+    if(!sw || (e && e.pointerId !== sw.pid)) return; const x = sw; sw = null; if(!x.on) return;
+    swDone = Date.now(); x.c.classList.remove('bpswing');
+    if(e && e.type === 'pointerup' && x.dx < -x.c.offsetWidth * 0.35){ x.c.style.transform = 'translateX(-110%)'; setTimeout(() => swMove(x.id), 170); }
+    else { x.c.style.transform = ''; const u = x.c.previousElementSibling; if(u) u.classList.remove('go'); }
+  };
+  document.addEventListener('pointerup', swEnd); document.addEventListener('pointercancel', swEnd);
+  try{ matchMedia('(max-width:760px)').addEventListener('change', () => { box0(); render(); }); }catch(e){}
+  function box0(){ const b = document.getElementById('bkpipe'); if(b) b.__h = ''; }
   let drag = '';
   document.addEventListener('dragstart', e => { const t = e.target.closest && e.target.closest('#bkpipe [data-bpc]'); if(!t) return; drag = t.dataset.bpc; t.classList.add('drag'); try{ e.dataTransfer.setData('text/plain', drag); e.dataTransfer.effectAllowed = 'move'; }catch(er){} });
   document.addEventListener('dragend', () => { drag = ''; document.querySelectorAll('#bkpipe .drag,#bkpipe .over').forEach(x => x.classList.remove('drag', 'over')); });
@@ -278,6 +334,30 @@ body.bkpipeon #bkmain{display:none!important}
 #bkpipe .bpempty{margin:6px 4px;font-size:12.5px;color:var(--faint)}
 #bkpipe .bpempty.big{font-size:14px;padding:30px;text-align:center}
 #bkpipe .bpnote{margin:0;font-size:13px;color:#7a5200}
+
+/* 1.2.280 phone: stage boxes (B3) */
+@media (max-width:760px){
+#bkpipe .bpfun{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}
+#bkpipe .bpfs{border:1px solid var(--line);background:var(--surf);border-radius:12px;padding:8px 2px 7px;text-align:center;font:inherit;color:var(--ink);cursor:pointer;min-width:0}
+#bkpipe .bpfs b{display:block;font-size:20px;line-height:1.1;font-variant-numeric:tabular-nums}
+#bkpipe .bpfs span{display:block;font-size:10.5px;color:var(--mut,#7A7283);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#bkpipe .bpfs.on{background:var(--acc);border-color:var(--acc);color:#fff}
+#bkpipe .bpfs.on span{color:rgba(255,255,255,.82)}
+#bkpipe .bpsect{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:2px 2px -4px;font-size:13px}
+#bkpipe .bpsect b{font-weight:700;white-space:nowrap}
+#bkpipe .bpsect span{font-size:12px;color:var(--mut,#7A7283);text-align:right}
+#bkpipe .bpphl{display:flex;flex-direction:column;gap:10px}
+#bkpipe .bpsw{position:relative;border-radius:14px;overflow:hidden}
+#bkpipe .bpund{position:absolute;inset:0;background:color-mix(in srgb,var(--acc) 70%,var(--surf));color:#fff;display:flex;align-items:center;justify-content:flex-end;padding-right:16px;font-size:13px;font-weight:600;border-radius:14px;transition:background .15s}
+#bkpipe .bpund.go{background:var(--acc)}
+#bkpipe .bpsw .bpc{position:relative;margin:0;touch-action:pan-y;transition:transform .17s ease-out}
+#bkpipe .bpsw .bpc.bpswing{transition:none}
+#bkpipe .bpempty{padding:22px 10px}
+}
+#bpphtoast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:9500;background:var(--ink,#211C26);color:var(--surf,#fff);border-radius:12px;padding:8px 8px 8px 14px;display:flex;align-items:center;gap:10px;font-size:13px;max-width:calc(100vw - 24px);box-shadow:0 8px 24px rgba(0,0,0,.25)}
+#bpphtoast[hidden]{display:none}
+#bpphtoast span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#bpphtoast button{flex:none;border:0;border-radius:9px;background:color-mix(in srgb,var(--acc) 75%,#fff);color:#fff;font:inherit;font-weight:700;font-size:13px;padding:7px 11px;cursor:pointer}
 `;
   document.head.appendChild(css);
   setTimeout(() => { try{ render(); }catch(e){} }, 300);

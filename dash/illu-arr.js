@@ -577,8 +577,122 @@
     /* leaving the page leaves full screen */
     setInterval(() => { if(document.body.classList.contains('adfull') && PG.hidden) document.body.classList.remove('adfull'); }, 800);
   })();
+  /* ---------- 1.2.280 (user, 22 Nov 2026, phone demo: "I want all the options for T1, T2, T3"): on a phone the board is
+     three views of the same stays, switched at the top - List (day by day, who arrives and who leaves), Bars (one bar per
+     model from arrival to departure, with a line for today) and Calendar (a month with a dot per arrival / departure; tap a
+     day for who). The three numbers on top filter the List. Tapping a model opens its details in a sheet from the bottom
+     (the same details as the computer's side bar: guarantee, flights, stay, notes, Open booking card). ---------- */
+  try{ const v = JSON.parse(localStorage.getItem('illu.arrph') || '{}') || {}; S.phv = ['list', 'bars', 'cal'].includes(v.v) ? v.v : 'list'; S.phr = [14, 42, 90].includes(v.r) ? v.r : 42; }catch(e){ S.phv = 'list'; S.phr = 42; }
+  S.phf = 'all'; S.phd = null; S.phy = 0; S.phm = -1;
+  const phKeep = () => { try{ localStorage.setItem('illu.arrph', JSON.stringify({v: S.phv, r: S.phr})); }catch(e){} };
+  function phEv(m, k, d){
+    const f = flight(m.c, k), sub = [f.no, apShort(f), m.ag].filter(Boolean).join(' · ');
+    return '<button type="button" class="adphev" data-adpick="' + H(m.id) + '" data-adtl="1"><i class="adphdir ' + k + '">' + (k === 'a' ? '✈' : '↗') + '</i>' + thumb(m) +
+      '<span class="adphm"><b>' + H(m.nm) + '</b><small>' + H(sub || L('Flight not set', '항공편 미입력')) + '</small></span>' +
+      '<span class="adpht"><b>' + H(f.t || '--:--') + '</b><small>' + (k === 'a' ? L('arrives', '도착') : (m.early ? L('leaves early', '조기 출국') : L('leaves', '출국'))) + '</small></span></button>';
+  }
+  function phList(all){
+    const T = today(), N = Date.now(), f = S.phf;
+    let h = '<div class="adphchips">' + [['all', L('All', '전체')], ['now', L('In town', '체류 중')], ['soon', L('Arriving', '도착 예정')], ['leave', L('Leaving', '출국 예정')]].map(([k, l]) => '<button type="button" data-adphf="' + k + '" aria-pressed="' + (f === k) + '">' + l + '</button>').join('') + '</div>';
+    if(f === 'now'){
+      const here = all.filter(m => arrAt(m) <= N && (m.tbd || depAt(m) > N)).sort((a, b) => (a.tbd ? 1 : 0) - (b.tbd ? 1 : 0) || a.out - b.out);
+      h += '<div class="adphday t">' + L('In Korea now', '지금 한국에 있음') + ' <small>' + L(here.length + (here.length === 1 ? ' model' : ' models'), here.length + '명') + '</small></div>';
+      return h + (here.length ? here.map(m => '<button type="button" class="adphev" data-adpick="' + H(m.id) + '" data-adtl="1"><i class="adphdir i">●</i>' + thumb(m) + '<span class="adphm"><b>' + H(m.nm) + '</b><small>' + H([VIS(m.vty), m.ag].filter(Boolean).join(' · ')) + '</small></span><span class="adpht"><b>' + (m.tbd ? 'TBD' : H(wdS(m.out) + ' ' + fmt(m.out))) + '</b><small>' + H(status(m)[1]) + '</small></span></button>').join('') : '<p class="adempty">' + L('Nobody is in Korea right now.', '지금 한국에 있는 모델이 없습니다.') + '</p>');
+    }
+    const ev = [];
+    for(const m of all){
+      if(f !== 'leave' && m.ind >= T && (f === 'all' || days(T, m.ind) < 30)) ev.push({d: m.ind, at: arrAt(m), m, k: 'a'});
+      if(f !== 'soon' && !m.tbd && m.out >= T && (f === 'all' || (days(T, m.out) < 30 && arrAt(m) <= N))) ev.push({d: m.out, at: depAt(m), m, k: 'd'});
+    }
+    if(f !== 'all') h += '<p class="adphhint">' + L('Next 30 days · tap All for everything later', '30일 안 · 이후 일정은 전체') + '</p>';
+    ev.sort((a, b) => a.at - b.at);
+    if(!ev.some(x => same(x.d, T))) h += '<div class="adphday t">' + L('Today', '오늘') + ' <small>' + H(wdS(T) + ' ' + fmt(T)) + ' · ' + L('nothing scheduled', '일정 없음') + '</small></div>';
+    let last = 0;
+    for(const x of ev){
+      const k = key(x.d);
+      if(k !== last){ last = k; const n = days(T, x.d); h += '<div class="adphday' + (n === 0 ? ' t' : '') + '">' + (n === 0 ? L('Today', '오늘') : H(x.d.toLocaleDateString(loc(), {weekday: 'short', day: 'numeric', month: 'short'}))) + ' <small>' + (n === 0 ? H(wdS(T) + ' ' + fmt(T)) : n === 1 ? L('tomorrow', '내일') : L('in ' + n + ' days', n + '일 후')) + '</small></div>'; }
+      h += phEv(x.m, x.k, x.d);
+    }
+    if(!ev.length) h += '<p class="adempty">' + (f === 'soon' ? L('No arrival booked.', '예정된 도착이 없습니다.') : f === 'leave' ? L('No departure booked.', '예정된 출국이 없습니다.') : L('Nothing coming up.', '예정된 일정이 없습니다.')) + '</p>';
+    return h;
+  }
+  function phBars(all){
+    const T = today(), R = S.phr, pxd = R <= 14 ? 22 : R <= 42 ? 8 : 4.5, a = addD(T, -Math.round(R * 0.15)), N = R * 3, z = addD(a, N), W = Math.round(N * pxd), NW = 84;
+    const step = R <= 14 ? 1 : 7;
+    let hd = '', mo = '';
+    for(let i = 0; i < N; i++){ const d = addD(a, i);
+      if(d.getDate() === 1 || i === 0) mo += '<span style="left:' + Math.round(i * pxd) + 'px">' + H(d.toLocaleDateString(loc(), {month: 'short'})) + '</span>';
+      if(step === 1 || d.getDay() === 1) hd += '<span class="' + (same(d, T) ? 't' : '') + '" style="left:' + Math.round(i * pxd) + 'px;width:' + Math.round(step * pxd) + 'px">' + d.getDate() + '</span>'; }
+    const rows = all.filter(m => m.ind < z && m.out >= a).sort((p, q) => p.ind - q.ind);
+    const body = rows.map(m => { const l = Math.max(0, days(a, m.ind) * pxd), r = Math.min(W, (days(a, m.out) + 1) * pxd), w = Math.max(16, r - l), fut = m.ind > T;
+      const lab = m.tbd ? L('→ TBD', '→ 미정') : '→ ' + fmt(m.out);
+      return '<div class="adphbr"><button type="button" class="adphbn" data-adpick="' + H(m.id) + '" data-adtl="1">' + H(first1(m.nm)) + '</button><div class="adphbt" style="width:' + W + 'px"><button type="button" class="adphb' + (fut ? ' fut' : '') + (m.tbd ? ' tbd' : '') + (S.pick === m.id ? ' on' : '') + '" data-adpick="' + H(m.id) + '" data-adtl="1" style="left:' + Math.round(l) + 'px;width:' + Math.round(w) + 'px" title="' + H(m.nm + ' · ' + fmt(m.ind) + ' → ' + (m.tbd ? 'TBD' : fmt(m.out))) + '">' + (w > 54 ? H(lab) : '') + '</button></div></div>'; }).join('');
+    const tl = Math.round((days(a, T) + 0.5) * pxd);
+    return '<div class="adphseg2" role="group">' + [[14, L('2 weeks', '2주')], [42, L('6 weeks', '6주')], [90, L('3 months', '3개월')]].map(([k, l]) => '<button type="button" data-adphr="' + k + '" aria-pressed="' + (R === k) + '">' + l + '</button>').join('') + '</div>' +
+      '<div class="adphgw"><div class="adphg" style="width:' + (W + NW) + 'px;--nw:' + NW + 'px"><i class="adphnow" style="left:' + (NW + tl) + 'px"></i>' +
+      '<div class="adphgh"><div class="adphbn"></div><div class="adphbt" style="width:' + W + 'px"><div class="adphmo">' + mo + '</div><div class="adphdd">' + hd + '</div></div></div>' +
+      (rows.length ? body : '<p class="adempty">' + L('Nobody in Korea in these weeks.', '이 기간에 한국에 있는 모델이 없습니다.') + '</p>') + '</div></div>' +
+      '<p class="adphleg"><span><i style="background:var(--acc)"></i>' + L('in Korea', '체류 중') + '</span><span><i style="background:#1F8A55"></i>' + L('still to come', '도착 예정') + '</span><span><i style="background:#E0A21B"></i>' + L('today', '오늘') + '</span><span>' + L('slide sideways for later dates', '옆으로 밀면 이후 날짜') + '</span></p>';
+  }
+  function phCal(all){
+    const T = today(); if(S.phm < 0){ S.phy = T.getFullYear(); S.phm = T.getMonth(); }
+    const first = new Date(S.phy, S.phm, 1), start = addD(first, -first.getDay());
+    const wk = isKO() ? ['일', '월', '화', '수', '목', '금', '토'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    let g = wk.map(x => '<span class="h">' + x + '</span>').join('');
+    for(let i = 0; i < 42; i++){ const d = addD(start, i); if(i >= 35 && d.getMonth() !== S.phm) break;
+      const o = d.getMonth() !== S.phm, a = all.filter(m => same(m.ind, d)).length, z = all.filter(m => !m.tbd && same(m.out, d)).length, p = apptsOn(d).length;
+      g += '<button type="button" class="adphc' + (o ? ' o' : '') + (same(d, T) ? ' t' : '') + (S.phd && same(S.phd, d) ? ' sel' : '') + '" data-adphday="' + d.getTime() + '"><b>' + d.getDate() + '</b><span class="adphdots">' + '<i class="a"></i>'.repeat(Math.min(a, 3)) + '<i class="d"></i>'.repeat(Math.min(z, 3)) + (p ? '<i class="p"></i>' : '') + '</span></button>'; }
+    let list = '';
+    if(S.phd){ const d = S.phd, ev = evts(all, d), here = all.filter(m => inStay(m, d)).length;
+      list = '<div class="adphday">' + H(d.toLocaleDateString(loc(), {weekday: 'short', day: 'numeric', month: 'short'})) + ' <small>' + L(here + ' in town', here + '명 체류') + '</small></div>' +
+        (ev.length ? ev.map(e => e.k === 'p' ? '<div class="adphev p"><i class="adphdir p">◷</i><span class="adphm"><b>' + H(e.x.title || '') + '</b><small>' + H([e.m ? e.m.nm : '', e.x.where].filter(Boolean).join(' · ')) + '</small></span><span class="adpht"><b>' + H(e.x.t || '') + '</b><small>' + L('appointment', '일정') + '</small></span></div>' : phEv(e.m, e.k, d)).join('') : '<p class="adempty">' + L('Nobody arrives or leaves this day.', '이 날 도착·출국이 없습니다.') + '</p>') +
+        '<button type="button" class="adphopen" data-adopenday="' + d.getTime() + '">' + L('Day schedule · appointments ›', '이 날 일정 · 약속 ›') + '</button>';
+    } else list = '<p class="adphhint">' + L('Tap a day to see who comes or goes.', '날짜를 누르면 도착·출국하는 모델이 보입니다.') + '</p>';
+    return '<div class="adphcal"><div class="adphch"><button type="button" data-adphmo="-1" aria-label="' + H(L('Previous month', '이전 달')) + '">‹</button><b>' + H(moName(S.phy, S.phm)) + '</b><button type="button" data-adphmo="1" aria-label="' + H(L('Next month', '다음 달')) + '">›</button></div><div class="adphcg">' + g + '</div>' +
+      '<p class="adphleg"><span><i style="background:#1F8A55"></i>' + L('arrival', '도착') + '</span><span><i style="background:#C2334D"></i>' + L('departure', '출국') + '</span><span><i style="background:#5B48C9"></i>' + L('appointment', '일정') + '</span></p></div>' + list;
+  }
+  function phBoard(){
+    const all = stays(), T = today(), N = Date.now();
+    const here = all.filter(m => arrAt(m) <= N && (m.tbd || depAt(m) > N)).length, a30 = all.filter(m => arrAt(m) > N && days(T, m.ind) < 30).length, d30 = all.filter(m => !m.tbd && depAt(m) > N && arrAt(m) <= N && days(T, m.out) < 30).length;
+    const gw = PG.querySelector('.adphgw'), gx = gw ? gw.scrollLeft : null, y = window.scrollY;
+    let h = '<div class="adph">';
+    if(S.view === 'day' && S.vday){
+      h += '<div class="adphback"><button type="button" class="adpill" data-adphback>‹ ' + L('Back', '뒤로') + '</button><b>' + H(dayLong(S.vday)) + '</b></div><div class="adbmain v-day">' + dayView(all) + '</div>';
+    } else {
+      const st = (k, cl, n, t) => '<button type="button" class="adphst ' + cl + '" data-adphf="' + k + '" aria-pressed="' + (S.phv === 'list' && S.phf === k) + '"><b>' + n + '</b><span>' + t + '</span></button>';
+      h += '<div class="adphsts">' + st('now', '', here, L('in Korea now', '지금 한국에')) + st('soon', 'g', a30, L('arriving · 30 days', '도착 · 30일')) + st('leave', 'r', d30, L('leaving · 30 days', '출국 · 30일')) + '</div>' +
+        '<div class="adphseg" role="tablist">' + [['list', L('List', '목록')], ['bars', L('Bars', '막대')], ['cal', L('Calendar', '달력')]].map(([k, l]) => '<button type="button" role="tab" data-adphv="' + k + '" aria-selected="' + (S.phv === k) + '">' + l + '</button>').join('') + '</div>' +
+        (S.phv === 'bars' ? phBars(all) : S.phv === 'cal' ? phCal(all) : phList(all));
+    }
+    const pm = S.pick ? all.find(m => m.id === S.pick) : null;
+    if(pm) h += '<div class="adphveil" data-adphclose></div><div class="adphsheet" role="dialog" aria-label="' + H(pm.nm) + '"><div class="adphgrab"></div><button type="button" class="adphx" data-adphclose aria-label="' + H(L('Close', '닫기')) + '">✕</button>' + srow(pm) + '</div>';
+    h += '</div>';
+    const sh = PG.querySelector('.adphsheet'), shy = sh ? sh.scrollTop : 0;
+    PG.innerHTML = h;
+    const g2 = PG.querySelector('.adphgw');
+    if(g2){ if(gx != null && !S.phJump) g2.scrollLeft = gx; else { const nw = PG.querySelector('.adphnow'); if(nw){ const v = nw.offsetLeft - 84 - 40; g2.scrollLeft = v < 60 ? 0 : v; } } }
+    S.phJump = false;
+    const sh2 = PG.querySelector('.adphsheet'); if(sh2 && sh) sh2.scrollTop = shy;
+    if(Math.abs(window.scrollY - y) > 2) window.scrollTo(0, y);
+    try{ fitSigns(PG); }catch(e){}
+    return true;
+  }
+  PG.addEventListener('click', e => {
+    if(window.innerWidth >= 760) return;
+    const t = e.target.closest && e.target.closest('[data-adphv],[data-adphf],[data-adphr],[data-adphmo],[data-adphday],[data-adphclose],[data-adphback]'); if(!t) return;
+    e.preventDefault(); e.stopPropagation(); const d = t.dataset;
+    if(d.adphv){ S.phv = d.adphv; if(S.phv === 'bars') S.phJump = true; phKeep(); }
+    else if(d.adphf){ const tile = t.classList.contains('adphst'); S.phf = tile && S.phv === 'list' && S.phf === d.adphf ? 'all' : d.adphf; S.phv = 'list'; phKeep(); }
+    else if(d.adphr){ S.phr = +d.adphr; S.phJump = true; phKeep(); }
+    else if(d.adphmo){ S.phm += +d.adphmo; if(S.phm > 11){ S.phm = 0; S.phy++; } if(S.phm < 0){ S.phm = 11; S.phy--; } S.phd = null; }
+    else if(d.adphday){ const x = new Date(+d.adphday); S.phd = S.phd && same(S.phd, x) ? null : x; if(x.getMonth() !== S.phm){ S.phm = x.getMonth(); S.phy = x.getFullYear(); } }
+    else if('adphclose' in d){ S.pick = null; S.flt = null; S.edit = null; }
+    else if('adphback' in d){ S.view = 'ov'; S.apt = null; }
+    board();
+  }, true);
   function board(){
     if(PG.hidden) return;
+    if(window.innerWidth < 760){ PG.querySelector('.adbd') && (PG.innerHTML = ''); phBoard(); return; }
     const all = stays();
     if(!PG.querySelector('.adbd')) PG.innerHTML = '<div class="adbd"><div class="adbdhw"></div><div class="adtilesw"></div><div class="adbdw"><div class="adbmain"></div><aside class="addet"></aside></div></div>';
     const root = PG.querySelector('.adbd'), MAIN = PG.querySelector('.adbmain'), D = PG.querySelector('.addet');
@@ -1281,6 +1395,75 @@ body.adfull #pane-arrd .adbd{height:100%}
 .adov.tight .admc.t{box-shadow:inset 0 0 0 1.5px var(--acc)}
 .adov.tight .admc.o{opacity:.3}
 .adov.tight .admc.band{background:color-mix(in srgb,var(--c) 22%,transparent)}
+
+/* 1.2.280 phone board: List / Bars / Calendar */
+.adph{display:flex;flex-direction:column;gap:10px;padding:2px 0 24px;font-family:var(--sans,Inter,system-ui,sans-serif);color:var(--ink)}
+.adphsts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.adphst{border:1px solid var(--line);background:var(--surf);border-radius:12px;padding:8px 9px;text-align:left;font:inherit;color:var(--ink);cursor:pointer;min-width:0}
+.adphst b{display:block;font-size:22px;line-height:1.1;font-variant-numeric:tabular-nums}
+.adphst span{display:block;font-size:11px;line-height:1.25;color:var(--mut,#7A7283)}
+.adphst.g b{color:#1F8A55}.adphst.r b{color:#C2334D}
+.adphst[aria-pressed="true"]{outline:2px solid var(--acc);outline-offset:-1px}
+.adphseg,.adphseg2{display:flex;background:var(--surf2,#f1eff6);border-radius:10px;padding:3px;gap:2px}
+.adphseg button,.adphseg2 button{flex:1;border:0;background:none;font:inherit;font-size:13px;font-weight:600;color:var(--mut,#7A7283);padding:7px 2px;border-radius:8px;min-height:34px;cursor:pointer;white-space:nowrap}
+.adphseg button[aria-selected="true"],.adphseg2 button[aria-pressed="true"]{background:var(--surf,#fff);color:var(--ink);box-shadow:0 1px 2px rgba(20,10,30,.12),0 0 0 1px var(--line)}
+.adphchips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -2px;padding:0 2px}
+.adphchips::-webkit-scrollbar{display:none}
+.adphchips button{flex:none;height:34px;padding:0 13px;border-radius:999px;border:1px solid var(--line);background:var(--surf);font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
+.adphchips button[aria-pressed="true"]{background:var(--acc);border-color:var(--acc);color:#fff}
+.adphday{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mut,#7A7283);margin:8px 2px -2px}
+.adphday.t{color:var(--acc)}
+.adphday small{font-weight:500;letter-spacing:0;text-transform:none}
+.adphev{display:flex;align-items:center;gap:9px;width:100%;box-sizing:border-box;background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:8px 10px;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
+.adphev .adthumb{flex:none}
+.adphdir{flex:none;width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-style:normal;font-size:14px}
+.adphdir.a{background:#E6F5EC;color:#1F8A55}.adphdir.d{background:#FBE7EB;color:#C2334D}.adphdir.i{background:color-mix(in srgb,var(--acc) 12%,var(--surf));color:var(--acc);font-size:9px}.adphdir.p{background:#ECE8FA;color:#5B48C9}
+.adphm{flex:1;min-width:0;display:flex;flex-direction:column}
+.adphm b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.adphm small,.adpht small{font-size:11.5px;color:var(--mut,#7A7283);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.adpht{flex:none;display:flex;flex-direction:column;align-items:flex-end;max-width:42%}
+.adpht b{font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.adphgw{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surf);-webkit-overflow-scrolling:touch}
+.adphg{position:relative}
+.adphgh,.adphbr{display:flex;border-bottom:1px solid var(--line)}
+.adphbr:last-child{border-bottom:0}
+.adphbn{flex:none;width:var(--nw,84px);position:sticky;left:0;z-index:3;background:var(--surf);border:0;border-right:1px solid var(--line);font:inherit;font-size:12.5px;font-weight:600;color:var(--ink);text-align:left;padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;min-height:40px}
+.adphbt{position:relative;flex:none;height:40px}
+.adphgh .adphbt{height:38px}
+.adphmo span,.adphdd span{position:absolute;font-size:10.5px;color:var(--mut,#7A7283);white-space:nowrap}
+.adphmo span{top:3px;font-weight:700;color:var(--ink);padding-left:3px}
+.adphdd span{top:20px;padding-left:3px;border-left:1px solid var(--line)}
+.adphdd span.t{color:#B7791F;font-weight:700}
+.adphb{position:absolute;top:11px;height:18px;border-radius:9px;border:0;background:var(--acc);color:#fff;font:inherit;font-size:10.5px;font-weight:600;padding:0 7px;white-space:nowrap;overflow:hidden;text-align:left;cursor:pointer}
+.adphb.fut{background:#1F8A55}
+.adphb.tbd{background-image:linear-gradient(90deg,transparent 70%,rgba(255,255,255,.35))}
+.adphb.on{box-shadow:0 0 0 2px var(--surf),0 0 0 4px var(--acc)}
+.adphnow{position:absolute;top:0;bottom:0;width:2px;background:#E0A21B;z-index:2;pointer-events:none}
+.adphleg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--mut,#7A7283);margin:0 2px}
+.adphleg i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.adphcal{border:1px solid var(--line);border-radius:12px;background:var(--surf);padding:8px;display:flex;flex-direction:column;gap:6px}
+.adphch{display:flex;justify-content:space-between;align-items:center}
+.adphch b{font-size:14.5px}
+.adphch button{border:0;background:none;color:var(--acc);font-size:24px;width:40px;height:34px;cursor:pointer}
+.adphcg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;text-align:center}
+.adphcg .h{font-size:10.5px;color:var(--mut,#7A7283);padding:2px 0}
+.adphc{height:42px;border:0;background:none;border-radius:9px;font:inherit;font-size:13px;color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;min-width:0}
+.adphc.o{opacity:.35}
+.adphc.t{box-shadow:inset 0 0 0 2px var(--acc);font-weight:700}
+.adphc.sel{background:var(--acc);color:#fff}
+.adphdots{display:flex;gap:2px;height:5px}
+.adphdots i{width:5px;height:5px;border-radius:50%}
+.adphdots .a{background:#1F8A55}.adphdots .d{background:#C2334D}.adphdots .p{background:#5B48C9}
+.adphc.sel .adphdots i{background:#fff}
+.adphhint{font-size:13px;color:var(--mut,#7A7283);text-align:center;margin:6px 0}
+.adphopen{align-self:flex-start;border:1px solid var(--line);background:var(--surf);border-radius:10px;font:inherit;font-size:13px;font-weight:600;color:var(--acc);padding:8px 12px;cursor:pointer}
+.adphback{display:flex;align-items:center;gap:10px}
+.adphback b{font-size:15px}
+.adphveil{position:fixed;inset:0;background:rgba(20,10,20,.38);z-index:9300}
+.adphsheet{position:fixed;left:0;right:0;bottom:0;max-height:84vh;overflow-y:auto;background:var(--surf,#fff);border-radius:18px 18px 0 0;z-index:9301;padding:8px 12px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 30px rgba(0,0,0,.2);box-sizing:border-box}
+.adphgrab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 8px}
+.adphx{position:absolute;top:8px;right:10px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:var(--surf);font-size:14px;color:var(--ink);cursor:pointer;z-index:2}
+.adphsheet .adsx{margin-top:4px}
 `;
   document.head.appendChild(css);
 

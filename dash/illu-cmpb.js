@@ -25,7 +25,11 @@
   const st = Object.assign({boards: [], lay: phone ? 'rows' : 'side', size: 'm', hideLit: false, multi: false, sync: true, n: 40, recent: []}, load());
   st.n = 40;
   const save = () => { try{ localStorage.setItem(KEY, JSON.stringify({boards: st.boards, lay: st.lay, size: st.size, hideLit: st.hideLit, multi: st.multi, sync: st.sync, recent: st.recent})); }catch(e){} };
-  const pk = {tab: 'browse', rg: '', co: '', kind: 'all', sort: 'az', q: '', n: 80};
+  const pk = {tab: 'browse', rg: '', co: '', kind: 'all', sort: 'az', q: '', n: 80, prg: ''};
+  /* 1.2.280 (user, 22 Nov 2026, phone demo "C2"): on a phone the finder opens on region tiles (like the Directory's phone
+     start); a region shows its countries as chips, biggest first, and its agencies with their boards; a bar at the bottom
+     holds the boards picked so far (✕ takes one off) and "Compare" closes the finder */
+  const PHC = () => { try{ return matchMedia('(max-width:760px)').matches; }catch(e){ return false; } };
   const COLORS = ['#6b2a5e', '#2f6f8f', '#8a6a1e', '#3f7d4e', '#9c3d3d', '#5b4f9c'];
   const sq = s => { try{ return window.__illuSB.squash(s); }catch(e){ return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); } };
   const B = () => window.__illuBoards;
@@ -167,6 +171,19 @@
         '<div class="cbplab">' + L('Agencies opened most in the Directory', 'Directory에서 가장 많이 연 에이전시') + '</div>' + (most.map(x => row(x)).join('') || '<p class="cbmut">—</p>') + '</div>';
     }
     if(pk.tab === 'fav') return lst(all.filter(x => x.fav).sort((x, y) => y.fav - x.fav || y.op - x.op), L('Agencies with models the team ♥', '팀이 ♥한 모델이 있는 에이전시'));
+    if(PHC()){
+      const nb = x => x.n.boards.filter(kOK).length;
+      const R = [...new Set(all.map(x => x.rg))].map(r => { const l = all.filter(x => x.rg === r), cs = new Map(); l.forEach(x => cs.set(x.co || '', (cs.get(x.co || '') || 0) + nb(x)));
+        return {r, l, b: l.reduce((t, x) => t + nb(x), 0), cs: [...cs].sort((a, b) => b[1] - a[1])}; }).sort((a, b) => b.b - a.b);
+      if(pk.prg && !R.some(x => x.r === pk.prg)) pk.prg = '';
+      if(!pk.prg) return '<div class="cbphr">' + R.map((x, i) => '<button type="button" class="cbpht' + (i === 0 ? ' big' : '') + '" data-cbprg="' + H(x.r) + '"><b>' + x.b + '</b><span>' + H(rgL(x.r)) + '</span><small>' + H(L(x.l.length + (x.l.length === 1 ? ' agency' : ' agencies'), '에이전시 ' + x.l.length)) + (x.cs.length ? ' · ' + x.cs.filter(c => c[0]).slice(0, i === 0 ? 3 : 2).map(c => c[0] + ' ' + c[1]).join(' · ') : '') + '</small></button>').join('') + '</div>';
+      const X = R.find(x => x.r === pk.prg), cos = X.cs.map(c => c[0]);
+      if(pk.co && !cos.includes(pk.co)) pk.co = '';
+      const list = X.l.filter(x => !pk.co || (x.co || '') === pk.co).sort(sortF);
+      return '<div class="cbphc"><button type="button" class="cblink" data-cbprg="">‹ ' + L('Regions', '지역') + '</button> · <b>' + H(rgL(X.r)) + '</b> · ' + H(L(X.b + ' boards', '보드 ' + X.b)) + '</div>' +
+        '<div class="cbphco"><button type="button" class="cbtc' + (!pk.co ? ' on' : '') + '" data-cbco="">' + L('All', '전체') + '<s>' + X.b + '</s></button>' + X.cs.map(([c, n]) => '<button type="button" class="cbtc' + (c === pk.co ? ' on' : '') + '" data-cbco="' + H(c) + '">' + H(c || L('Country not stated', '국가 미상')) + '<s>' + n + '</s></button>').join('') + '</div>' +
+        lst(list, '');
+    }
     const rgs = RGO.filter(r => all.some(x => x.rg === r)).concat([...new Set(all.map(x => x.rg))].filter(r => !RGO.includes(r)));
     if(!pk.rg || !rgs.includes(pk.rg)) pk.rg = rgs[0] || '';
     const inR = all.filter(x => x.rg === pk.rg);
@@ -182,14 +199,21 @@
     if(!keep){ FIND = null; pk.n = 80; }
     box.hidden = false; box.dataset.kind = 'add'; box.className = 'cbpov cbfind';
     box.innerHTML = '<div class="cbfhd"><div class="cbsr">' + IC.q + '<input type="text" id="cbq" placeholder="' + H(L('Agency, city, country or board…', '에이전시, 도시, 국가 또는 보드…')) + '" autocomplete="off" value="' + H(pk.q) + '" aria-label="' + H(L('Search agencies', '에이전시 찾기')) + '"></div><button type="button" class="cbib" data-cbpx>' + L('Done', '완료') + '</button></div>' +
-      '<div class="cbftabs"><div class="cbseg" role="group">' + [['browse', 'Browse', '둘러보기'], ['recent', 'Recent', '최근'], ['fav', 'Team ♥', '팀 ♥']].map(([k, en, ko]) => '<button type="button" data-cbtab="' + k + '" aria-pressed="' + (pk.tab === k && !pk.q.trim()) + '">' + L(en, ko) + '</button>').join('') + '</div>' +
+      '<div class="cbftabs"><div class="cbseg" role="group">' + [['browse', PHC() ? 'Regions' : 'Browse', PHC() ? '지역' : '둘러보기'], ['recent', 'Recent', '최근'], ['fav', 'Team ♥', '팀 ♥']].map(([k, en, ko]) => '<button type="button" data-cbtab="' + k + '" aria-pressed="' + (pk.tab === k && !pk.q.trim()) + '">' + L(en, ko) + '</button>').join('') + '</div>' +
       '<div class="cbkinds">' + KINDS.map(([k, en, ko]) => '<button type="button" data-cbkind="' + k + '" aria-pressed="' + (pk.kind === k) + '">' + (k === 'all' ? '' : '<span class="cbk k-' + k + '"></span>') + L(en, ko) + '</button>').join('') + '</div>' +
       '<label class="cbsort">' + L('Sort', '정렬') + ' <select id="cbsort"><option value="az"' + (pk.sort === 'az' ? ' selected' : '') + '>A–Z</option><option value="big"' + (pk.sort === 'big' ? ' selected' : '') + '>' + L('Most models', '모델 많은 순') + '</option><option value="fav"' + (pk.sort === 'fav' ? ' selected' : '') + '>' + L('Team ♥', '팀 ♥') + '</option></select></label></div>' +
-      '<div class="cbfbody" id="cbfbody">' + finderBody() + '</div>';
+      '<div class="cbfbody" id="cbfbody">' + finderBody() + '</div>' + (PHC() ? '<div class="cbtray" id="cbtray">' + trayHTML() + '</div>' : '');
+    if(PHC()) box.classList.add('cbph');
     place(box, pane.querySelector('[data-cbadd]') || pane.querySelector('.cbchips'), 760);
     if(!keep) setTimeout(() => { const i = box.querySelector('#cbq'); if(i) i.focus(); }, 0);
   }
+  function trayHTML(){
+    const D = st.boards.map(findBoard).map((x, i) => x ? {i, lab: label(x.n, x.b), c: COLORS[i % COLORS.length]} : null).filter(Boolean);
+    return '<div class="cbtb">' + (D.length ? D.map(x => '<button type="button" data-cbrm="' + x.i + '" title="' + H(L('Take this board off', '이 보드 빼기')) + '"><i style="background:' + x.c + '"></i>' + H(x.lab.ag + ' · ' + x.lab.board) + ' ✕</button>').join('') : '<span>' + L('Tap boards to add them · up to 6', '보드를 눌러 추가 · 최대 6개') + '</span>') + '</div>' +
+      '<button type="button" class="cbgo" data-cbpx>' + (D.length ? L('Compare ' + D.length + ' →', D.length + '개 비교 →') : L('Close', '닫기')) + '</button>';
+  }
   function finderRefresh(){ const b = pane.querySelector('#cbfbody'); if(!b) return; const y = b.scrollTop; b.innerHTML = finderBody(); b.scrollTop = y;
+    const tr = pane.querySelector('#cbtray'); if(tr) tr.innerHTML = trayHTML();
     pane.querySelectorAll('[data-cbtab]').forEach(x => x.setAttribute('aria-pressed', pk.tab === x.dataset.cbtab && !pk.q.trim()));
     pane.querySelectorAll('[data-cbkind]').forEach(x => x.setAttribute('aria-pressed', pk.kind === x.dataset.cbkind)); }
   function options(){
@@ -200,6 +224,7 @@
     const a = pane.querySelector('[data-cbopt]'); place(box, a, 300, true);
   }
   function place(box, a, w, right){
+    if(PHC() && box.classList.contains('cbfind')){ box.style.width = box.style.top = box.style.left = box.style.maxHeight = ''; return; }
     const P = pane.getBoundingClientRect(), R = a ? a.getBoundingClientRect() : P;
     const width = Math.min(w, P.width - 8);
     box.style.width = width + 'px';
@@ -229,6 +254,7 @@
     if(t.hasAttribute('data-cbpx')){ closePov(); return; }
     if(d.cbtab){ pk.tab = d.cbtab; pk.q = ''; pk.n = 80; const q = pane.querySelector('#cbq'); if(q) q.value = ''; finderRefresh(); return; }
     if(d.cbkind){ pk.kind = d.cbkind; pk.n = 80; finderRefresh(); return; }
+    if(d.cbprg != null){ pk.prg = d.cbprg; pk.co = ''; pk.n = 80; finderRefresh(); const b = pane.querySelector('#cbfbody'); if(b){ b.scrollTop = 0; const l = b.querySelector('.cbfl'); if(l) l.scrollTop = 0; } return; }
     if(d.cbrg != null){ pk.rg = d.cbrg; pk.co = ''; pk.n = 80; finderRefresh(); return; }
     if(d.cbco != null){ pk.co = d.cbco; pk.n = 80; finderRefresh(); return; }
     if(t.hasAttribute('data-cbfmore')){ pk.n += 80; finderRefresh(); return; }
@@ -369,6 +395,33 @@
   #pane-cmpb .cbtc{flex:none;border:1px solid var(--line);border-radius:999px;background:var(--surf)}
   #pane-cmpb .cbkinds{flex-wrap:nowrap;overflow-x:auto;max-width:100%}
   #pane-cmpb .cbsort{margin-left:0}
+  /* 1.2.280 C2 */
+  #pane-cmpb .cbph .cbfbody{display:block;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  #pane-cmpb .cbph .cbfl{overflow:visible;padding:4px 12px 12px}
+  #pane-cmpb .cbphr{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 12px 14px}
+  #pane-cmpb .cbpht{border:1px solid var(--line);background:var(--surf);border-radius:14px;padding:11px;text-align:left;font:inherit;color:var(--ink)!important;display:flex;flex-direction:column;gap:1px;min-width:0}
+  #pane-cmpb .cbpht b{font-size:22px;line-height:1.1;color:var(--acc);font-variant-numeric:tabular-nums}
+  #pane-cmpb .cbpht span{font-size:14px;font-weight:700}
+  #pane-cmpb .cbpht small{font-size:11px;color:var(--faint);line-height:1.35;margin-top:3px}
+  #pane-cmpb .cbpht.big{grid-column:1/-1;background:linear-gradient(135deg,#5E2A5A,#8A4A86);border:0;color:#fff!important}
+  #pane-cmpb .cbpht.big b{color:#fff}#pane-cmpb .cbpht.big small{color:rgba(255,255,255,.8)}
+  #pane-cmpb .cbphc{font-size:13px;color:var(--faint);padding:10px 12px 4px}
+  #pane-cmpb .cbphc .cblink{font-size:13px;padding:0}
+  #pane-cmpb .cbphc b{color:var(--ink)}
+  #pane-cmpb .cbphco{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding:4px 12px 8px;border-bottom:1px solid var(--line)}
+  #pane-cmpb .cbphco::-webkit-scrollbar{display:none}
+  #pane-cmpb .cbphco .cbtc{flex:none;border:1px solid var(--line);border-radius:999px;background:var(--surf);height:32px;padding:0 11px;gap:6px}
+  #pane-cmpb .cbphco .cbtc s{margin-left:0}
+  #pane-cmpb .cbphco .cbtc.on{background:var(--acc);border-color:var(--acc);color:#fff!important}
+  #pane-cmpb .cbphco .cbtc.on s{color:rgba(255,255,255,.8)}
+  #pane-cmpb .cbph .cbfbs button{height:32px}
+  #pane-cmpb .cbtray{display:flex;align-items:center;gap:8px;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:var(--surf)}
+  #pane-cmpb .cbtb{display:flex;gap:5px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+  #pane-cmpb .cbtb::-webkit-scrollbar{display:none}
+  #pane-cmpb .cbtb button{flex:none;height:30px;border:1px solid var(--line);border-radius:8px;background:var(--surf2,#f4ecf2);font-size:12px;padding:0 8px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;color:var(--ink)!important}
+  #pane-cmpb .cbtb button i{width:8px;height:8px;border-radius:2px}
+  #pane-cmpb .cbtb span{font-size:12px;color:var(--faint);white-space:nowrap;align-self:center}
+  #pane-cmpb .cbgo{flex:none;height:36px;border:0;border-radius:10px;background:var(--acc);color:#fff!important;font:inherit;font-size:13.5px;font-weight:700;padding:0 13px}
 }
 `;
   document.head.appendChild(css);

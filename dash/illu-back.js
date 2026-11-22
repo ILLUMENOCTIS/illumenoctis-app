@@ -37,6 +37,8 @@
     ['maplevel', () => view() === 'atl' && !!window.__atlLevel && window.__atlLevel() !== 'world', () => { try{ window.__atlUp(); return true; }catch(e){ return false; } }],
     ['agency', () => !!window.__illuDirAgOpen && window.__illuDirAgOpen() && matchMedia('(max-width:760px)').matches, () => window.__illuDirAgClose()],
     ['filters', () => { const t = document.querySelector('#fbar .fbtog'); return !!t && t.getAttribute('aria-expanded') === 'true' && vis(t); }, () => click('#fbar .fbtog')],
+    ['cbfind', () => { const p = document.querySelector('#pane-cmpb #cbpov'); return !!p && !p.hidden; }, esc],   // 1.2.280 Compare boards finder
+    ['arrsheet', () => !!document.querySelector('#pane-arrd .adphsheet'), esc],   // 1.2.280 Arrival/Departure details sheet
     ['drawer', () => { const d = document.getElementById('abdrawer'); return !!d && d.classList.contains('open'); }, () => click('#abdrawer [data-abclose]')],
     ['more', () => vis(document.getElementById('abmorep')), () => click('#abmore')],
     ['typelist', () => !!document.querySelector('#pane-arr .rcddl'), () => click('#pane-arr .rcddb')]
