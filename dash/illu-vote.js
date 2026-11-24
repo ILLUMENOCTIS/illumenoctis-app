@@ -263,7 +263,7 @@
     if(!signedIn()) return;
     const h = hash(k);
     let o = onVote(k);
-    if(!o){ say(L('Send her to the Team Vote first.', '먼저 팀 투표로 보내세요.')); return; }
+    if(!o){ say(__illuLH(k, 'Send her to the Team Vote first.', '먼저 팀 투표로 보내세요.')); return; }
     if(o.legacy){
       const m = info(k);
       o = {k, nm: o.nm || (about && about.nm) || m.nm || '', ag: o.ag || m.ag || (about && about.ag) || '', href: m.href || o.href || '', by: o.by, at: o.at, voters: people(), base: 1};
@@ -388,7 +388,7 @@
     let box = document.getElementById('illuwk'); if(!box){ box = document.createElement('div'); box.id = 'illuwk'; document.body.appendChild(box); }
     box.innerHTML = '<div class="wkveil" data-wkx></div><div class="wkdlg" role="dialog" aria-modal="true"><h4>' + H(L(w.who + ' is already working on ' + (w.c.nm || 'her'), w.who + '님이 이미 ' + (w.c.nm || '') + ' 작업 중입니다')) + '</h4>' +
       '<p>' + H(L((w.what === 'booked' ? 'Booked' : 'Booking card') + ' since ' + w.since + (w.them ? ' · talking to ' + w.them : '') + ' at ' + (w.c.ag || 'her agency') + '.', (w.what === 'booked' ? '부킹 완료' : '부킹 카드') + ' · ' + w.since + (w.them ? ' · ' + w.them + '와 연락 중' : '') + ' · ' + (w.c.ag || ''))) + '</p>' +
-      '<div class="wkb"><button type="button" class="wkp" data-wkopen>' + H(L('Open her booking card', '부킹 카드 열기')) + '</button><button type="button" data-wkmsg>' + H(L('Message ' + w.who, w.who + '님에게 메시지')) + '</button><button type="button" class="wkm" data-wkgo>' + H(L(verb + ' anyway', '그래도 ' + verb)) + '</button></div>' +
+      '<div class="wkb"><button type="button" class="wkp" data-wkopen>' + H(__illuLH(k, 'Open her booking card', '부킹 카드 열기')) + '</button><button type="button" data-wkmsg>' + H(L('Message ' + w.who, w.who + '님에게 메시지')) + '</button><button type="button" class="wkm" data-wkgo>' + H(L(verb + ' anyway', '그래도 ' + verb)) + '</button></div>' +
       '<small>' + H(L('"' + verb + ' anyway" lets ' + w.who + ' know too, so nobody writes twice without knowing.', '그래도 진행하면 ' + w.who + '님에게도 알립니다.')) + '</small></div>';
     box.hidden = false; try{ box.querySelector('[data-wkopen]').focus(); }catch(e){}
   }
@@ -403,7 +403,7 @@
   document.addEventListener('keydown', e => { const box = document.getElementById('illuwk'); if(e.key === 'Escape' && box && !box.hidden) box.hidden = true; });
   function sendVote(k, about, sure){
     if(!signedIn()) return;
-    if(onVote(k)){ say(L('She is on the Team Vote already.', '이미 팀 투표에 있습니다.')); return; }
+    if(onVote(k)){ say(__illuLH(k, 'She is on the Team Vote already.', '이미 팀 투표에 있습니다.')); return; }
     if(!sure){ const w = workOf(k, about && about.nm, about && about.ag); if(w){ workAsk(k, w, () => sendVote(k, about, true), L('Send to Team Vote', '팀 투표로 보내기')); return; } }
     const h = hash(k), m = info(k), was = OPEN.get(h);
     const o = {k, nm: (about && about.nm) || m.nm || (was && was.nm) || '', ag: m.ag || (about && about.ag) || (was && was.ag) || '', href: m.href || '', by: me(), at: nowIso(), voters: people(), base: lastRound(k) + 1};
@@ -435,7 +435,7 @@
     o.ends = Object.assign({}, o.ends || {}, {[String(st.round)]: {by: me(), at: nowIso(), v, of: st.voters.length}});
     OPEN.set(h, o); save('vopen/' + h, o); ENDASK = ''; changed(); rerender();
     const now = stateOf(k);
-    const where = !now ? '' : now.open ? L(' It is a tie — she goes to the Tie-breaker.', ' 동점 — 타이브레이커로 갑니다.') : now.res === 'appr' ? L(' Approved ' + now.g + '–' + now.r + '.', ' 승인 ' + now.g + '–' + now.r + '.') : L(' Cancelled ' + now.g + '–' + now.r + '.', ' 취소 ' + now.g + '–' + now.r + '.');
+    const where = !now ? '' : now.open ? __illuLH(k, ' It is a tie — she goes to the Tie-breaker.', ' 동점 — 타이브레이커로 갑니다.') : now.res === 'appr' ? L(' Approved ' + now.g + '–' + now.r + '.', ' 승인 ' + now.g + '–' + now.r + '.') : L(' Cancelled ' + now.g + '–' + now.r + '.', ' 취소 ' + now.g + '–' + now.r + '.');
     say(L('Vote ended for ' + (o.nm || 'her') + ' with ' + Object.keys(v).length + ' of ' + st.voters.length + ' votes in.', (o.nm || '') + ' 투표 종료 — ' + st.voters.length + '명 중 ' + Object.keys(v).length + '명 투표.') + where, () => {
       const back = before ? Object.assign({}, before) : Object.assign({}, st.o); delete back.legacy; if(!back.voters) back.voters = st.voters;
       if(back.ends){ back.ends = Object.assign({}, back.ends); delete back.ends[String(st.round)]; }
@@ -463,7 +463,7 @@
     if(ENDASK === k) return eb;
     if(ASK !== k) return eb + '<button type="button" class="ivoff" data-ivoff="' + H(k) + '">' + L('Take off Team Vote', '팀 투표에서 빼기') + '</button>';
     const others = st.voters.filter(p => p !== me() && voteOf(p, k, st.round)).map(pname);
-    return '<div class="ivask"><span>' + H(others.length ? L(others.join(', ') + (others.length > 1 ? ' have' : ' has') + ' voted already. Take her off and clear the votes?', others.join(', ') + ' 님이 이미 투표했습니다. 빼고 투표를 지울까요?') : L('Take her off the Team Vote?', '팀 투표에서 뺄까요?')) + ' ' + H(L('She stays in My Favorites.', '내 즐겨찾기에는 남습니다.')) + '</span>' +
+    return '<div class="ivask"><span>' + H(others.length ? L(others.join(', ') + (others.length > 1 ? ' have' : ' has') + ' voted already. Take her off and clear the votes?', others.join(', ') + ' 님이 이미 투표했습니다. 빼고 투표를 지울까요?') : __illuLH(k, 'Take her off the Team Vote?', '팀 투표에서 뺄까요?')) + ' ' + H(__illuLH(k, 'She stays in My Favorites.', '내 즐겨찾기에는 남습니다.')) + '</span>' +
       '<div><button type="button" class="ivbtn red" data-ivoffyes="' + H(k) + '">' + L('Take off', '빼기') + '</button><button type="button" class="ivbtn" data-ivoffno>' + L('Keep it', '그대로 두기') + '</button></div></div>';
   }
   document.addEventListener('click', e => {
@@ -501,7 +501,7 @@
     OPEN.set(st.h, o); save('vopen/' + st.h, o);
     try{ renderBook(); }catch(e){}
     changed();
-    say(L((c.nm || '') + ' is on the Booking board — you are in charge of her card.', (c.nm || '') + ' — 부킹 보드로 옮겼습니다. 이 카드는 내가 담당합니다.'));
+    say(__illuLH(k, (c.nm || '') + ' is on the Booking board — you are in charge of her card.', (c.nm || '') + ' — 부킹 보드로 옮겼습니다. 이 카드는 내가 담당합니다.'));
   }
   function reopen(k){
     if(!signedIn()) return;
@@ -628,7 +628,7 @@
     MXASK = '';
     try{ renderBook(); }catch(e){}
     changed();
-    say(L((c.nm || '') + ' is on the Booking board — you are in charge of her card.', (c.nm || '') + ' — 부킹 보드로 보냈습니다. 이 카드는 내가 담당합니다.'), () => { try{ bvOpenFor(c.id); }catch(e){} }, null, L('Open card', '카드 열기'));
+    say(__illuLH(c.k, (c.nm || '') + ' is on the Booking board — you are in charge of her card.', (c.nm || '') + ' — 부킹 보드로 보냈습니다. 이 카드는 내가 담당합니다.'), () => { try{ bvOpenFor(c.id); }catch(e){} }, null, L('Open card', '카드 열기'));
   }
   /* 1.2.197 (user, 15 Nov 2026: "Once an email is sent through Hiworks, I want you to automatically change the status of the model
      to booking"): Send to Booking without any question - used when an email about her has been sent. Her card already on the
@@ -664,7 +664,7 @@
   document.addEventListener('submit', e => { const f = e.target; if(!f || !f.matches || !f.matches('form[data-pnagef]')) return; e.preventDefault(); const b = f.querySelector('[data-pnageok]'); if(b) b.click(); }, true);
   window.__illuAgeCell = k => { if(!k) return ''; let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){} const A = ageInfo(k, c), lock = !!A.dobTxt;
     return '<span class="mxc mxage" data-f="age"><i>' + L('AGE', '나이') + '</i><input class="mxi mxagei" type="text" inputmode="numeric" maxlength="3" data-agek="' + H(k) + '" value="' + H(A.age) + '" placeholder="–" aria-label="' + H(L('Age', '나이')) + '"' +
-      (lock ? ' readonly title="' + H(L('Born ', '생년월일 ') + A.dobTxt + L(' — change the date of birth on her card', ' — 카드에서 생년월일을 바꾸세요')) + '"' : ' title="' + H(L('Her age — type it here', '나이 — 여기에 입력')) + '"') + (signedIn() ? '' : ' disabled') + '></span>'; };
+      (lock ? ' readonly title="' + H(L('Born ', '생년월일 ') + A.dobTxt + __illuLH(k, ' — change the date of birth on her card', ' — 카드에서 생년월일을 바꾸세요')) + '"' : ' title="' + H(__illuLH(k, 'Her age — type it here', '나이 — 여기에 입력')) + '"') + (signedIn() ? '' : ' disabled') + '></span>'; };
   document.addEventListener('change', e => { const i = e.target; if(!i || !i.matches || !i.matches('.mxagei') || i.readOnly) return;
     const k = i.dataset.agek, v = i.value.replace(/[^\d]/g, '').slice(0, 3); let c = null; try{ c = bkForKey(k); }catch(er){}
     if(c){ c.age = v; saveBook(c.id, true); changed(); } else savePre(k, {age: v}); });
@@ -673,7 +673,7 @@
   function linkBtns(k, n, c){
     const can = (() => { try{ return !!SIGNED(); }catch(e){ return false; } })();
     let b = '';
-    if(window.illu && illu.getFilesPlan && /^https?:/i.test(n.u) && !/instagram\.com|tiktok\.com|facebook\.com|youtube\.com|youtu\.be/i.test(n.u)) b += '<button type="button" class="mxg" data-mxget="' + H(n.u) + '" title="' + H(L('Save the book, snaps and videos at this link into her Booking folder (Dropbox)', '이 링크의 북·스냅·영상을 부킹 폴더(Dropbox)에 저장')) + '">' + L('Get files', '파일 받기') + '</button>';
+    if(window.illu && illu.getFilesPlan && /^https?:/i.test(n.u) && !/instagram\.com|tiktok\.com|facebook\.com|youtube\.com|youtu\.be/i.test(n.u)) b += '<button type="button" class="mxg" data-mxget="' + H(n.u) + '" title="' + H(__illuLH(k, 'Save the book, snaps and videos at this link into her Booking folder (Dropbox)', '이 링크의 북·스냅·영상을 부킹 폴더(Dropbox)에 저장')) + '">' + L('Get files', '파일 받기') + '</button>';
     if(can && canDrop(n.p)) b += '<button type="button" class="mxx" data-mxdel="' + H(n.p + '|' + n.at) + '" aria-label="' + H(L('Remove this link', '이 링크 지우기')) + '">×</button>';
     return b;
   }
@@ -728,8 +728,8 @@
       (a.readNote || '');
   }
   function statusSec(k, a, c, st, can, nm){
-    const ask = MXASK === k ? '<div class="mxask"><p>' + H(L('Send ' + nm + ' to the Booking board without a vote? You will be in charge of her card.', nm + ' — 투표 없이 부킹 보드로 보낼까요? 이 카드는 내가 담당합니다.')) +
-      (st && st.open ? ' ' + H(L('Her Team Vote carries on.', '팀 투표는 계속 진행됩니다.')) : '') + '</p><div><button type="button" class="mxb pri" data-mxsendyes>' + L('Send to Booking', '부킹으로 보내기') + '</button><button type="button" class="mxb" data-mxsendno>' + L('Cancel', '취소') + '</button></div></div>' : '';
+    const ask = MXASK === k ? '<div class="mxask"><p>' + H(__illuLH(k, 'Send ' + nm + ' to the Booking board without a vote? You will be in charge of her card.', nm + ' — 투표 없이 부킹 보드로 보낼까요? 이 카드는 내가 담당합니다.')) +
+      (st && st.open ? ' ' + H(__illuLH(k, 'Her Team Vote carries on.', '팀 투표는 계속 진행됩니다.')) : '') + '</p><div><button type="button" class="mxb pri" data-mxsendyes>' + L('Send to Booking', '부킹으로 보내기') + '</button><button type="button" class="mxb" data-mxsendno>' + L('Cancel', '취소') + '</button></div></div>' : '';
     const voteBtns = () => '<div class="pnvote"><button type="button" class="pnv g' + (st.mine === 'g' ? ' on' : '') + '" data-pnv="g"' + (can ? '' : ' disabled') + ' aria-pressed="' + (st.mine === 'g') + '">✓ ' + L('Go', '찬성') + '</button><button type="button" class="pnv r' + (st.mine === 'r' ? ' on' : '') + '" data-pnv="r"' + (can ? '' : ' disabled') + ' aria-pressed="' + (st.mine === 'r') + '">✕ ' + L('Pass', '반대') + '</button></div>';
     const bar = () => '<div class="pnbar">' + st.voters.map((p, i) => '<i class="' + (i < st.n ? 'in' : '') + '"></i>').join('') + '</div>';
     const openLine = () => '<div class="pnh"><span class="pndot v"></span><b>' + H(L('Team Vote · ' + st.n + ' of ' + st.of + ' voted', '팀 투표 · ' + st.of + '명 중 ' + st.n + '명')) + '</b><span class="pnr">' + (st.hist.length ? H(L('Round ' + st.round, st.round + '라운드')) + ' · ' : '') + H(when(st.hist.length ? st.hist[st.hist.length - 1].at : st.o.at)) + '</span></div>' + bar() + voteBtns() +
@@ -743,8 +743,8 @@
         '<button type="button" class="mxb pri pnfull" data-mxopen="' + H(c.id) + '">' + L('Open booking card →', '부킹 카드 열기 →') + '</button>';
       /* the team can still vote on a model who went to Booking without one */
       if(st && st.open) h += '<div class="pnsub">' + openLine() + '</div>';
-      else if(st && !st.o.off) h += '<div class="pnsub">' + doneLine() + (st.res !== 'appr' ? '<p class="mxhint">' + L('Her booking card stays where it is.', '부킹 카드는 그대로 둡니다.') + '</p>' : '') + '</div>';
-      else h += '<div class="pnsub"><button type="button" class="mxb" data-mxvote' + (can ? '' : ' disabled') + '>' + L('Send to Team Vote', '팀 투표로 보내기') + '</button><p class="mxhint">' + L('She stays on the Booking board while the team votes.', '팀이 투표하는 동안 부킹 보드에 그대로 있습니다.') + '</p></div>';
+      else if(st && !st.o.off) h += '<div class="pnsub">' + doneLine() + (st.res !== 'appr' ? '<p class="mxhint">' + __illuLH(k, 'Her booking card stays where it is.', '부킹 카드는 그대로 둡니다.') + '</p>' : '') + '</div>';
+      else h += '<div class="pnsub"><button type="button" class="mxb" data-mxvote' + (can ? '' : ' disabled') + '>' + L('Send to Team Vote', '팀 투표로 보내기') + '</button><p class="mxhint">' + __illuLH(k, 'She stays on the Booking board while the team votes.', '팀이 투표하는 동안 부킹 보드에 그대로 있습니다.') + '</p></div>';
       return h + '</div>';
     }
     if(st && st.open){
@@ -780,7 +780,7 @@
   function linksSec(k, c, can){
     const ls = linksOf(k), MAT = window.__illuMaterials;
     return '<section class="mxs"><h3>' + L('Links', '링크') + (ls.length ? ' <span>' + ls.length + '</span>' : '') + '</h3>' +
-      (ls.length ? '<ul class="mxl">' + ls.map(n => '<li class="lk"><a href="' + H(n.u) + '" target="_blank" rel="noopener">' + H(n.t || hostOf(n.u)) + ' ↗</a><span class="mxu">' + H(n.t ? hostOf(n.u) + ' · ' : '') + H(pname(n.p)) + '</span>' + linkBtns(k, n, c) + (MAT ? MAT.linkRow(k, n.u) : '') + '</li>').join('') + '</ul>' : '<p class="mxhint">' + L('Instagram, another agency, a Drive folder or package — any page about her.', '인스타그램, 다른 에이전시, 드라이브 폴더나 패키지 등 모델 관련 페이지.') + '</p>') +
+      (ls.length ? '<ul class="mxl">' + ls.map(n => '<li class="lk"><a href="' + H(n.u) + '" target="_blank" rel="noopener">' + H(n.t || hostOf(n.u)) + ' ↗</a><span class="mxu">' + H(n.t ? hostOf(n.u) + ' · ' : '') + H(pname(n.p)) + '</span>' + linkBtns(k, n, c) + (MAT ? MAT.linkRow(k, n.u) : '') + '</li>').join('') + '</ul>' : '<p class="mxhint">' + __illuLH(k, 'Instagram, another agency, a Drive folder or package — any page about her.', '인스타그램, 다른 에이전시, 드라이브 폴더나 패키지 등 모델 관련 페이지.') + '</p>') +
       (ls.length && MAT ? MAT.linksHint(k) : '') +
       (can ? '<div class="mxin lk"><input data-mxin="url" type="url" inputmode="url" placeholder="https://…"><input data-mxin="lab" type="text" placeholder="' + H(L('Label (optional)', '이름 (선택)')) + '"><button type="button" class="mxb pri" data-mxlink>' + L('Add link', '링크 추가') + '</button></div><p class="mxerr" hidden></p>' : '') + '</section>';
   }
@@ -843,7 +843,7 @@
       '<div class="mxp2"><label class="mxpf"><span>' + L('Age', '나이') + '</span><input data-mxin="pre-age" inputmode="numeric" placeholder="—" value="' + H(p.age || '') + '"' + dis + '></label>' +
       '<label class="mxpf"><span>' + L('Entry window', '입국 시기') + '</span><input data-mxin="pre-entry" placeholder="' + H(L('e.g. mid-Dec, being confirmed', '예: 12월 중순, 확인 중')) + '" value="' + H(p.entry || '') + '"' + dis + '></label></div>' +
       '<label class="mxpf"><span>' + L('Agency notes', '에이전시 메모') + '</span><textarea data-mxin="pre-anote" rows="2" placeholder="' + H(L('What the agency said - e.g. active in Europe and North America with several agencies', '에이전시 답변 - 예: 유럽·북미 여러 에이전시 활동')) + '"' + dis + '>' + H(p.anote || '') + '</textarea></label>' +
-      '<p class="mxhint">' + (p.by && p.at ? H(L('Last typed by ', '마지막 입력: ') + pname(p.by) + ' · ' + when(p.at) + '. ') : '') + L('Goes onto her booking card when she moves to Booking.', '부킹으로 넘어가면 부킹 카드에 그대로 옮겨집니다.') + '</p></section>';
+      '<p class="mxhint">' + (p.by && p.at ? H(L('Last typed by ', '마지막 입력: ') + pname(p.by) + ' · ' + when(p.at) + '. ') : '') + __illuLH(k, 'Goes onto her booking card when she moves to Booking.', '부킹으로 넘어가면 부킹 카드에 그대로 옮겨집니다.') + '</p></section>';
   }
   document.addEventListener('click', e => {
     const b = e.target.closest && e.target.closest('.mx [data-prety],.mx [data-preper]'); if(!b) return;
@@ -1053,7 +1053,7 @@
     if(MO){
       pgM = MO.page;
       /* 1.2.232: the mother agency's name opens its main page; her name opens her page there (else the page she was found on) */
-      agH = MO.site ? '<a class="pnagl" href="' + H(MO.site) + '" target="_blank" rel="noopener" title="' + H(L('Her mother agency’s website', '마더 에이전시 웹사이트')) + '">' + H(MO.ag) + ' ↗</a>' : '<span class="pnagl">' + H(MO.ag) + '</span>';
+      agH = MO.site ? '<a class="pnagl" href="' + H(MO.site) + '" target="_blank" rel="noopener" title="' + H(__illuLH(k, 'Her mother agency’s website', '마더 에이전시 웹사이트')) + '">' + H(MO.ag) + ' ↗</a>' : '<span class="pnagl">' + H(MO.ag) + '</span>';
       if(MO.foundAg){ let fs = ''; try{ fs = MO.foundPage ? new URL(MO.foundPage).origin : ''; }catch(e){} try{ const h = MO.foundPage ? new URL(MO.foundPage).hostname.replace(/^www\./, '').toLowerCase() : ''; const hit = h && AG.find(x => String(x.domain || '').replace(/^www\./, '').toLowerCase() === h); if(hit) fs = 'https://' + hit.domain; }catch(e){}
         also = '<p class="pnalso">' + L('also at ', '함께 소속: ') + (fs ? '<a href="' + H(fs) + '" target="_blank" rel="noopener">' + H(MO.foundAg) + ' ↗</a>' : H(MO.foundAg)) + '</p>';
         alsoV = fs ? '<a class="pnagl" href="' + H(fs) + '" target="_blank" rel="noopener">' + H(MO.foundAg) + ' ↗</a>' : '<span>' + H(MO.foundAg) + '</span>'; }
@@ -1073,7 +1073,7 @@
       ? cell(L('Mother agency', '마더 에이전시'), agH + favH) + cell(MO.foundAg ? L('Also at', '함께 소속') : L('Mother agency', '마더 에이전시'), (MO.foundAg ? alsoV + ' ' : '') + momBtn)
       : cell(L('Agency', '에이전시'), agH + favH) + cell(L('Mother agency', '마더 에이전시'), momBtn)) +
       cell(L('Based in', '지역'), H(place)) + cell(L('Gender', '성별'), sexH);
-    return '<div class="pnhd pnhdF"><div class="pnhm"><h2' + ((n => n > 22 ? ' class="pnlong2"' : n > 13 ? ' class="pnlong"' : '')(String(nmTxt).replace(/<[^>]*>/g, '').length)) + '>' + (pg ? '<a class="pnnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(L('Open her page on the agency’s site', '에이전시 사이트에서 모델 페이지 열기')) + '">' + nmTxt + '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg></a>' : nmTxt) + (window.__illuNameEditHtml && sk && /^https?:/i.test(sk) ? window.__illuNameEditHtml(sk, a.nm || i.nm || '') : '') + '</h2>' +
+    return '<div class="pnhd pnhdF"><div class="pnhm"><h2' + ((n => n > 22 ? ' class="pnlong2"' : n > 13 ? ' class="pnlong"' : '')(String(nmTxt).replace(/<[^>]*>/g, '').length)) + '>' + (pg ? '<a class="pnnml" href="' + H(pg) + '" target="_blank" rel="noopener" title="' + H(__illuLH(k, 'Open her page on the agency’s site', '에이전시 사이트에서 모델 페이지 열기')) + '">' + nmTxt + '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L5 11"/></svg></a>' : nmTxt) + (window.__illuNameEditHtml && sk && /^https?:/i.test(sk) ? window.__illuNameEditHtml(sk, a.nm || i.nm || '') : '') + '</h2>' +
       /* 1.2.274 (user: "there is enough space by Development to specify Johannesburg"): the board she was found on,
          by its city when the board names one, opening that board on the agency's site */
       (() => { const dv = a.div || i.div || '', bc = divCity(dv, a.ag || i.ag, a.country || i.country), bu = i.bu || '';
@@ -1103,10 +1103,10 @@
        booking card's own Age / Date of birth (the contract and visa read those); before that it is kept with her card
        and goes onto the booking card when she is booked. */
     const A = ageInfo(k, c), can = signedIn();
-    const ageCell = '<button type="button" class="pnage' + (A.age === '' ? ' no' : '') + '" data-pnage' + (can ? '' : ' disabled') + ' aria-label="' + H(L('Age — tap to change', '나이 — 눌러서 바꾸기')) + '" title="' + H(A.dobTxt ? L('Born ', '생년월일 ') + A.dobTxt : L('Tap to type her age or date of birth', '눌러서 나이나 생년월일 입력')) + '"><small>' + L('Age', '나이') + '</small><b>' + (A.age === '' ? '–' : H(A.age)) + '</b></button>';
+    const ageCell = '<button type="button" class="pnage' + (A.age === '' ? ' no' : '') + '" data-pnage' + (can ? '' : ' disabled') + ' aria-label="' + H(L('Age — tap to change', '나이 — 눌러서 바꾸기')) + '" title="' + H(A.dobTxt ? L('Born ', '생년월일 ') + A.dobTxt : __illuLH(k, 'Tap to type her age or date of birth', '눌러서 나이나 생년월일 입력')) + '"><small>' + L('Age', '나이') + '</small><b>' + (A.age === '' ? '–' : H(A.age)) + '</b></button>';
     const ed = MXAGE === k && can ? '<form class="pnaged" data-pnagef><label><span>' + L('Age', '나이') + '</span><input data-mxin="age-v" inputmode="numeric" placeholder="–" value="' + H(A.typed) + '"></label>' +
       '<label><span>' + L('Date of birth', '생년월일') + '</span><input data-mxin="age-dob" placeholder="DD/MM/YYYY" value="' + H(A.dob) + '"></label>' +
-      '<p>' + L('With a date of birth the age works itself out. The same age is on her booking card, contract and visa.', '생년월일을 넣으면 나이가 자동으로 계산됩니다. 부킹 카드·계약서·비자에도 같은 나이가 들어갑니다.') + '</p>' +
+      '<p>' + __illuLH(k, 'With a date of birth the age works itself out. The same age is on her booking card, contract and visa.', '생년월일을 넣으면 나이가 자동으로 계산됩니다. 부킹 카드·계약서·비자에도 같은 나이가 들어갑니다.') + '</p>' +
       '<div><button type="button" class="mxb" data-pnagex>' + L('Cancel', '취소') + '</button><button type="submit" class="mxb pri" data-pnageok>' + L('Save', '저장') + '</button></div></form>' : '';
     const nv = v => v == null || v === '' || isNaN(+v) ? '' : String(Math.round(+v * 10) / 10);
     const fld = (f, lab, v, ph) => '<label><span>' + lab + '</span><input data-mxin="mx-' + f + '" inputmode="decimal" placeholder="' + ph + '" value="' + H(nv(v)) + '"></label>';
@@ -1119,8 +1119,8 @@
   }
   function pnSecH(title, right){ return '<div class="pnsh"><h3>' + title + '</h3>' + (right || '') + '</div>'; }
   function pnStatus(k, a, c, st, can, nm){
-    const ask = MXASK === k ? '<div class="mxask"><p>' + H(L('Send ' + nm + ' to the Booking board? You will be in charge of her card.', nm + ' — 부킹 보드로 보낼까요? 이 카드는 내가 담당합니다.')) +
-      (st && st.open ? ' ' + H(L('Her Team Vote carries on.', '팀 투표는 계속 진행됩니다.')) : '') + '</p><div><button type="button" class="mxb pri" data-mxsendyes>' + L('Send to Booking', '부킹으로 보내기') + '</button><button type="button" class="mxb" data-mxsendno>' + L('Cancel', '취소') + '</button></div></div>' : '';
+    const ask = MXASK === k ? '<div class="mxask"><p>' + H(__illuLH(k, 'Send ' + nm + ' to the Booking board? You will be in charge of her card.', nm + ' — 부킹 보드로 보낼까요? 이 카드는 내가 담당합니다.')) +
+      (st && st.open ? ' ' + H(__illuLH(k, 'Her Team Vote carries on.', '팀 투표는 계속 진행됩니다.')) : '') + '</p><div><button type="button" class="mxb pri" data-mxsendyes>' + L('Send to Booking', '부킹으로 보내기') + '</button><button type="button" class="mxb" data-mxsendno>' + L('Cancel', '취소') + '</button></div></div>' : '';
     const voteBox = () => '<div class="pnvb' + (st.mine ? ' done' : '') + '"><div class="pnvh"><b>' + H(L('Team Vote · ' + st.n + ' of ' + st.of, '팀 투표 · ' + st.of + '명 중 ' + st.n + '명')) + '</b><span>' +
       (st.hist.length ? H(L('Round ' + st.round, st.round + '라운드')) + ' · ' : '') + H(when(st.hist.length ? st.hist[st.hist.length - 1].at : st.o.at)) + '</span></div>' +
       '<div class="pnbar">' + st.voters.map((p, i) => '<i class="' + (i < st.n ? 'in' : '') + '"></i>').join('') + '</div>' +
@@ -1215,11 +1215,11 @@
   const LNI = '<svg class="gsln" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>';
   function pnGuar(k, c, can){
     const g = gOf(k, c), dis = can ? '' : ' disabled';
-    const cell = (show, lab, body, extra, cls) => '<label class="gscell' + (cls ? ' ' + cls : '') + '">' + '<small' + (show ? ' title="' + H(c ? L('The same boxes as her booking card contract', '부킹 카드 계약서와 같은 칸') : L('Goes into her contract when she has a booking card', '부킹 카드가 생기면 계약서로 들어갑니다')) + '"' : '') + '>' + (show ? LNI : '') + H(lab) + '</small><span class="gsval">' + body + '</span>' + (extra || '') + '</label>';
+    const cell = (show, lab, body, extra, cls) => '<label class="gscell' + (cls ? ' ' + cls : '') + '">' + '<small' + (show ? ' title="' + H(c ? __illuLH(k, 'The same boxes as her booking card contract', '부킹 카드 계약서와 같은 칸') : __illuLH(k, 'Goes into her contract when she has a booking card', '부킹 카드가 생기면 계약서로 들어갑니다')) + '"' : '') + '>' + (show ? LNI : '') + H(lab) + '</small><span class="gsval">' + body + '</span>' + (extra || '') + '</label>';
     const inp = (f, val, ph, attrs) => '<input data-gin="' + f + '" value="' + H(val) + '" placeholder="' + H(ph) + '"' + (attrs || '') + dis + '>';
     let rows = '';
     if(g.gty === 'net') rows += cell(1, L('Amount', '금액'), '<span class="gscur">₩</span>' + inp('amt', g.amt, L('Amount', '금액'), ' inputmode="numeric"') +
-      '<span class="gstog" role="group" aria-label="' + H(L('Amount is for', '금액 기준')) + '">' + [['term', L('Term', '전체'), L('Term — the amount is for her whole stay', '전체 — 체류 기간 전체 금액')], ['month', L('Mo', '월'), L('Month — the amount is per month', '월 — 한 달 금액')]].map(([v, t, tip]) => '<button type="button" data-gmode="' + v + '" aria-pressed="' + (g.mode === v) + '" title="' + H(tip) + '" aria-label="' + H(tip) + '"' + dis + '>' + t + '</button>').join('') + '</span>');
+      '<span class="gstog" role="group" aria-label="' + H(L('Amount is for', '금액 기준')) + '">' + [['term', L('Term', '전체'), __illuLH(k, 'Term — the amount is for her whole stay', '전체 — 체류 기간 전체 금액')], ['month', L('Mo', '월'), L('Month — the amount is per month', '월 — 한 달 금액')]].map(([v, t, tip]) => '<button type="button" data-gmode="' + v + '" aria-pressed="' + (g.mode === v) + '" title="' + H(tip) + '" aria-label="' + H(tip) + '"' + dis + '>' + t + '</button>').join('') + '</span>');
     if(g.gty === 'cond') rows += cell(1, L('Per month', '월'), '<span class="gscur">₩</span>' + inp('cgm', g.cgm, L('Full guarantee', '월 개런티 전액'), ' inputmode="numeric"')) +
       cell(1, L('If', '조건'), inp('jobs', g.jobs, '5', ' inputmode="numeric" class="gsjobs"') + '<span class="gsunit">' + L('full-day jobs / 30 days', '풀데이 잡 / 30일') + '</span>');
     if(g.gty === 'no') rows += '<div class="gscell none"><small>' + L('Guarantee', '개런티') + '</small><span class="gsval">' + L('None. Nothing to fill in.', '없음. 입력할 것이 없습니다.') + '</span></div>';
@@ -1228,7 +1228,7 @@
        same line); the amount lines appear under it only for Net or Condition. The chain marks what goes into her
        contract; the words are in its tooltip. */
     const grows = g.gty === 'no' ? '' : rows;
-    const lnk = H(c ? L('The same boxes as her booking card contract', '부킹 카드 계약서와 같은 칸') : L('Goes into her contract when she has a booking card', '부킹 카드가 생기면 계약서로 들어갑니다'));
+    const lnk = H(c ? __illuLH(k, 'The same boxes as her booking card contract', '부킹 카드 계약서와 같은 칸') : __illuLH(k, 'Goes into her contract when she has a booking card', '부킹 카드가 생기면 계약서로 들어갑니다'));
     let top = cell(0, L('Available', '가능'), inp('avf', g.avf, L('e.g. mid-Dec (estimate)', '예: 12월 중순 (예상)'), ' maxlength="40" title="' + H(L('Rough estimate. Not in the contract.', '대략적인 예상. 계약서에는 들어가지 않습니다.')) + '"'));
     top += cell(1, L('Stay', '체류'), inp('days', g.days, '–', ' inputmode="numeric" class="gsdays" style="width:' + (Math.max(2, (g.days || '–').length) + 0.6) + 'ch"') + '<span class="gsunit">' + L('days', '일') + '</span>');   /* user: "just manually input the numbers instead of selecting 60 or 90 days" */
     top += '<div class="gscell gsg"><small title="' + lnk + '">' + LNI + H(L('Guarantee', '개런티')) + '</small><span class="gsval"><span class="gsseg" role="group" aria-label="' + H(L('Guarantee type', '개런티 유형')) + '">' +
@@ -1318,7 +1318,7 @@
     /* 1.2.231: whenever her mother agency is set, the contacts are the mother agency's (also when the card already names it
        but her page is on another agency's site) */
     const mo = motherInfo(k, a.ag);
-    if(mo && mo.dom && (!mo.here || !onDom(a.href || '', mo.dom))){ let mc = ''; try{ mc = typeof ctsChip === 'function' ? ctsChip(mo.site, mo.ag) : ''; }catch(e){} if(mc){ pills.push('<span class="pnct pnmomct" title="' + H(L('Write to her mother agency', '마더 에이전시에 메일')) + '"><em>' + L('Mother', '마더') + '</em>' + mc + '</span>'); chip = ''; } }
+    if(mo && mo.dom && (!mo.here || !onDom(a.href || '', mo.dom))){ let mc = ''; try{ mc = typeof ctsChip === 'function' ? ctsChip(mo.site, mo.ag) : ''; }catch(e){} if(mc){ pills.push('<span class="pnct pnmomct" title="' + H(__illuLH(k, 'Write to her mother agency', '마더 에이전시에 메일')) + '"><em>' + L('Mother', '마더') + '</em>' + mc + '</span>'); chip = ''; } }
     if(chip) pills.push('<span class="pnct">' + chip + '</span>');
     /* 1.2.178 (user, 13 Nov 2026: "what happened the model instagram link/link input?"): her Instagram is always here -
        the handle as a link with ✎ to change it, or "add ig" to type one in (the same handle the cards use) */
@@ -1335,7 +1335,7 @@
     return '<section class="pns">' + pnSecH(L('Agency', '에이전시')) + strip + (pills.length ? '<div class="pnpills">' + pills.join('') + '</div>' : '') + '</section>';
   }
   function pnTabs(k, c, nm, can){
-    const gfa = GFASK && GFASK.split('\n')[0] === k ? '<div class="mxask"><p>' + H(L('Get files puts ' + nm + ' on the Booking board (her Team Vote carries on), makes her folder and saves the book, snaps and videos into it. You will be in charge of her card.', nm + ' — 부킹 보드에 올리고(팀 투표는 계속), 폴더를 만들어 북·스냅·영상을 저장합니다. 이 카드는 내가 담당합니다.')) + '</p><div><button type="button" class="mxb pri" data-gfyes>' + L('Put on Booking and get files', '부킹에 올리고 파일 받기') + '</button><button type="button" class="mxb" data-gfno>' + L('Cancel', '취소') + '</button></div></div>' : '';
+    const gfa = GFASK && GFASK.split('\n')[0] === k ? '<div class="mxask"><p>' + H(__illuLH(k, 'Get files puts ' + nm + ' on the Booking board (her Team Vote carries on), makes her folder and saves the book, snaps and videos into it. You will be in charge of her card.', nm + ' — 부킹 보드에 올리고(팀 투표는 계속), 폴더를 만들어 북·스냅·영상을 저장합니다. 이 카드는 내가 담당합니다.')) + '</p><div><button type="button" class="mxb pri" data-gfyes>' + L('Put on Booking and get files', '부킹에 올리고 파일 받기') + '</button><button type="button" class="mxb" data-gfno>' + L('Cancel', '취소') + '</button></div></div>' : '';
     if(gfa) PTAB.set(k, 'links');
     const t = PTAB.get(k) === 'links' ? 'links' : 'notes';
     const ns = notesOf(k).length, ls = linksOf(k).length;
@@ -1379,7 +1379,7 @@
   document.addEventListener('focusout', e => { if(e.target && e.target.classList && e.target.classList.contains('igin') && e.target.closest('.mx')) setTimeout(() => { try{ changed(); }catch(err){} }, 400); }, true);
   function modelPanel(k, about){
     if(!k) return '';
-    const can = signedIn(), a = about || {}, nm = a.nm || info(k).nm || L('her', '모델');
+    const can = signedIn(), a = about || {}, nm = a.nm || info(k).nm || __illuLH(k, 'her', '모델');
     let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){}
     const st = stateOf(k), fav = myFav().has(k);
     const facts = factsOf(k), aa = Object.assign({facts}, a);
@@ -1403,7 +1403,7 @@
   /* the older block (Booking / Notes / Links) - kept for anything that still asks for it */
   function extras(k, about){
     if(!k) return '';
-    const can = signedIn(), a = about || {}, nm = a.nm || info(k).nm || L('her', '모델');
+    const can = signedIn(), a = about || {}, nm = a.nm || info(k).nm || __illuLH(k, 'her', '모델');
     let c = null; try{ c = /^bid:/.test(k) ? BOOK.get(k.slice(4)) : bkForKey(k); }catch(e){}
     return '<div class="mx" data-mxk="' + H(k) + '" data-mxab="' + H(JSON.stringify({nm: a.nm || '', ag: a.ag || '', city: a.city || '', country: a.country || ''})) + '">' +
       statusSec(k, a, c, stateOf(k), can, nm) + notesSec(k, nm, can) + linksSec(k, c, can) + '</div>';
@@ -1483,7 +1483,7 @@
     const heart = '<button type="button" class="ivh' + (fav ? ' on' : '') + '" data-ivfav title="' + H(fav ? L('In My Favorites since ', '내 즐겨찾기에 추가: ') + when(myFav().get(k).at) + L(' — click to remove', ' — 누르면 뺍니다') : L('Add to My Favorites', '내 즐겨찾기에 추가')) + '" aria-pressed="' + fav + '" aria-label="' + H(L('Favourite', '즐겨찾기')) + '">' + HEART + '</button>';
     let right;
     if(!st){
-      right = fav ? '<button type="button" class="ivsend" data-ivsend title="' + H(L('Ask the team to vote on her', '팀에게 투표를 요청합니다')) + '">' + L('Send to Team Vote', '팀 투표로 보내기') + '</button>' : '';
+      right = fav ? '<button type="button" class="ivsend" data-ivsend title="' + H(__illuLH(k, 'Ask the team to vote on her', '팀에게 투표를 요청합니다')) + '">' + L('Send to Team Vote', '팀 투표로 보내기') + '</button>' : '';
     }else if(!st.open){
       right = '<span class="ivres ' + st.res + '" title="' + H(L('Open the card to see who voted what', '카드를 열면 누가 어떻게 투표했는지 보입니다')) + '">' + (st.res === 'appr' ? '✓ ' + L('Approved', '승인') : '✕ ' + L('Cancelled', '취소')) + ' <b>' + st.g + '–' + st.r + '</b></span>';
     }else{
@@ -1949,7 +1949,7 @@
       if(c.st === 'canc') step = '<span class="ivdx">' + L('Cancelled', '취소') + '</span>';
       else{ for(const [sk, lab] of STG){ const st = (c.s && c.s[sk]) || {}; const pv = (st.p === 'g' || st.p === 'y') ? st.p : (st.d ? 'g' : ''); if(pv !== 'g'){ step = '<span class="' + (pv === 'y' ? 'ivdon' : 'ivdoff') + '" title="' + H(lab + ' · ' + (pv === 'y' ? L('in progress', '진행 중') : L('not started', '시작 전'))) + '">' + H(lab) + '</span>'; break; } }
         if(!step) step = '<span class="ivdok">' + L('All done', '완료') + '</span>'; }
-      bV = who + (who ? '<i>·</i>' : '') + step; bT = (pname(c.by) || '') + L(' is booking her', '님이 부킹 중');
+      bV = who + (who ? '<i>·</i>' : '') + step; bT = (pname(c.by) || '') + __illuLH((c && c.k), ' is booking her', '님이 부킹 중');
     }
     return '<dl class="ivdrows"><dt>' + L('Guarantee', '개런티') + '</dt><dd title="' + H(gT) + '">' + gV + '</dd>' +
       '<dt>' + L('Available', '가능') + '</dt><dd title="' + H(L('Rough estimate, not in the contract', '대략적인 날짜, 계약 아님')) + '">' + aV + '</dd>' +
@@ -2121,7 +2121,7 @@
       seg('mfview', [['side', L('Side by side', '나란히')], ['table', L('Table', '표')]]) + seg('mfshow', [['all', L('All their favorites', '모든 즐겨찾기')], ['shared', L('Liked by 2+ of them', '2명 이상')]]) + '</div>';
     if(!picked.length) return bar + empty(L('No member picked', '선택한 멤버 없음'), L('Open the list above and tick the members whose favorites you want to compare.', '위 목록을 열어 비교할 멤버를 고르세요.'));
     const mini = x => { const n = likedBy.get(x.k) || 0, i = info(x.k), th = mfThumb(x.k), others = n > 1 ? picked.filter(p => (FAV.get(p) || new Map()).has(x.k)) : [];
-      return '<div class="mfmini' + (n > 1 ? ' sh' : '') + '" data-mfopen="' + H(x.k) + '" role="button" tabindex="0" title="' + H(L('Open her photos', '사진 보기')) + '"><span class="mfph">' + (th ? '<img src="' + H(th) + '" alt="" loading="lazy" decoding="async">' : '') + '</span><span class="mfmt"><b>' + H(i.nm || x.nm || '') + '</b><span>' + H(i.ag || x.ag || '') + '</span><span class="mfms">' + H(mfMs(x.k)) + '</span>' + mfVote(x.k) + '</span>' + (n > 1 ? '<span class="mftag" title="' + H(others.map(nm).join(', ')) + '">♥ ' + n + '</span>' : '') + '</div>'; };
+      return '<div class="mfmini' + (n > 1 ? ' sh' : '') + '" data-mfopen="' + H(x.k) + '" role="button" tabindex="0" title="' + H(__illuLH(x.k, 'Open her photos', '사진 보기')) + '"><span class="mfph">' + (th ? '<img src="' + H(th) + '" alt="" loading="lazy" decoding="async">' : '') + '</span><span class="mfmt"><b>' + H(i.nm || x.nm || '') + '</b><span>' + H(i.ag || x.ag || '') + '</span><span class="mfms">' + H(mfMs(x.k)) + '</span>' + mfVote(x.k) + '</span>' + (n > 1 ? '<span class="mftag" title="' + H(others.map(nm).join(', ')) + '">♥ ' + n + '</span>' : '') + '</div>'; };
     if((VS.mfview || 'side') === 'table'){
       const keys = [...likedBy.keys()].filter(k => !shared || likedBy.get(k) > 1).sort((a, b) => (likedBy.get(b) - likedBy.get(a)) || String(info(a).nm || '').localeCompare(String(info(b).nm || '')));
       if(!keys.length) return bar + empty(L('Nothing to show', '표시할 것 없음'), L('None of these members liked the same model yet.', '아직 같은 모델을 좋아한 멤버가 없습니다.'));
@@ -2230,8 +2230,8 @@
       const pct = st.d && st.done != null ? Math.max(0, Math.min(100, Math.round(st.done / st.d * 100))) : 0;
       const n1 = v => v == null || v === '' || isNaN(+v) ? '–' : String(Math.round(+v * 10) / 10);
       const late = st.left != null && st.left <= 14 && st.on;
-      return '<article class="stc' + (st.up ? ' up' : '') + '" data-stopen="' + H(c.id) + '" role="button" tabindex="0" title="' + H(L('Open her booking files', '부킹 파일 열기')) + '">' +
-        '<div class="stph" data-stph="' + H(c.id) + '" title="' + H(L('Her photos — pick the card photo here', '사진 보기 — 여기서 카드 사진을 고를 수 있어요')) + '">' + (ph ? '<img src="' + H(ph) + '" alt="" loading="lazy" decoding="async">' : '<span class="stnoph">' + H((c.nm || '?').charAt(0)) + '</span>') +
+      return '<article class="stc' + (st.up ? ' up' : '') + '" data-stopen="' + H(c.id) + '" role="button" tabindex="0" title="' + H(__illuLH((c && c.k), 'Open her booking files', '부킹 파일 열기')) + '">' +
+        '<div class="stph" data-stph="' + H(c.id) + '" title="' + H(__illuLH((c && c.k), 'Her photos — pick the card photo here', '사진 보기 — 여기서 카드 사진을 고를 수 있어요')) + '">' + (ph ? '<img src="' + H(ph) + '" alt="" loading="lazy" decoding="async">' : '<span class="stnoph">' + H((c.nm || '?').charAt(0)) + '</span>') +
           '<span class="stbadge ' + (st.up ? 'up' : 'on') + '">' + (st.up ? L('Arriving', '입국 예정') : L('On stay', '체류 중')) + '</span>' +
           (c.by ? '<span class="stby" title="' + H(L('In charge: ', '담당: ') + (pname(c.by) || '')) + '">' + disc(c.by, 'xs') + '</span>' : '') +
           '<b class="stnm">' + H(c.nm || '') + '</b></div>' +

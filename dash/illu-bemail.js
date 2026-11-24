@@ -241,7 +241,7 @@
       r.st = !ms.length ? 'opened' : r.last.d === 'in' ? 'replied' : r.recv ? 'waiting' : 'none';
       /* the model's card says another agency (her mother agency, another office): say so */
       const other = [...r.models.values()].map(m => m.cardAg).filter(a => a && a.toLowerCase() !== String(r.ag).toLowerCase() && !agSame(a, r));
-      r.note = other.length === 1 && r.models.size === 1 ? L('Her card says ', '카드 에이전시: ') + other[0] : '';
+      r.note = other.length === 1 && r.models.size === 1 ? __illuLH((([...r.models.values()][0] || {}).k), 'Her card says ', '카드 에이전시: ') + other[0] : '';
       r.mine = r.by.has(me());
       out.push(r);
     }
@@ -335,7 +335,7 @@
   /* her mini card (was a name chip in 1.2.248) */
   function chip(r, m, mk){
     const bk = !!m.bid, nm = nmOf(m), ph = photoOf(m), canc = m.st === 'canc';
-    const tip = nm + (m.ht ? ' · ' + m.ht + ' cm' : '') + ' — ' + (m.sent ? (bk ? L('has a booking card — choose which card to open', '부킹 카드 있음 — 열 카드를 고르세요') : L('open her card', '모델 카드 열기')) : L('opened in Hiworks, not confirmed sent', 'Hiworks 작성 창만 열림, 발송 미확인'));
+    const tip = nm + (m.ht ? ' · ' + m.ht + ' cm' : '') + ' — ' + (m.sent ? (bk ? L('has a booking card — choose which card to open', '부킹 카드 있음 — 열 카드를 고르세요') : __illuLH(m.k, 'open her card', '모델 카드 열기')) : L('opened in Hiworks, not confirmed sent', 'Hiworks 작성 창만 열림, 발송 미확인'));
     return '<button type="button" class="bemmc' + (m.sent ? '' : ' unc') + '" data-bemmc="' + E(r.key) + '" data-bemmk="' + E(mk) + '" title="' + E(tip) + '">' +
       '<span class="bemph">' + (ph ? '<img src="' + E(ph) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') + '<i>' + E(ini(nm)) + '</i>' +
       (bk ? '<span class="bembk' + (canc ? ' canc' : '') + '" aria-label="' + E(L('has a booking card', '부킹 카드 있음')) + '">' + BKI + '</span>' : '') +
@@ -572,7 +572,7 @@
     const p = document.createElement('div'); p.className = 'bempick'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', L('Which card?', '어느 카드?'));
     p.innerHTML = '<h4>' + L('Which card do you want to open?', '어느 카드를 열까요?') + '<small>' + E(m.nm) + L(' has a booking card.', '님은 부킹 카드가 있습니다.') + '</small></h4>' +
       '<button type="button" class="bemopt" data-bemgo="bk"><span class="bemic">' + I.bk + '</span><span><b>' + L('Booking card', '부킹 카드') + '</b><span class="s">' + L('Profile, MD, stages, documents, email', '프로필, MD, 단계, 서류, 이메일') + '</span></span><span class="bemtg ' + (canc ? 'canc' : 'proc') + '">' + (canc ? L('Cancelled', '취소됨') : done ? L('Done', '완료') : L('In Booking', '부킹 중')) + '</span></button>' +
-      '<button type="button" class="bemopt" data-bemgo="card"><span class="bemic">' + I.md + '</span><span><b>' + L('Model card', '모델 카드') + '</b><span class="s">' + (inDir ? L('Her card in the Directory · ', '디렉터리의 모델 카드 · ') + E(m.cardAg || r.ag) : L('Not in the Directory · opens her page on the agency’s site ↗', '디렉터리에 없음 · 에이전시 사이트의 모델 페이지 ↗')) + '</span></span></button>' +
+      '<button type="button" class="bemopt" data-bemgo="card"><span class="bemic">' + I.md + '</span><span><b>' + L('Model card', '모델 카드') + '</b><span class="s">' + (inDir ? __illuLH(m.k, 'Her card in the Directory · ', '디렉터리의 모델 카드 · ') + E(m.cardAg || r.ag) : __illuLH(m.k, 'Not in the Directory · opens her page on the agency’s site ↗', '디렉터리에 없음 · 에이전시 사이트의 모델 페이지 ↗')) + '</span></span></button>' +
       '<div class="bempickx"><button type="button" data-bemx>' + L('Cancel', '취소') + '</button></div>';
     document.body.appendChild(bg); document.body.appendChild(p);
     bg.addEventListener('click', closePick);

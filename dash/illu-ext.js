@@ -404,7 +404,9 @@ document.head.appendChild(st);
   function fill(t, agName, ms) {
     if (t.kind === 'inquiry' && !String(t.body || '').trim()) return Object.assign({ subject: t.subject || SUBJECT }, ms.length ? letter(agName, ms) : letter(agName, []));
     const me = (typeof meRec === 'function' && meRec()) || {};
-    const one = ms.length === 1, g = one ? ms[0].g : '';
+    /* the sex set on her card wins over the board's label (illu-sex.js) */
+    const sexOfM = m => { let x = ''; try { x = window.__illuSexOf ? (window.__illuSexOf(m.key) || window.__illuSexOf(m.url)) : ''; } catch (e) {} return x || m.g || '?'; };
+    const one = ms.length === 1, g = one ? sexOfM(ms[0]) : '';
     const [sub, pos] = g === 'F' ? ['she', 'her'] : g === 'M' ? ['he', 'his'] : ['they', 'their'];
     /* 1.2.162: grammar that follows how many models (one: "Is she", "model"; more: "Are they", "models") - {Is} {She} {Her} capitalised at a sentence start */
     const isW = sub === 'they' ? 'are' : 'is', cap = w => w.charAt(0).toUpperCase() + w.slice(1);
@@ -412,11 +414,99 @@ document.head.appendChild(st);
       .replace(/\{Is\}/g, cap(isW)).replace(/\{is\}/g, isW).replace(/\{She\}/g, cap(sub)).replace(/\{she\}/g, sub).replace(/\{Her\}/g, cap(pos)).replace(/\{her\}/g, pos)
       .replace(/\{date\}/gi, new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }));
     const lines = [];
+    /* 1.2.287: {Model Name} / {Model Link} (as written in "Model Inquiry v.2") are the same list as {models}: the line with
+       the name becomes the list (names with their links), a line with only the link is then not needed */
+    let body = String(t.body || '');
+    if (/\{model name\}/i.test(body)) body = body.split('\n').filter(l => !/^\s*\{model link\}\s*$/i.test(l)).map(l => /\{model name\}/i.test(l) ? '{models}' : l).join('\n');
+    else body = body.replace(/^\s*\{model link\}\s*$/gim, '{models}');
+    body = agree(body, ms.length, g);
     /* {models}: each name as the agency writes it, its link under it, a blank line between */
-    for (const l of rep(t.body).split('\n')) { if (/\{models\}/i.test(l)) { ms.forEach((m, i) => { lines.push(String(m.nm || '')); lines.push('\u0000' + m.url); if (i < ms.length - 1) lines.push(''); }); } else lines.push(l); }
+    for (const l of rep(body).split('\n')) { if (/\{models\}/i.test(l)) { ms.forEach((m, i) => { lines.push(String(m.nm || '')); lines.push('\u0000' + m.url); if (i < ms.length - 1) lines.push(''); }); } else lines.push(l); }
     const html = lines.map(l => l === '' ? '<p><br></p>' : l.charAt(0) === '\u0000' ? '<p><a href="' + escT(l.slice(1)) + '">' + escT(l.slice(1)) + '</a></p>' : '<p>' + escT(l) + '</p>').join('');
-    return { subject: rep(t.subject), html, text: lines.map(l => l.replace('\u0000', '')).join('\n') };
+    return { subject: rep(agree(t.subject, ms.length, g)), html, text: lines.map(l => l.replace('\u0000', '')).join('\n') };
   }
+  /* 1.2.287 (user, 24 Nov 2026: "regarding the following templates when sending out emails, depending on the model(s), I want
+     you to grammatically fix the pronouns and all other wordings also depending on singular/plural"): the template's own
+     words follow the models picked - one woman: she / her / is / model / book; one man: he / him / his; more than one, or one
+     whose sex is not known: they / them / their / are / models / books. Generic wording about other models ("if you have
+     other suitable models ... their details") is left as written. */
+  function agree(text, n, g) {
+    if (!n) return String(text || '');
+    const one = n === 1, sg = one && (g === 'F' || g === 'M');          // a singular pronoun ("she is"); one model of unknown sex: "they are"
+    const S = !sg ? 'they' : g === 'F' ? 'she' : 'he', O = !sg ? 'them' : g === 'F' ? 'her' : 'him', P = !sg ? 'their' : g === 'F' ? 'her' : 'his';
+    const PP = !sg ? 'theirs' : g === 'F' ? 'hers' : 'his', X = !sg ? 'themselves' : g === 'F' ? 'herself' : 'himself';
+    const like = (w, src) => src === src.toUpperCase() && src.length > 1 ? w.toUpperCase() : src.charAt(0) === src.charAt(0).toUpperCase() ? w.charAt(0).toUpperCase() + w.slice(1) : w;
+    const AFTER_OBJ = /^(and|or|but|to|for|with|at|in|on|by|about|from|as|if|so|that|know|please|too|again|now|soon|back|up|off|out|over|into|onto|away|down|through|when|once|after|before|until|while|because|since|is|was|will|would|can|could|has|have|had|the|a|an|this|that|these|those|our|my|your|any|some|all|directly|via|through|here|there)$/i;
+    /* a sentence-by-sentence pass; within a sentence, nothing after a generic plural ("other suitable models") is changed */
+    const GENERIC = /\b(other|suitable|available|new|more|any|similar)\s+(\w+\s+)?models\b/i;
+    const fix = seg => {
+      let s = seg;
+      /* "any of them are" / "all of them" -> she / they */
+      s = s.replace(/\b(any|each|all|either|both|one|some) of them\b/gi, (m, a) => one ? like(S, a) : m);
+      /* counted nouns: the following model(s), this/these model(s), her/their (full) book(s) */
+      s = s.replace(/\b(following|above|listed|mentioned) (models?)\b/gi, (m, a, w) => a + ' ' + like(one ? 'model' : 'models', w));
+      s = s.replace(/\b(this|these|that|those) (models?)\b/gi, (m, d, w) => { const dd = d.toLowerCase(); const nd = one ? (dd === 'these' ? 'this' : dd === 'those' ? 'that' : dd) : (dd === 'this' ? 'these' : dd === 'that' ? 'those' : dd); return like(nd, d) + ' ' + like(one ? 'model' : 'models', w); });
+      /* pronouns */
+      s = s.replace(/\b(she's|he's|they're|she'd|he'd|they'd|she'll|he'll|they'll|herself|himself|themselves|theirs|hers|she|he|they|him|them|his|their|her)\b('?)/gi, (m, w, q, off, all) => {
+        const lw = w.toLowerCase();
+        const c = { "she's": S + "'s", "he's": S + "'s", "they're": S + "'re", "she'd": S + "'d", "he'd": S + "'d", "they'd": S + "'d", "she'll": S + "'ll", "he'll": S + "'ll", "they'll": S + "'ll" }[lw];
+        if (c) { const r = sg ? c.replace(/'re$/, "'s") : c.replace(/'s$/, "'re"); return like(r, w) + q; }
+        if (lw === 'she' || lw === 'he' || lw === 'they') return like(S, w) + q;
+        if (lw === 'him' || lw === 'them') return like(O, w) + q;
+        if (lw === 'his' || lw === 'their') return like(P, w) + q;
+        if (lw === 'theirs' || lw === 'hers') return like(PP, w) + q;
+        if (/self|selves/.test(lw)) return like(X, w) + q;
+        /* her: "her full book" (possessive) or "contact her and" (object) */
+        const next = (all.slice(off + m.length).match(/^\s+([A-Za-z][\w-]*)/) || [])[1];
+        return like(next && !AFTER_OBJ.test(next) ? P : O, w) + q;
+      });
+      /* her/their (full) book(s), portfolio(s) */
+      s = s.replace(/\b(her|his|their)((?:\s+(?:full|latest|recent|updated|complete))*)\s+(books?|portfolios?|comp cards?)\b/gi, (m, p, adj, nn) => { const base = nn.replace(/s$/i, ''); return p + adj + ' ' + (one ? base : base + 's'); });
+      /* the verb that goes with the pronoun */
+      const SG = { are: 'is', were: 'was', have: 'has', do: 'does', "don't": "doesn't", "aren't": "isn't", "weren't": "wasn't", "haven't": "hasn't" };
+      const PL = { is: 'are', was: 'were', has: 'have', does: 'do', "doesn't": "don't", "isn't": "aren't", "wasn't": "weren't", "hasn't": "haven't" };
+      const V = sg ? SG : PL, vre = Object.keys(V).map(k => k.replace("'", "'")).join('|');
+      /* not after a helper verb: "does she have", "can she do" stay as they are */
+      s = s.replace(new RegExp("(^|[^\\w'])((?:(?:do|does|did|can|could|will|would|should|may|might|must|don't|doesn't|didn't|can't|won't)\\s+)?)(" + S + ')(\\s+(?:also\\s+|still\\s+|currently\\s+)?)(' + vre + ")(?![\\w'])", 'gi'), (m, pre, aux, p, sp, v) => aux ? m : pre + p + sp + like(V[v.toLowerCase()], v));
+      /* the model / these models + is / are */
+      const NV = one ? { are: 'is', were: 'was', have: 'has' } : { is: 'are', was: 'were', has: 'have' };
+      s = s.replace(new RegExp('\\b((?:this|that|these|those|the following|the above|the) models?)(\\s+)(' + Object.keys(NV).join('|') + ')\\b', 'gi'), (m, np, sp, v) => np + sp + like(NV[v.toLowerCase()], v));
+      s = s.replace(new RegExp("(^|[^\\w'])(" + vre + ')(\\s+)(' + S + ')\\b', 'gi'), (m, pre, v, sp, p) => pre + like(V[v.toLowerCase()], v) + sp + p);
+      return s;
+    };
+    /* {she}, {Is}, {models} ... are filled in later as they are written - kept out of this pass */
+    const PH = []; text = String(text || '').replace(/\{[^{}\n]*\}/g, m => { PH.push(m); return '\u0001' + (PH.length - 1) + '\u0001'; });
+    return text.split('\n').map(line => line.split(/(?<=[.!?])(\s+)/).map(seg => {
+      if (/^\s*$/.test(seg)) return seg;
+      const gm = seg.match(GENERIC);
+      if (!gm) return fix(seg);
+      const cut = gm.index + gm[0].length;            /* the words before "other suitable models" follow the picked models */
+      return fix(seg.slice(0, cut)) + seg.slice(cut);
+    }).join('')).join('\n').replace(/\u0001(\d+)\u0001/g, (m, i) => PH[+i]);
+  }
+  window.__illuAgree = agree;
+  /* 1.2.287 (user, 24 Nov 2026: "When I selected 'Confirm' for Illia, it mentioned that I was responsible for 'her card'. Illia is
+     a male model. Make sure that the pronouns are correct when you mention it"): the program's own messages about one model
+     follow that model's sex - set on the card (Gender), else her booking card, else the agency board's label. Not known yet:
+     they / their (set Male or Female on the card and it says he / she). */
+  function sexFor(k, c) {
+    try {
+      if (!c && /^bid:/.test(String(k || ''))) c = BOOK.get(String(k).slice(4));
+      const key = (c && c.k) || (/^bid:/.test(String(k || '')) ? '' : k) || '';
+      let g = key && window.__illuSexOf ? window.__illuSexOf(key) : '';
+      if (!g && c && (c.g === 'F' || c.g === 'M')) g = c.g;
+      if (!g && key && typeof keyInfo === 'function') { const i = keyInfo(key); if (i && (i.g === 'F' || i.g === 'M')) g = i.g; }
+      return g === 'F' || g === 'M' ? g : '?';
+    } catch (e) { return '?'; }
+  }
+  window.__illuSexFor = sexFor;
+  window.__illuLH = function (k, en, ko) {
+    let kor = false; try { kor = typeof LANG !== 'undefined' && LANG === 'ko'; } catch (e) {}
+    const t = kor && ko != null ? ko : en;
+    if (t !== en || typeof en !== 'string') return t;          /* Korean has no he / she here */
+    const g = sexFor(k);
+    return g === 'F' ? t : agree(t, 1, g);
+  };
   let PK = null;   /* {addr, agName, ms, el, edit} */
   /* 1.2.160 (user: "allow me to also select multiple models from that agency ... to add onto the email"): the agency's
      models, ticked in the same box; the one the email was opened for is ticked already */
@@ -460,7 +550,7 @@ document.head.appendChild(st);
         '<label>Name<input id="tplnm" maxlength="60" value="' + escT(t.name || '') + '" placeholder="e.g. Follow-up after no reply"></label>' +
         '<label>Subject<input id="tplsub" maxlength="200" value="' + escT(t.subject || '') + '"></label>' +
         '<label>Email<textarea id="tplbody" rows="12" placeholder="Dear {agency} Team,&#10;&#10;…&#10;&#10;{models}&#10;&#10;Thank you!">' + escT(t.body || (t.kind === 'inquiry' ? fill(t, '{agency}', []).text.replace(/following models:\n\n/, 'following models:\n\n{models}\n').replace(/My name is [^,]*,/, 'My name is {my name},') : '')) + '</textarea></label>' +
-        '<p class="tplhelp">Filled in for you: <b>{agency}</b> the agency · <b>{my name}</b> your name · <b>{models}</b> the model names with their links · <b>{model}</b> one model\'s name · <b>{model(s)}</b> model or models · <b>{she}</b> / <b>{her}</b> / <b>{is}</b> she·he·they, her·his·their, is·are (write <b>{She}</b> <b>{Is}</b> at the start of a sentence) · <b>{date}</b> today. Your Hiworks signature is added by Hiworks.</p>' +
+        '<p class="tplhelp">Filled in for you: <b>{agency}</b> the agency · <b>{my name}</b> your name · <b>{models}</b> the model names with their links · <b>{model}</b> one model\'s name · <b>{model(s)}</b> model or models · <b>{she}</b> / <b>{her}</b> / <b>{is}</b> she·he·they, her·his·their, is·are (write <b>{She}</b> <b>{Is}</b> at the start of a sentence) · <b>{date}</b> today. You can also just write she / her / is / model - it changes by itself to he / his or they / their / are / models for the models you pick. Your Hiworks signature is added by Hiworks.</p>' +
         '<div class="tplacts">' + (t.id && t.id !== BUILTIN.id ? '<button type="button" class="tpldel" data-tpldel="' + escT(t.id) + '">Delete</button>' : '') + '<span></span><button type="button" data-tplback>Back</button><button type="button" class="tplgo" data-tplsave>Save</button></div></div>';
       setTimeout(() => { const i = box.querySelector('#tplnm'); if (i) i.focus(); }, 30);
       return;

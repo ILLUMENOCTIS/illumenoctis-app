@@ -150,12 +150,12 @@
     const pad = n => String(n).padStart(2, '0');
     return base.concat(ALL.filter(q => q.submitted_at && Date.now() - new Date(q.submitted_at).getTime() < 7 * 864e5).map(q => { const d = new Date(q.submitted_at);
       return {ts: d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()), who: '',
-        html: '📋 <b>' + H(q.ag || 'The agency') + '</b> sent <b>' + H(q.nm || 'her') + '</b>\'s details through the form <button type="button" class="alnb" data-crqcard="' + H(q.bid) + '">Open her card</button>'}; }));
+        html: '📋 <b>' + H(q.ag || 'The agency') + '</b> sent <b>' + H(q.nm || 'her') + '</b>\'s details through the form <button type="button" class="alnb" data-crqcard="' + H(q.bid) + '">' + H(window.__illuLH ? window.__illuLH('bid:' + q.bid, 'Open her card') : 'Open her card') + '</button>'}; }));
   };
   document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-crqcard]'); if(!b) return; e.preventDefault(); e.stopPropagation(); try{ bvOpenFor(b.dataset.crqcard); }catch(er){} }, true);
   function note(text, bid){
     const el = document.createElement('div'); el.className = 'crqtoast'; el.setAttribute('role', 'status');
-    el.innerHTML = '📋 ' + H(text) + ' <button type="button" data-crqcard="' + H(bid) + '">Open her card</button><button type="button" class="x" aria-label="Close">✕</button>';
+    el.innerHTML = '📋 ' + H(text) + ' <button type="button" data-crqcard="' + H(bid) + '">' + H(window.__illuLH ? window.__illuLH('bid:' + bid, 'Open her card') : 'Open her card') + '</button><button type="button" class="x" aria-label="Close">✕</button>';
     el.addEventListener('click', e => { if(e.target.closest('button')) setTimeout(() => el.remove(), 0); });
     document.body.appendChild(el); setTimeout(() => el.remove(), 20000);
   }
@@ -163,7 +163,7 @@
     let seen = {}; try{ seen = JSON.parse(localStorage.getItem(seenKey) || '{}'); }catch(e){}
     let ch = false;
     for(const q of ALL) if(q.submitted_at && seen[q.id] !== q.submitted_at){
-      if(seen.__init) note((q.ag || 'The agency') + ' sent ' + (q.nm || 'her') + '\'s details — they are on her card.', q.bid);
+      if(seen.__init) note((q.ag || 'The agency') + ' sent ' + (q.nm || 'her') + '\'s details — ' + (window.__illuLH ? window.__illuLH('bid:' + q.bid, 'saved on her card.') : 'saved on her card.'), q.bid);
       seen[q.id] = q.submitted_at; ch = true;
     }
     if(!seen.__init){ seen.__init = 1; ch = true; }

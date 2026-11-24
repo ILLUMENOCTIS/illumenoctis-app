@@ -49,11 +49,11 @@
     ASK = {w, el};
     let box = document.getElementById('illuown'); if(!box){ box = document.createElement('div'); box.id = 'illuown'; document.body.appendChild(box); }
     const who = pn(w.by) || L('someone else', '다른 사람'), nm = nice(w.nm) || L('this model', '이 모델');
-    const why = w.why === 'booking' ? L(who + ' sent ' + nm + ' to Booking and is in charge of her.', who + '님이 ' + nm + '을(를) 부킹으로 보냈고 담당자입니다.')
-      : L(who + ' sent ' + nm + ' to the Team Vote and is in charge of her.', who + '님이 ' + nm + '을(를) 팀 투표에 올렸고 담당자입니다.');
+    const why = w.why === 'booking' ? __illuLH((w.bid ? 'bid:' + w.bid : w.k), who + ' sent ' + nm + ' to Booking and is in charge of her.', who + '님이 ' + nm + '을(를) 부킹으로 보냈고 담당자입니다.')
+      : __illuLH((w.bid ? 'bid:' + w.bid : w.k), who + ' sent ' + nm + ' to the Team Vote and is in charge of her.', who + '님이 ' + nm + '을(를) 팀 투표에 올렸고 담당자입니다.');
     box.innerHTML = '<div class="owveil" data-owno></div><div class="owdlg" role="alertdialog" aria-modal="true" aria-labelledby="owt"><div class="owic" aria-hidden="true">' + H((who || '?').charAt(0).toUpperCase()) + '</div>' +
       '<h4 id="owt">' + H(L('This is ' + who + '’s model', who + '님 담당 모델입니다')) + '</h4><p>' + H(why) + '</p>' +
-      '<p class="owsm">' + H(L('Change her details anyway? ' + who + ' will be told what you change.', '그래도 정보를 바꿀까요? 바꾼 내용은 ' + who + '님에게 알립니다.')) + '</p>' +
+      '<p class="owsm">' + H(__illuLH((w.bid ? 'bid:' + w.bid : w.k), 'Change her details anyway? ' + who + ' will be told what you change.', '그래도 정보를 바꿀까요? 바꾼 내용은 ' + who + '님에게 알립니다.')) + '</p>' +
       '<div class="owb"><button type="button" data-owno>' + H(L('Cancel', '취소')) + '</button><button type="button" class="pri" data-owyes>' + H(L('Change anyway', '그래도 바꾸기')) + '</button></div></div>';
     box.hidden = false; try{ box.querySelector('[data-owno]:not(.owveil)').focus(); }catch(e){}
   }
@@ -144,7 +144,7 @@
   const keepSeen = () => { try{ localStorage.setItem(SEENK(), JSON.stringify([...seen()].slice(-300))); }catch(e){} };
   const isNew = x => !x.seen && !seen().has(x.id) && Date.now() - new Date(x.at) < 14 * 864e5;
   function lines(x){
-    if(x.coll === 'wknote') return [L('sent her on although you are booking her', '내가 부킹 중인데 진행했습니다')];
+    if(x.coll === 'wknote') return [__illuLH((x.bid ? 'bid:' + x.bid : x.k), 'sent her on although you are booking her', '내가 부킹 중인데 진행했습니다')];
     return (x.ch || []).slice(0, 6).map(c => (c.f || '') + ': ' + (c.a || '–') + ' → ' + (c.b || '–'));
   }
   function title(x){
@@ -169,7 +169,7 @@
     el.innerHTML = '<div class="albar"></div><div class="alin"><span class="alpic"><i>' + H((pn(x.by) || '?').charAt(0).toUpperCase()) + '</i></span><div class="altx"><div class="alk">' + H(L('YOUR MODEL', '내 담당 모델')) + '</div>' +
       '<div class="alt">' + H(title(x)) + '</div><ul class="owch">' + lines(x).map(t => '<li>' + H(t) + '</li>').join('') + '</ul></div>' +
       '<button type="button" class="alx" data-ow="ok" aria-label="' + H(L('Close', '닫기')) + '">×</button></div>' +
-      '<div class="alacts"><span class="alsp"></span><button type="button" class="albtn" data-ow="ok">' + H(L('OK', '확인')) + '</button>' + (x.bid || x.k ? '<button type="button" class="albtn pri" data-ow="open">' + H(L('Open her card', '카드 열기')) + '</button>' : '') + '</div>';
+      '<div class="alacts"><span class="alsp"></span><button type="button" class="albtn" data-ow="ok">' + H(L('OK', '확인')) + '</button>' + (x.bid || x.k ? '<button type="button" class="albtn pri" data-ow="open">' + H(__illuLH((x.bid ? 'bid:' + x.bid : x.k), 'Open her card', '카드 열기')) + '</button>' : '') + '</div>';
     el.addEventListener('click', e => { const b = e.target.closest('[data-ow]'); if(!b) return; markSeen(x); el.classList.add('out'); setTimeout(() => el.remove(), 220); if(b.dataset.ow === 'open') openIt(x); });
     box.prepend(el);
   }
