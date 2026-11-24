@@ -46,34 +46,41 @@
   function place(host, i, small, k){
     let el = host.querySelector(':scope > .emk');
     const want = i.st + '|' + label(i) + '|' + i.key;
-    if(el && el[KEYATTR] === want) return;
-    if(el) el.remove();
-    host.insertAdjacentHTML('beforeend', markHTML(i, small));
-    el = host.querySelector(':scope > .emk'); el[KEYATTR] = want; el.__emkKey = k;
-    if(getComputedStyle(host).position === 'static') host.style.position = 'relative';
-    /* a strip across the top of the photo (Team Vote's date and clock): sit under it */
-    if(!small){
-      let top = 8;
-      for(const ch of host.children){
-        if(ch === el || ch.classList.contains('ucph')) continue;
-        const cs = getComputedStyle(ch); if(cs.position !== 'absolute' || cs.display === 'none') continue;
-        const r = ch.getBoundingClientRect(), hr = host.getBoundingClientRect();
-        if(hr.width && r.width > hr.width * .7 && r.top - hr.top < 4 && r.height < 60) top = Math.max(top, r.height + 6);
-      }
-      el.style.top = top + 'px';
-      /* 1.2.282 (user, 24 Nov 2026: "the name initial and the 'Waiting' are overlapping"): on a Team Vote card the circle
-         with the initial of whoever sent her to the vote sits at the same spot - the marker moves to its right */
-      const fi = host.querySelector('.ivfirst');
-      if(fi && fi.offsetParent){
-        const r = fi.getBoundingClientRect(), hr = host.getBoundingClientRect(), er = el.getBoundingClientRect();
-        if(r.width && r.bottom > er.top && r.top < er.bottom && r.left < er.right && r.right > er.left){
-          el.style.left = Math.round(r.right - hr.left + 6) + 'px';
-          el.style.maxWidth = 'calc(100% - ' + Math.round(r.right - hr.left + 14) + 'px)';
-          /* (user: "I want the initial and the email notification aligned"): the same middle line as the circle */
-          el.style.top = Math.round(r.top + r.height / 2 - hr.top - el.offsetHeight / 2) + 'px';
-        }
+    if(!(el && el[KEYATTR] === want)){
+      if(el) el.remove();
+      host.insertAdjacentHTML('beforeend', markHTML(i, small));
+      el = host.querySelector(':scope > .emk'); el[KEYATTR] = want; el.__emkKey = k;
+      if(getComputedStyle(host).position === 'static') host.style.position = 'relative';
+    }
+    if(!small) align(host, el);
+  }
+  /* where the marker sits on a card photo - worked out again on every pass, as the card's top row can change */
+  function align(host, el){
+    /* 1.2.286 (user, 24 Nov 2026 - a Team Vote card whose vote is closed: "not aligned by the initial"): with the vote
+       closed the top row is only the small date, so the marker sat on the date and the circle with the initial was
+       lower down. Whenever the card has that circle, the marker now always sits right of it, on its middle line. */
+    const fi = host.querySelector('.ivfirst');
+    if(fi && fi.offsetParent){
+      const r = fi.getBoundingClientRect(), hr = host.getBoundingClientRect();
+      if(r.width && hr.width){
+        const left = Math.round(r.right - hr.left + 6) + 'px', mw = 'calc(100% - ' + Math.round(r.right - hr.left + 14) + 'px)';
+        const top = Math.round(r.top + r.height / 2 - hr.top - el.offsetHeight / 2) + 'px';
+        if(el.style.left !== left) el.style.left = left;
+        if(el.style.maxWidth !== mw) el.style.maxWidth = mw;
+        if(el.style.top !== top) el.style.top = top;
+        return;
       }
     }
+    /* no circle: a strip across the top of the photo (Team Vote's date and clock) - sit under it */
+    let top = 8;
+    for(const ch of host.children){
+      if(ch === el || ch.classList.contains('ucph')) continue;
+      const cs = getComputedStyle(ch); if(cs.position !== 'absolute' || cs.display === 'none') continue;
+      const r = ch.getBoundingClientRect(), hr = host.getBoundingClientRect();
+      if(hr.width && r.width > hr.width * .7 && r.top - hr.top < 4 && r.height < 60) top = Math.max(top, r.height + 6);
+    }
+    if(el.style.top !== top + 'px') el.style.top = top + 'px';
+    if(el.style.left){ el.style.left = ''; el.style.maxWidth = ''; }
   }
   let BUSY = false, LASTV = '';
   /* 1.2.255 (user, 18 Nov 2026: "I also don't think it's necessary to show the 'Waiting' for the email once the card has
