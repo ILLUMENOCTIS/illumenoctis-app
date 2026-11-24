@@ -47,6 +47,21 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
     if (!/^https?:\/\//i.test(page)) return { photos: [], why: 'nolink' };
     if (GAL.has(page)) return GAL.get(page);
     const job = (async () => {
+      /* 1.2.285: SYSTEM Agency's pages are drawn by script from its own public list - read straight from it (tested from another site) */
+      try {
+        const u = new URL(page), m = /(^|\.)systemagency\.com$/i.test(u.host) && u.pathname.match(/^\/(?:talents|country\/[^/]+)\/([^/?#]+)\/?$/i);
+        if (m) {
+          const r = await fetch('https://app1-wdkhklvgeq-uc.a.run.app/talent?slug=' + encodeURIComponent(decodeURIComponent(m[1])), { headers: { Accept: 'application/json' } });
+          const j = r.ok ? await r.json() : null, row = j && j.item && Array.isArray(j.item.rows) ? j.item.rows[0] : null;
+          if (row) {
+            const ord = x => x === 'portfolio' ? 0 : x === 'polaroid' ? 1 : 2;
+            const res = (row.resources || []).filter(x => x && /^https:\/\//i.test(x.route || '') && (!x.type || /^image\//i.test(x.type)) && x.section !== 'cover')
+              .sort((a, b) => ord(a.section) - ord(b.section) || (+a.position || 0) - (+b.position || 0));
+            const photos = res.map(x => ({ url: x.route, cat: x.section === 'polaroid' ? 'Snaps' : 'Book' }));
+            if (photos.length) return { photos: photos.slice(0, 80), why: '', via: 'system-api', page };
+          }
+        }
+      } catch (e) {}
       const C = window.ILLU_CONFIG || {}, sb = window.__illuSb;
       let tk = ''; try { const { data } = await sb.auth.getSession(); tk = (data && data.session && data.session.access_token) || ''; } catch (e) {}
       if (!tk || !C.url) return { photos: [], why: 'none' };
@@ -94,6 +109,12 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
   addEventListener('error', e => { const i = e.target; if (i && i.tagName === 'IMG') { const s = i.getAttribute('src') || ''; if (/images\.weserv\.nl/.test(s)) { e.stopImmediatePropagation(); try { i.src = new URL(s).searchParams.get('url'); } catch (er) {} } } }, true);
   /* a photograph the phone cannot open (files kept only on the office computer) shows a quiet blank, not a broken picture */
   const BLANK = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 40"><rect width="30" height="40" fill="#EDE7F0"/><circle cx="15" cy="15" r="6" fill="#D8CDDE"/><path d="M4 40c1-9 6-13 11-13s10 4 11 13z" fill="#D8CDDE"/></svg>');
+  /* 1.2.282 (user, 24 Nov 2026: "Not able to see the photos on mobile. It had an image of a blank card"): a photo saved onto
+     the card (/_blob/mp.…) that this phone cannot open shows the agency's own photo of her first (illu-photo.js finds it);
+     the blank only when there is none */
+  addEventListener('error', e => { const i = e.target; if (!i || i.tagName !== 'IMG' || i.dataset.picfb) return; const m = /\/_blob\/((?:mp|bf)\.[^?#]+|[A-Za-z0-9_-]{8,64}(?=$|[?#]))/.exec(i.getAttribute('src') || ''); if (!m || !window.__illuPicFallback) return;
+    let u = ''; try { u = window.__illuPicFallback(decodeURIComponent(m[1])); } catch (er) {} if (!u) return;
+    e.stopImmediatePropagation(); i.dataset.picfb = '1'; i.removeAttribute('srcset'); i.src = window.__illuSmall ? window.__illuSmall(u, 700) : u; }, true);
   addEventListener('error', e => { const i = e.target; if (i && i.tagName === 'IMG' && !i.dataset.illublank && i.getAttribute('src') !== BLANK) { i.dataset.illublank = '1'; i.src = BLANK; } }, true);
   /* phone layout fixes (Suggestiones header, the bottom menu fitting the screen) */
   addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent =

@@ -60,7 +60,9 @@
     return s.access;
   }
   /* the service worker reads the current key from the phone's cache (it cannot read localStorage) */
-  async function pushToken(t, exp) { try { const c = await caches.open('illu-auth'); await c.put('/__illu_dbx', new Response(JSON.stringify({ t, exp }))); } catch (e) {} }
+  /* 1.2.282: the service worker also learns where MEDIA is (the folder beside BOOKING), so a photo saved onto a card
+     (/_blob/mp.<id>, kept in Dropbox MEDIA › MODEL PHOTOS by the computer since 1.2.216) opens on this phone too */
+  async function pushToken(t, exp) { try { const s = S() || {}; const m = s.base ? s.base.replace(/\/[^/]+$/, '') + '/MEDIA' : ''; const c = await caches.open('illu-auth'); await c.put('/__illu_dbx', new Response(JSON.stringify({ t, exp, m }))); } catch (e) {} }
   async function api(ep, body) {
     const t = await token();
     const r = await fetch('https://api.dropboxapi.com/2/' + ep, { method: 'POST', headers: Object.assign({ Authorization: 'Bearer ' + t }, body === null ? {} : { 'Content-Type': 'application/json' }), body: body === null ? undefined : JSON.stringify(body) });
@@ -212,5 +214,5 @@
   window.__illuDbxFinish = finish;
   window.__illuDbxApi = api;
   /* keep the service worker's key fresh while the app is open */
-  if (S()) token().then(t => pushToken(t, (S() || {}).exp || 0)).catch(() => {});
+  if (S()) findBase().catch(() => '').then(() => token()).then(t => pushToken(t, (S() || {}).exp || 0)).catch(() => {});
 })();

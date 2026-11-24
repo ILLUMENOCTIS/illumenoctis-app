@@ -31,8 +31,34 @@ async function dbxFile(id, w, req) {
   try { await kept.put(ck, out.clone()); } catch (e) {}
   return out;
 }
+/* 1.2.282 (user, 24 Nov 2026: photos blank on the phone): a photo saved onto a card (mp.<id>) or a booking-card file
+   (bf.<id>) is kept in Dropbox MEDIA (computer, 1.2.216), never in the shared database - it is read from Dropbox with this
+   phone's own Dropbox sign-in. Without the sign-in, or when the file is not in Dropbox, the answer is "not here" at once
+   and the page shows the agency's photo instead (illu-photo.js). */
+const MSUB = { mp: 'MODEL PHOTOS', bf: 'BOOKING FILES' }, NOFILE = new Set();
+async function mediaFile(id, w) {
+  if (NOFILE.has(id)) return new Response('', { status: 404 });
+  let j = null; try { const r = await (await caches.open('illu-auth')).match('/__illu_dbx'); j = r ? await r.json() : null; } catch (e) {}
+  const vid = VIDX.test(id), size = !w || w > 1100 ? 'w2048h1536' : w > 500 ? 'w1024h768' : w > 300 ? 'w640h480' : 'w256h256';
+  const kept = await caches.open('illu-blob'), ck = '/_blob/' + id + '?s=' + size;
+  if (!vid) { const hit = await kept.match(ck); if (hit) return hit; }
+  if (!j || !j.t || !(j.exp > Date.now()) || !j.m) return new Response('', { status: 401 });
+  const p = j.m + '/' + MSUB[id.slice(0, 2)] + '/' + id;
+  if (vid) {
+    const r = await fetch('https://api.dropboxapi.com/2/files/get_temporary_link', { method: 'POST', headers: { Authorization: 'Bearer ' + j.t, 'Content-Type': 'application/json' }, body: JSON.stringify({ path: p }) });
+    if (!r.ok) { if (r.status === 409) NOFILE.add(id); return new Response('', { status: r.status === 409 ? 404 : r.status }); }
+    return Response.redirect((await r.json()).link, 302);
+  }
+  const arg = JSON.stringify({ resource: { '.tag': 'path', path: p }, format: 'jpeg', size, mode: 'fitone_bestfit' }).replace(/[\u007f-\uffff]/g, c => '\\u' + ('000' + c.charCodeAt(0).toString(16)).slice(-4));
+  const r = await fetch('https://content.dropboxapi.com/2/files/get_thumbnail_v2', { method: 'POST', headers: { Authorization: 'Bearer ' + j.t, 'Dropbox-API-Arg': arg } });
+  if (!r.ok) { if (r.status === 409) NOFILE.add(id); return new Response('', { status: r.status === 409 ? 404 : r.status }); }
+  const out = new Response(await r.blob(), { headers: { 'content-type': 'image/jpeg', 'cache-control': 'max-age=31536000' } });
+  try { await kept.put(ck, out.clone()); } catch (e) {}
+  return out;
+}
 async function blob(id, w, req) {
   if (id.startsWith('bk.')) return dbxFile(id, w, req);
+  if (/^(mp|bf)\.[a-z0-9]{8,40}\.[a-z0-9]{2,5}$/.test(id)) return mediaFile(id, w);
   const kept = await caches.open('illu-blob'), hit = await kept.match('/_blob/' + id); if (hit) return hit;
   if (!/^[A-Za-z0-9._-]{4,120}$/.test(id)) return new Response('', { status: 404 });
   const t = await (await caches.open('illu-auth')).match('/__illu_token'); const tk = t ? await t.text() : '';
