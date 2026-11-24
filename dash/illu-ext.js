@@ -197,8 +197,46 @@ document.head.appendChild(st);
 
   function compose(job) {
     if (window.illu && window.illu.hiworks) window.illu.hiworks(job);
+    else if (window.illu && window.illu.web) phoneCompose(job);
     else (window.__illuComposed = window.__illuComposed || []).push(job);
   }
+  /* 1.2.282 (user, 24 Nov 2026: "Unable to navigate to Hiworks to send email via mobile. I can't continue on to actually
+     signing in to Hiworks"): on the phone nothing happened after the template was picked - only the computer program can
+     fill Hiworks' compose page. Hiworks' page takes no To / Subject / text in its address (tried 24 Nov), so the phone shows
+     the email ready to copy, piece by piece, and opens Hiworks' own compose page in the browser, where the person signs in
+     themselves and pastes. The program never sends anything. */
+  function phoneCompose(job) {
+    const ko = typeof LANG !== 'undefined' && LANG === 'ko', T = (en, k) => ko ? k : en;
+    let box = document.getElementById('illuhwph'); if (box) box.remove();
+    box = document.createElement('div'); box.id = 'illuhwph'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
+    const to = (job.to || []).join(', '), cc = (job.cc || []).join(', ');
+    const row = (k, lab, val, big) => !val ? '' : '<div class="hwpr"><div class="hwph"><b>' + lab + '</b><button type="button" class="hwpc" data-hwpc="' + k + '">' + T('Copy', '복사') + '</button></div>' +
+      (big ? '<pre class="hwpv">' + escT(val) + '</pre>' : '<div class="hwpv">' + escT(val) + '</div>') + '</div>';
+    box.innerHTML = '<div class="hwpveil" data-hwpx></div><div class="hwpbox">' +
+      '<div class="hwptop"><h3>' + T('Email in Hiworks', 'Hiworks에서 이메일') + '</h3><button type="button" class="hwpx" data-hwpx aria-label="' + T('Close', '닫기') + '">✕</button></div>' +
+      '<p class="hwphelp">' + T('Hiworks opens in your browser — sign in there if it asks. Copy each part below and paste it into Hiworks. Nothing is sent until you press Send in Hiworks yourself.',
+        'Hiworks가 브라우저에서 열립니다 — 요청하면 로그인하세요. 아래 항목을 복사해 Hiworks에 붙여넣으세요. Hiworks에서 직접 보내기를 누르기 전에는 아무것도 보내지지 않습니다.') + '</p>' +
+      row('to', T('To', '받는 사람'), to) + row('cc', T('CC', '참조'), cc) + row('subject', T('Subject', '제목'), job.subject || '') + row('text', T('Text', '본문'), job.text || '', true) +
+      '<div class="hwpacts"><a class="hwpgo" href="https://mails.office.hiworks.com/write?mode=normal" target="_blank" rel="noopener" data-hwpgo>' + T('Copy text & open Hiworks', '본문 복사 후 Hiworks 열기') + ' ↗</a></div>' +
+      '<p class="hwpmsg" role="status"></p></div>';
+    const val = { to, cc, subject: job.subject || '', text: job.text || '' };
+    const say = s => { const m = box.querySelector('.hwpmsg'); if (m) m.textContent = s; };
+    const copy = async (k, btn) => {
+      let ok = false; try { await navigator.clipboard.writeText(val[k]); ok = true; } catch (e) {}
+      if (!ok) { try { const t = document.createElement('textarea'); t.value = val[k]; t.setAttribute('readonly', ''); t.style.cssText = 'position:fixed;top:0;left:0;opacity:0'; document.body.appendChild(t); t.select(); ok = document.execCommand('copy'); t.remove(); } catch (e) {} }
+      if (btn) { btn.textContent = ok ? T('Copied', '복사됨') : T('Select & copy', '직접 복사'); btn.classList.toggle('on', ok); }
+      if (!ok) say(T('Copying is blocked here - press and hold the text to copy it.', '복사가 막혀 있습니다 - 글자를 길게 눌러 복사하세요.'));
+      return ok;
+    };
+    box.addEventListener('click', e => {
+      const b = e.target.closest('[data-hwpx],[data-hwpc],[data-hwpgo]'); if (!b) return;
+      if (b.hasAttribute('data-hwpx')) { box.remove(); return; }
+      if (b.dataset.hwpc) { copy(b.dataset.hwpc, b); return; }
+      if (b.hasAttribute('data-hwpgo')) { copy('text', box.querySelector('[data-hwpc="text"]')); say(T('Text copied. In Hiworks: paste it into the message, then copy To and Subject from here.', '본문을 복사했습니다. Hiworks에서 본문에 붙여넣고, 받는 사람과 제목은 여기서 복사하세요.')); }
+    });
+    document.body.appendChild(box);
+  }
+  window.__illuPhoneCompose = phoneCompose;
   window.__illuCompose = compose;
   /* 1.2.171 (user: "When an email gets sent out via Hiworks regarding a model, I want the Email Stage to automatically
      change the status of the Email to Processing"): the program confirms the email in Hiworks' Sent side (main.js);
@@ -696,6 +734,15 @@ document.head.appendChild(st);
     '#illutoast[data-on="1"]{opacity:1}' +
     '.ctbhd .illufor{flex-basis:100%;margin:6px 0 0;font-size:12.5px;color:var(--mut)}.ctbhd .illufor b{color:var(--ink);font-weight:600}' +
     'a.ctmail.illusent{color:var(--acc)}' +
+    '#illuhwph{position:fixed;inset:0;z-index:9300;display:grid;place-items:end center}#illuhwph .hwpveil{position:absolute;inset:0;background:rgba(20,12,24,.45)}' +
+    '#illuhwph .hwpbox{position:relative;width:min(560px,100vw);max-height:calc(100dvh - 40px);overflow:auto;background:var(--paper,#fff);color:var(--ink,#211C26);border-radius:16px 16px 0 0;padding:16px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:10px;font:14px var(--sans);box-shadow:0 -10px 40px rgba(20,14,38,.3)}' +
+    '@media (min-width:761px){#illuhwph{place-items:center}#illuhwph .hwpbox{border-radius:14px}}' +
+    '#illuhwph .hwptop{display:flex;align-items:center;gap:8px}#illuhwph h3{flex:1;margin:0;font-size:17px}#illuhwph .hwpx{width:36px;height:36px;border:1px solid var(--line);border-radius:50%;background:var(--surf,#fff);color:var(--ink);font-size:15px;cursor:pointer}' +
+    '#illuhwph .hwphelp{margin:0;font-size:12.5px;line-height:1.5;color:var(--mut)}' +
+    '#illuhwph .hwpr{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--surf,#fff);min-width:0}#illuhwph .hwph{display:flex;align-items:center;gap:8px;margin-bottom:4px}#illuhwph .hwph b{flex:1;font:600 10px var(--mono,ui-monospace,monospace);letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}' +
+    '#illuhwph .hwpc{border:1px solid var(--line);background:var(--surf2,#f6f3f8);color:var(--acc);border-radius:999px;padding:5px 12px;font:600 12px var(--sans);cursor:pointer}#illuhwph .hwpc.on{background:var(--acc);border-color:var(--acc);color:var(--on-acc,#fff)}' +
+    '#illuhwph .hwpv{font-size:13.5px;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text}#illuhwph pre.hwpv{margin:0;white-space:pre-wrap;font:13px/1.5 var(--sans);max-height:30vh;overflow:auto}' +
+    '#illuhwph .hwpacts{display:flex}#illuhwph .hwpgo{flex:1;text-align:center;text-decoration:none;background:var(--acc);color:var(--on-acc,#fff);border-radius:999px;padding:12px 16px;font:600 14px var(--sans)}#illuhwph .hwpmsg{margin:0;font-size:12.5px;color:var(--acc)}#illuhwph .hwpmsg:empty{display:none}' +
     '#illutpl{position:fixed;inset:0;z-index:9200;display:grid;place-items:center}#illutpl[hidden]{display:none}' +
     '#illutpl .tplveil{position:absolute;inset:0;background:rgba(20,12,24,.4)}' +
     '#illutpl .tplbox{position:relative;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 60px);overflow:auto;background:var(--paper,#fff);color:var(--ink,#211C26);border:1px solid var(--line);border-radius:14px;box-shadow:0 26px 70px rgba(20,14,38,.35);padding:18px 20px;display:flex;flex-direction:column;gap:10px;font:14px var(--sans)}' +

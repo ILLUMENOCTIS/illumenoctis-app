@@ -579,7 +579,9 @@
       if(!c) return;
       const st = await window.illu.dropboxStatus(); if(st.connected) return;
       const b = document.createElement('button'); b.type = 'button'; b.className = 'fvdbx';
-      b.textContent = ko() ? '이 모델의 Dropbox 폴더 · Dropbox 연결' : 'Her Dropbox folder · Connect Dropbox';
+      const narrow = window.innerWidth <= 760;   /* 1.2.282: the long label did not fit the phone's top row */
+      b.textContent = narrow ? (ko() ? 'Dropbox 연결' : 'Connect Dropbox') : (ko() ? '이 모델의 Dropbox 폴더 · Dropbox 연결' : 'Her Dropbox folder · Connect Dropbox');
+      b.title = ko() ? '이 모델의 Dropbox 폴더를 보려면 Dropbox를 연결하세요' : 'Connect Dropbox to see her Dropbox folder and saved card photos';
       b.addEventListener('click', e => { e.stopPropagation(); window.illu.dropboxConnect(); });
       const top = box.querySelector('.fvtop'); if(top) top.appendChild(b);
     })();

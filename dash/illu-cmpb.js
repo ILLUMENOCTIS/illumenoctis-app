@@ -23,13 +23,16 @@
      side, the second board was off the screen; Columns / Mixed can still be chosen */
   const phone = (() => { try{ return matchMedia('(max-width:760px)').matches; }catch(e){ return false; } })();
   const st = Object.assign({boards: [], lay: phone ? 'rows' : 'side', size: 'm', hideLit: false, multi: false, sync: true, n: 40, recent: []}, load());
-  st.n = 40;
+  st.n = 40; st.pn = 20;
   const save = () => { try{ localStorage.setItem(KEY, JSON.stringify({boards: st.boards, lay: st.lay, size: st.size, hideLit: st.hideLit, multi: st.multi, sync: st.sync, recent: st.recent})); }catch(e){} };
   const pk = {tab: 'browse', rg: '', co: '', kind: 'all', sort: 'az', q: '', n: 80, prg: ''};
   /* 1.2.280 (user, 22 Nov 2026, phone demo "C2"): on a phone the finder opens on region tiles (like the Directory's phone
      start); a region shows its countries as chips, biggest first, and its agencies with their boards; a bar at the bottom
      holds the boards picked so far (✕ takes one off) and "Compare" closes the finder */
   const PHC = () => { try{ return matchMedia('(max-width:760px)').matches; }catch(e){ return false; } };
+  /* 1.2.281 (user, 22 Nov 2026: "keep the compare boards capable of only 2 agencies ... I want 2 columns only"): on a phone
+     two boards at most, always side by side in two columns of small cards (no Columns / Mixed / Rows or S / M / L there) */
+  const MAXB = () => PHC() ? 2 : 6;
   const COLORS = ['#6b2a5e', '#2f6f8f', '#8a6a1e', '#3f7d4e', '#9c3d3d', '#5b4f9c'];
   const sq = s => { try{ return window.__illuSB.squash(s); }catch(e){ return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); } };
   const B = () => window.__illuBoards;
@@ -61,7 +64,7 @@
   const idOf = (m, s) => { const n = sq(m.nm); return n ? n + '|' + s.n.key : ''; };
   const voted = k => { try{ return !!(window.__illuVoteMine && window.__illuVoteMine(k)); }catch(e){ return false; } };
   function data(){
-    const sel = st.boards.map(findBoard).map((x, i) => x ? Object.assign(x, {i, ref: st.boards[i], c: COLORS[i % COLORS.length], lab: label(x.n, x.b)}) : null).filter(Boolean);
+    const sel = st.boards.slice(0, MAXB()).map(findBoard).map((x, i) => x ? Object.assign(x, {i, ref: st.boards[i], c: COLORS[i % COLORS.length], lab: label(x.n, x.b)}) : null).filter(Boolean);
     for(const s of sel) s.ms = modelsFor(s.n, s.b);
     /* who is on more than one of these boards, by name */
     const on = new Map();
@@ -90,7 +93,7 @@
     MODELS = new Map();
     const nOpt = (st.hideLit ? 1 : 0) + (st.multi ? 1 : 0);
     let h = '<div class="cbbar"><div class="cbchips">' + D.sel.map(s => '<span class="cbchip" title="' + H(s.lab.ag + ' · ' + s.lab.board) + '"><i style="background:' + s.c + '"></i><span class="cbct"><b>' + H(s.lab.ag) + '</b><span>' + H([s.lab.city, s.lab.board].filter(Boolean).join(' · ') + ' · ' + s.ms.length) + '</span></span><button type="button" data-cbrm="' + s.i + '" aria-label="' + H(L('Remove this board', '이 보드 빼기')) + '">' + IC.x + '</button></span>').join('') +
-      (st.boards.length < 6 ? '<button type="button" class="cbadd" data-cbadd aria-haspopup="dialog">+ ' + L('Add a board', '보드 추가') + '</button>' : '') + '</div>' +
+      (st.boards.length < MAXB() ? '<button type="button" class="cbadd" data-cbadd aria-haspopup="dialog">+ ' + L('Add a board', '보드 추가') + '</button>' : '') + '</div>' +
       '<div class="cbtools"><div class="cbseg" role="group" aria-label="' + H(L('Layout', '보기')) + '">' +
       [['side', 'Columns', '열'], ['mix', 'Mixed', '섞어서'], ['rows', 'Rows', '줄']].map(([k, en, ko]) => '<button type="button" data-cblay="' + k + '" aria-pressed="' + (st.lay === k) + '">' + L(en, ko) + '</button>').join('') + '</div>' +
       '<div class="cbseg" role="group" aria-label="' + H(L('Card size', '카드 크기')) + '">' + [['s', 'Small cards', '작은 카드'], ['m', 'Medium cards', '중간 카드'], ['l', 'Large cards', '큰 카드']].map(([k, en, ko]) => '<button type="button" data-cbsize="' + k + '" aria-pressed="' + (st.size === k) + '" title="' + H(L(en, ko)) + '">' + k.toUpperCase() + '</button>').join('') + '</div>' +
@@ -98,11 +101,11 @@
     h += '<div class="cbpov" id="cbpov" hidden></div>';
     let body;
     if(!D.sel.length){
-      body = '<div class="cbempty"><b>' + L('Pick the boards to compare', '비교할 보드를 고르세요') + '</b><p>' + L('Press “+ Add a board”. Browse by region and country, see the boards you used before, or search by agency, city, country or board. Up to six.', '“+ 보드 추가”를 누르세요. 지역·국가로 둘러보거나, 전에 쓴 보드를 보거나, 에이전시·도시·국가·보드 이름으로 찾을 수 있습니다. 최대 6개.') + '</p></div>';
-    }else if(st.lay === 'side'){
+      body = '<div class="cbempty"><b>' + L('Pick the boards to compare', '비교할 보드를 고르세요') + '</b><p>' + (PHC() ? L('Press “+ Add a board” and pick two boards — they show side by side. Browse by region and country, see the boards you used before, or search.', '“+ 보드 추가”를 눌러 보드 두 개를 고르세요 — 나란히 보입니다. 지역·국가로 둘러보거나, 전에 쓴 보드를 보거나, 검색할 수 있습니다.') : L('Press “+ Add a board”. Browse by region and country, see the boards you used before, or search by agency, city, country or board. Up to six.', '“+ 보드 추가”를 누르세요. 지역·국가로 둘러보거나, 전에 쓴 보드를 보거나, 에이전시·도시·국가·보드 이름으로 찾을 수 있습니다. 최대 6개.')) + '</p></div>';
+    }else if(st.lay === 'side' || PHC()){
       body = '<div class="cbcols' + (st.sync ? ' sync' : '') + '" style="--cbn:' + D.sel.length + '">' + D.sel.map(s =>
-        '<section class="cbcol">' + colHead(s) + '<div class="cbg">' + s.show.slice(0, st.n).map(m => tile(m, s, D, false)).join('') +
-        (s.show.length > st.n ? '<button type="button" class="cbmore" data-cbmore>' + L('Show more', '더 보기') + '</button>' : '') + '</div></section>').join('') + '</div>';
+        '<section class="cbcol">' + colHead(s) + '<div class="cbg">' + s.show.slice(0, PHC() ? st.pn : st.n).map(m => tile(m, s, D, false)).join('') +
+        (s.show.length > (PHC() ? st.pn : st.n) ? '<button type="button" class="cbmore" data-cbmore>' + L('Show more', '더 보기') + '</button>' : '') + '</div></section>').join('') + '</div>';
     }else if(st.lay === 'rows'){
       body = '<div class="cbrows">' + D.sel.map(s => '<section class="cbrow">' + colHead(s) + '<div class="cbr">' + s.show.slice(0, st.n).map(m => tile(m, s, D, false)).join('') + '</div></section>').join('') + '</div>';
     }else{
@@ -112,6 +115,7 @@
       for(let j = 0; j < max && all.length < st.n * D.sel.length; j++) for(const s of D.sel){ const m = s.show[j]; if(!m) continue; const id = idOf(m, s) || m.key; if(seen.has(id)) continue; seen.add(id); all.push([m, s]); }
       body = '<div class="cbmix">' + all.map(([m, s]) => tile(m, s, D, true)).join('') + '</div>' + (D.sel.some(s => s.show.length > st.n) ? '<button type="button" class="cbmore" data-cbmore>' + L('Show more', '더 보기') + '</button>' : '');
     }
+    if(PHC() && D.sel.length === 1 && body.indexOf('cbcols') > 0) body = body.slice(0, -6) + '<section class="cbcol cbcol2"><button type="button" class="cbadd2" data-cbadd aria-haspopup="dialog"><b>+</b><span>' + L('Add a second board to compare', '비교할 두 번째 보드 추가') + '</span></button></section></div>';
     h += '<div class="cbbody" data-size="' + st.size + '">' + body + '</div>';
     if(pane.__h !== h){
       const pov = pane.querySelector('#cbpov'), keep = pov && !pov.hidden ? {html: pov.innerHTML, kind: pov.dataset.kind, q: (pov.querySelector('#cbq') || {}).value} : null;
@@ -156,7 +160,7 @@
     const row = (x, only) => '<div class="cbfr"><div class="cbfh"><b>' + mark(x.n.name) + '</b><span>' + mark([x.city, x.co].filter(Boolean).join(', ')) + '</span><em>' +
       (x.fav ? '<i class="cbfv" title="' + H(L('Models the team put in Favorites', '팀이 즐겨찾기한 모델')) + '">♥ ' + x.fav + '</i>' : '') + (x.op ? '<i title="' + H(L('Times opened in the Directory', 'Directory에서 연 횟수')) + '">' + L('opened ', '열람 ') + x.op + '×</i>' : '') + '</em></div><div class="cbfbs">' +
       x.n.boards.filter(b => kOK(b) && (!only || only.has(String(b.u || '').replace(/\/$/, '')))).map(b => { const u = String(b.u || '').replace(/\/$/, ''); const on = st.boards.some(r => r.k === x.n.key && r.u === u);
-        return '<button type="button" data-cbpk="' + H(x.n.key) + '" data-cbpu="' + H(u) + '"' + (on || st.boards.length >= 6 ? ' disabled' : '') + '><span class="cbk k-' + kindOf(b) + '"></span>' + mark(label(x.n, b).board) + ' <s>' + (b.m || []).length + '</s>' + (on ? ' ✓' : '') + '</button>'; }).join('') + '</div></div>';
+        return '<button type="button" data-cbpk="' + H(x.n.key) + '" data-cbpu="' + H(u) + '"' + (on || st.boards.length >= MAXB() ? ' disabled' : '') + '><span class="cbk k-' + kindOf(b) + '"></span>' + mark(label(x.n, b).board) + ' <s>' + (b.m || []).length + '</s>' + (on ? ' ✓' : '') + '</button>'; }).join('') + '</div></div>';
     const lst = (arr, head) => '<div class="cbfl wide">' + (head ? '<div class="cbplab">' + head + '</div>' : '') + (arr.length ? arr.slice(0, pk.n).map(x => row(x)).join('') + (arr.length > pk.n ? '<button type="button" class="cbmore" data-cbfmore>' + L('Show more', '더 보기') + ' (' + (arr.length - pk.n) + ')</button>' : '') : '<p class="cbmut">' + L('Nothing here with that kind of board.', '그런 보드가 없습니다.') + '</p>') + '</div>';
     const kl = pk.kind !== 'all' ? (KINDS.find(k => k[0] === pk.kind) || [])[1] : '';
     if(t){
@@ -174,7 +178,7 @@
     if(PHC()){
       const nb = x => x.n.boards.filter(kOK).length;
       const R = [...new Set(all.map(x => x.rg))].map(r => { const l = all.filter(x => x.rg === r), cs = new Map(); l.forEach(x => cs.set(x.co || '', (cs.get(x.co || '') || 0) + nb(x)));
-        return {r, l, b: l.reduce((t, x) => t + nb(x), 0), cs: [...cs].sort((a, b) => b[1] - a[1])}; }).sort((a, b) => b.b - a.b);
+        return {r, l, b: l.reduce((t, x) => t + nb(x), 0), cs: [...cs].sort((a, b) => b[1] - a[1])}; }).sort((a, b) => (a.r === 'Unknown') - (b.r === 'Unknown') || b.b - a.b);
       if(pk.prg && !R.some(x => x.r === pk.prg)) pk.prg = '';
       if(!pk.prg) return '<div class="cbphr">' + R.map((x, i) => '<button type="button" class="cbpht' + (i === 0 ? ' big' : '') + '" data-cbprg="' + H(x.r) + '"><b>' + x.b + '</b><span>' + H(rgL(x.r)) + '</span><small>' + H(L(x.l.length + (x.l.length === 1 ? ' agency' : ' agencies'), '에이전시 ' + x.l.length)) + (x.cs.length ? ' · ' + x.cs.filter(c => c[0]).slice(0, i === 0 ? 3 : 2).map(c => c[0] + ' ' + c[1]).join(' · ') : '') + '</small></button>').join('') + '</div>';
       const X = R.find(x => x.r === pk.prg), cos = X.cs.map(c => c[0]);
@@ -209,8 +213,8 @@
   }
   function trayHTML(){
     const D = st.boards.map(findBoard).map((x, i) => x ? {i, lab: label(x.n, x.b), c: COLORS[i % COLORS.length]} : null).filter(Boolean);
-    return '<div class="cbtb">' + (D.length ? D.map(x => '<button type="button" data-cbrm="' + x.i + '" title="' + H(L('Take this board off', '이 보드 빼기')) + '"><i style="background:' + x.c + '"></i>' + H(x.lab.ag + ' · ' + x.lab.board) + ' ✕</button>').join('') : '<span>' + L('Tap boards to add them · up to 6', '보드를 눌러 추가 · 최대 6개') + '</span>') + '</div>' +
-      '<button type="button" class="cbgo" data-cbpx>' + (D.length ? L('Compare ' + D.length + ' →', D.length + '개 비교 →') : L('Close', '닫기')) + '</button>';
+    return '<div class="cbtb">' + (D.length ? D.map(x => '<button type="button" data-cbrm="' + x.i + '" title="' + H(L('Take this board off', '이 보드 빼기')) + '"><i style="background:' + x.c + '"></i>' + H(x.lab.ag + ' · ' + x.lab.board) + ' ✕</button>').join('') : '<span>' + L('Tap two boards to compare them', '비교할 보드 두 개를 누르세요') + '</span>') + '</div>' +
+      '<button type="button" class="cbgo" data-cbpx>' + (D.length >= 2 ? L('Compare →', '비교 →') : D.length ? L('Done', '완료') : L('Close', '닫기')) + '</button>';
   }
   function finderRefresh(){ const b = pane.querySelector('#cbfbody'); if(!b) return; const y = b.scrollTop; b.innerHTML = finderBody(); b.scrollTop = y;
     const tr = pane.querySelector('#cbtray'); if(tr) tr.innerHTML = trayHTML();
@@ -258,9 +262,9 @@
     if(d.cbrg != null){ pk.rg = d.cbrg; pk.co = ''; pk.n = 80; finderRefresh(); return; }
     if(d.cbco != null){ pk.co = d.cbco; pk.n = 80; finderRefresh(); return; }
     if(t.hasAttribute('data-cbfmore')){ pk.n += 80; finderRefresh(); return; }
-    if(d.cbpk){ if(st.boards.length < 6 && !st.boards.some(x => x.k === d.cbpk && x.u === d.cbpu)){ st.boards.push({k: d.cbpk, u: d.cbpu}); st.recent = st.recent.filter(x => !(x.k === d.cbpk && x.u === d.cbpu)).concat([{k: d.cbpk, u: d.cbpu}]).slice(-24); save(); }
-      render(); if(st.boards.length >= 6) closePov(); else { const p = pane.querySelector('#cbpov'); if(p && p.hidden) finder(true); else { finderRefresh(); place(p, pane.querySelector('[data-cbadd]') || pane.querySelector('.cbchips'), 760); } } return; }
-    if(t.hasAttribute('data-cbmore')){ st.n += 40; render(); return; }
+    if(d.cbpk){ if(st.boards.length < MAXB() && !st.boards.some(x => x.k === d.cbpk && x.u === d.cbpu)){ st.boards.push({k: d.cbpk, u: d.cbpu}); st.recent = st.recent.filter(x => !(x.k === d.cbpk && x.u === d.cbpu)).concat([{k: d.cbpk, u: d.cbpu}]).slice(-24); save(); }
+      render(); if(st.boards.length >= MAXB()) closePov(); else { const p = pane.querySelector('#cbpov'); if(p && p.hidden) finder(true); else { finderRefresh(); place(p, pane.querySelector('[data-cbadd]') || pane.querySelector('.cbchips'), 760); } } return; }
+    if(t.hasAttribute('data-cbmore')){ if(PHC()) st.pn += 20; else st.n += 40; render(); return; }
     if(pov && !pov.hidden && !e.target.closest('#cbpov')) closePov();
   });
   document.addEventListener('keydown', e => { if(e.key === 'Escape' && !pane.hidden && !document.querySelector('#pane-cmpb .d2solo')){ const p = pane.querySelector('#cbpov'); if(p && !p.hidden){ e.preventDefault(); closePov(); } } });
@@ -395,6 +399,31 @@
   #pane-cmpb .cbtc{flex:none;border:1px solid var(--line);border-radius:999px;background:var(--surf)}
   #pane-cmpb .cbkinds{flex-wrap:nowrap;overflow-x:auto;max-width:100%}
   #pane-cmpb .cbsort{margin-left:0}
+  /* 1.2.281: two boards side by side, small cards */
+  #pane-cmpb .cbseg{display:none}
+  #pane-cmpb .cbchips{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  #pane-cmpb .cbchip{min-width:0;max-width:none}
+  #pane-cmpb .cbchip .cbct{min-width:0}
+  #pane-cmpb .cbchips .cbadd{min-width:0;justify-content:center}
+  #pane-cmpb .cbcols{grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-columns:auto;overflow:visible;scroll-snap-type:none;gap:6px}
+  #pane-cmpb .cbcol{min-width:0;scroll-snap-align:none}
+  #pane-cmpb .cbcols .cbg{grid-template-columns:minmax(0,1fr);padding:4px 5px 10px;gap:8px}
+  #pane-cmpb .cbcols .cbch{display:none}   /* the chip with ✕ above each column already names the board */
+  #pane-cmpb .cbchip{padding-right:4px}
+  #pane-cmpb .cbchip .cbct span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #pane-cmpb .cbcols .cbch b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(100% - 14px)}
+  #pane-cmpb .cbcols .cbch span{font-size:11px;flex-basis:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #pane-cmpb .cbcols .uc{border-radius:12px}
+  #pane-cmpb .cbcols .uc .ucarr{width:26px;height:26px;font-size:15px}
+  #pane-cmpb .cbcols .uc .uccnt,#pane-cmpb .cbcols .uc .piccopy,#pane-cmpb .cbcols .uc .picsrc{display:none}
+  #pane-cmpb .cbcols .uc .ucov{padding:8px 8px 7px}
+  #pane-cmpb .cbcols .uc .ucov b{font-size:12.5px;letter-spacing:.02em}
+  #pane-cmpb .cbcols .uc .ucag{font-size:10px}
+  #pane-cmpb .cbcols .uc .ucmx{font-size:10.5px;padding:2px 6px;gap:1px}
+  #pane-cmpb .cbcols .cbalso{font-size:9.5px}
+  #pane-cmpb .cbcol2{display:flex;align-items:flex-start}
+  #pane-cmpb .cbadd2{width:100%;margin-top:4px;min-height:180px;border:2px dashed var(--line);border-radius:14px;background:var(--surf);color:var(--acc)!important;font:inherit;font-size:13px;font-weight:600;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px;text-align:center}
+  #pane-cmpb .cbadd2 b{font-size:28px;line-height:1}
   /* 1.2.280 C2 */
   #pane-cmpb .cbph .cbfbody{display:block;overflow-y:auto;-webkit-overflow-scrolling:touch}
   #pane-cmpb .cbph .cbfl{overflow:visible;padding:4px 12px 12px}

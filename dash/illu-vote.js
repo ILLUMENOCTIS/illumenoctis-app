@@ -1855,7 +1855,7 @@
   const ageH = iso => { const t = Date.parse(iso); return isNaN(t) ? 0 : Math.max(0, (Date.now() - t) / 36e5); };
   const needK = (k, st) => !!st && needMe(st);
   function dfmt(iso){ const d = new Date(iso); if(isNaN(d)) return ''; let ds = ''; try{ ds = d.toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short'}); }catch(e){ ds = iso.slice(5, 10); } return ds + ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
-  function clk(iso){ let s = Math.floor(ageH(iso) * 3600); const d = Math.floor(s / 86400); s -= d * 86400; const t = pad(Math.floor(s / 3600)) + ':' + pad(Math.floor(s % 3600 / 60)) + ':' + pad(s % 60); return d ? (isKO() ? d + '일 ' : d + (d === 1 ? ' day ' : ' days ')) + t : t; }
+  function clk(iso, short){ let s = Math.floor(ageH(iso) * 3600); const d = Math.floor(s / 86400); s -= d * 86400; const t = pad(Math.floor(s / 3600)) + ':' + pad(Math.floor(s % 3600 / 60)) + ':' + pad(s % 60); return d ? (isKO() ? d + '일 ' : short ? d + 'd ' : d + (d === 1 ? ' day ' : ' days ')) + t : t; }
   function firstMark(k){
     const o = onVote(k); const p = o ? o.by : '';
     if(!p) return '';
@@ -1886,13 +1886,15 @@
       if(!sp){ sp = document.createElement('div'); sp.className = 'ivstrip'; sp.innerHTML = '<span class="ivsd"><b></b><i></i></span><span class="ivsv">' + L('Vote', '투표') + '</span><span class="ivclk">' + CLKI + '<b></b></span>'; ph.appendChild(sp); }
       if(sp.__at !== at){ sp.__at = at; const d = new Date(at); let ds = ''; try{ ds = d.toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short'}); }catch(e){} sp.querySelector('.ivsd b').textContent = ds; sp.querySelector('.ivsd i').textContent = ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); sp.title = L('On the vote since ', '투표에 오른 시각: ') + dfmt(at); }
       if(sp.classList.contains('late') !== late) sp.classList.toggle('late', late);
-      const t = clk(at), cb = sp.querySelector('.ivclk b'); if(cb.textContent !== t) cb.textContent = t;
+      /* 1.2.282 (user, 24 Nov 2026: "is it supposed to overlap here?" - "18 Nov" cut off by "5 days 17:55:39" on the phone):
+         on a narrow card the clock says "5d 17:55:39" so the date fits beside it */
+      const t = clk(at, sp.clientWidth > 0 && sp.clientWidth < 250), cb = sp.querySelector('.ivclk b'); if(cb.textContent !== t) cb.textContent = t;
       strips.push([sp, late, t.length]);
     }
     /* the time of day only when it fits whole - never cut in half (measured all together, then changed) */
     const refit = [];
     for(const [sp, late, tl] of strips){ const key = sp.clientWidth + '|' + late + '|' + tl; if(sp.__fit !== key){ sp.__fit = key; refit.push(sp); } }
-    for(const sp of refit){ const sd = sp.querySelector('.ivsd'); sd.classList.remove('cut', 'cut2'); if(sd.scrollWidth > sd.clientWidth + 1){ sd.classList.add('cut'); if(sd.scrollWidth > sd.clientWidth + 1) sd.classList.add('cut2'); } }
+    for(const sp of refit){ const sd = sp.querySelector('.ivsd'); sd.classList.remove('cut', 'cut2'); if(sd.scrollWidth > sd.clientWidth){ sd.classList.add('cut'); if(sd.scrollWidth > sd.clientWidth) sd.classList.add('cut2'); } }
     /* a card whose vote is decided (or that left the vote) loses its clock and ribbon */
     document.querySelectorAll('.uc .ivstrip').forEach(x => { const uc = x.closest('.uc'); if(uc && !uc.querySelector('.vmk[data-at]')) x.remove(); });
   }
@@ -1965,6 +1967,7 @@
       if(e.target.closest('.vmk')) return;
       const ph = phOf(e);
       if(ph){ const a = ph.closest('[data-ivk]'); if(a){ e.preventDefault(); e.stopPropagation(); openFull(a.dataset.ivk, ph); } return; }
+      const pg = e.target.closest('[data-ivpg]'); if(pg){ pageTo(el, id, pg.dataset.ivpg); return; }
       const b = e.target.closest('[data-ivset]'); if(b){ const sv = b.dataset.ivset, ix = sv.indexOf('='), kk = sv.slice(0, ix), v = sv.slice(ix + 1); VS[kk] = v; saveVS(); PAGES.get(id).render(); return; }
       const nb = e.target.closest('[data-ivnote]'); if(nb){ const k = nb.dataset.ivnote, inp = el.querySelector('textarea[data-ivnotein="' + CSS.escape(k) + '"]'); const t = inp && inp.value.trim(); if(!t){ if(inp) inp.focus(); return; } addNote(k, t); inp.value = ''; return; }
     });
@@ -2012,12 +2015,51 @@
 .ivvf .ivwf{display:inline-flex;margin:0}
 .ivvf .ivdisc{position:static!important;inset:auto!important;margin:0!important;transform:none!important;width:15px!important;height:15px!important;font-size:7px!important;line-height:15px!important;box-shadow:none}
 .ivvf .ivwf.wait{opacity:.35;filter:grayscale(.6)}`; document.head.appendChild(st); }
+  /* 1.2.282 (user, 24 Nov 2026: "From My Favorites (Mine, Members, Approved, Cancelled), and all across the Team Vote boards,
+     I only want to see up to 25 cards per page. Create a 'Next page' so that the page doesn't have endless cards"):
+     the board is drawn whole as before, then only 25 cards show at a time, with Previous / page numbers / Next page under
+     them. A board keeps its page while it updates; changing its tab, sort or person starts again at page 1. */
+  const PGN = 25, PGIDS = new Set(['fav', 'mfav', 'team', 'appr', 'cxl', 'tie']), PGS = new Map();
+  const pgSig = id => id + '|' + ['vsub', 'cwho', 'corder', 'lsort', 'mfwho', 'mfsort', 'mfp'].map(k => VS[k] || '').join('|') + '|' + gWho();
+  function paginate(el, id){
+    if(!PGIDS.has(id)) return;
+    el.querySelectorAll('.ivpager').forEach(x => x.remove());
+    const cards = [...el.querySelectorAll('.ivgrid > .ivcw')];
+    const sig = pgSig(id); let st = PGS.get(id); if(!st || st.sig !== sig){ st = {sig, n: 0}; PGS.set(id, st); }
+    const pages = Math.max(1, Math.ceil(cards.length / PGN)); if(st.n > pages - 1) st.n = pages - 1;
+    const a = st.n * PGN, b = a + PGN;
+    cards.forEach((c, i) => { const on = pages === 1 || (i >= a && i < b); c.hidden = !on; const nx = c.nextElementSibling; if(nx && nx.classList.contains('ivtbx')) nx.hidden = !on; });
+    for(const g of el.querySelectorAll('.ivgrid')){ if(!g.querySelector(':scope > .ivcw')) continue; const has = !!g.querySelector(':scope > .ivcw:not([hidden])'); g.hidden = !has; const hd = g.previousElementSibling; if(hd && hd.classList.contains('ivsec')) hd.hidden = !has; }
+    if(pages === 1) return;
+    const num = i => '<button type="button" class="ivpgn' + (i === st.n ? ' on' : '') + '" data-ivpg="' + i + '"' + (i === st.n ? ' aria-current="page"' : '') + '>' + (i + 1) + '</button>';
+    let nums = '';
+    if(pages <= 7) for(let i = 0; i < pages; i++) nums += num(i);
+    else { const show = new Set([0, pages - 1, st.n - 1, st.n, st.n + 1].filter(i => i >= 0 && i < pages)); let last = -1; for(const i of [...show].sort((x, y) => x - y)){ if(i - last > 1) nums += '<span class="ivpgdots">…</span>'; nums += num(i); last = i; } }
+    const box = document.createElement('nav'); box.className = 'ivpager'; box.setAttribute('aria-label', L('Pages', '페이지'));
+    box.innerHTML = '<span class="ivpgc">' + H(L('Cards ' + (a + 1) + '–' + Math.min(b, cards.length) + ' of ' + cards.length, cards.length + '장 중 ' + (a + 1) + '–' + Math.min(b, cards.length))) + '</span>' +
+      '<div class="ivpgr"><button type="button" class="ivpgb" data-ivpg="prev"' + (st.n === 0 ? ' disabled' : '') + '>‹ ' + L('Previous', '이전') + '</button>' +
+      '<span class="ivpgns">' + nums + '</span>' +
+      '<button type="button" class="ivpgb pri" data-ivpg="next"' + (st.n === pages - 1 ? ' disabled' : '') + '>' + L('Next page', '다음 페이지') + ' ›</button></div>';
+    const lastG = [...el.querySelectorAll('.ivgrid')].filter(g => !g.hidden).pop() || [...el.querySelectorAll('.ivgrid')].pop();
+    if(lastG) lastG.after(box); else el.appendChild(box);
+  }
+  function pageTo(el, id, to){
+    const st = PGS.get(id); if(!st) return;
+    const pages = Math.max(1, Math.ceil(el.querySelectorAll('.ivgrid > .ivcw').length / PGN));
+    const n = to === 'next' ? st.n + 1 : to === 'prev' ? st.n - 1 : +to;
+    if(isNaN(n) || n < 0 || n > pages - 1 || n === st.n) return;
+    st.n = n; paginate(el, id);
+    const top = el.querySelector('.ivhead, .ivabout, .ivsec') || el;
+    try{ top.scrollIntoView({block: 'start', behavior: 'instant'}); }catch(e){ top.scrollIntoView(); }
+    try{ tick(); }catch(e){}
+  }
+  window.__illuVotePage = id => { const s = PGS.get(id); return s ? s.n + 1 : 1; };
   const capDisc = p => disc(p, 'xs');
   const RAW = new Map();
   function add(id, label, render, count, title){
     RAW.set(id, {label, render, count});
     const el = pageEl(id);
-    const p = {el, render: () => { if(el.hidden) return; const h = render(); if(el.__h !== h){ el.__h = h; el.innerHTML = h; } tick(); }, count};
+    const p = {el, render: () => { if(el.hidden) return; const h = render(); if(el.__h !== h){ el.__h = h; el.innerHTML = h; paginate(el, id); } tick(); }, count};
     PAGES.set(id, p);
     function mount(){
       const ref = document.getElementById('pane-arr');
@@ -2172,7 +2214,7 @@
   const fmtD = ms => { if(isNaN(ms)) return '–'; const x = new Date(ms); const M = L(['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][x.getUTCMonth()], (x.getUTCMonth() + 1) + '월'); return isKO() ? M + ' ' + x.getUTCDate() + '일' : x.getUTCDate() + ' ' + M + ' ' + x.getUTCFullYear(); };
   function stayCards(){ try{ return [...BOOK.values()].map(c => ({c, s: stayOf(c)})).filter(x => x.s && (x.s.on || x.s.up)); }catch(e){ return []; } }
   window.__illuStayOf = stayOf;
-  add('stay', ['Current / On-Stay', '현재 / 체류 중'], () => {
+  add('stay', ['On-Stay', '체류 중'], () => {
     const list = stayCards();
     const who = VS.stwho || '';
     const ppl = [...new Set(list.map(x => x.c.by).filter(Boolean))];
@@ -2201,7 +2243,7 @@
           '<button type="button" class="stwho" data-bkhand="' + H(c.id) + '" title="' + H(L('Hand this card to someone else', '다른 사람에게 넘기기')) + '">' + (c.by ? L('In charge: ', '담당: ') + '<b>' + H(pname(c.by) || '') + '</b>' : L('No one in charge', '담당자 없음')) + ' ▾</button>' +
         '</div></article>';
     }).join('') + '</div>';
-  }, () => stayCards().filter(x => x.s.on).length || '', ['Current / On-Stay', '현재 / 체류 중']);
+  }, () => stayCards().filter(x => x.s.on).length || '', ['On-Stay', '체류 중']);
   document.addEventListener('click', e => { const g = e.target.closest && e.target.closest('[data-stag]'); if(!g) return; e.preventDefault(); e.stopPropagation(); try{ if(window.__illuDirGoAg) window.__illuDirGoAg(g.dataset.stag); }catch(er){} }, true);
   /* 1.2.155: her photo opens her photos (her folder + her agency page), where the card photo can be changed */
   document.addEventListener('click', e => { const p = e.target.closest && e.target.closest('[data-stph]'); if(!p || e.target.closest('[data-stag]')) return; e.preventDefault(); e.stopPropagation();
@@ -2214,7 +2256,7 @@
     const list = stayCards(); if(!list.length) return '';
     const sh = list.slice().sort((p, q) => (p.s.up - q.s.up) || ((p.s.left == null ? 1e9 : p.s.left) - (q.s.left == null ? 1e9 : q.s.left)));
     const nOn = list.filter(x => x.s.on).length, nUp = list.length - nOn;
-    return '<section class="shstay"><div class="shsth"><h3>' + L('Current / On-Stay', '현재 / 체류 중') + '</h3><span class="shtag g">' + nOn + '</span>' + (nUp ? '<span class="shmut sm">+ ' + nUp + ' ' + L('arriving', '입국 예정') + '</span>' : '') + '<button type="button" class="shlink" data-shgo="stay" style="margin-left:auto">' + L('Board', '보드') + ' →</button></div>' +
+    return '<section class="shstay"><div class="shsth"><h3>' + L('On-Stay', '체류 중') + '</h3><span class="shtag g">' + nOn + '</span>' + (nUp ? '<span class="shmut sm">+ ' + nUp + ' ' + L('arriving', '입국 예정') + '</span>' : '') + '<button type="button" class="shlink" data-shgo="stay" style="margin-left:auto">' + L('Board', '보드') + ' →</button></div>' +
       '<div class="shstrow">' + sh.map(({c, s: st}) => {
         let ph = ''; try{ ph = typeof bkPhoto === 'function' ? bkPhoto(c) : ''; }catch(e){}
         if(!ph){ try{ ph = (window.__illuMatCover && (window.__illuMatCover(c.k || ('bid:' + c.id)) || (c.k ? window.__illuMatCover('bid:' + c.id) : ''))) || ''; }catch(e){} }
@@ -2340,7 +2382,7 @@
   function ddList(key, cur, n, items){
     const open = VS[key] === '1';
     return '<span class="ivdd" data-ivdd="' + key + '"><button type="button" class="ivddb" data-ivset="' + key + '=' + (open ? '' : '1') + '" aria-haspopup="listbox" aria-expanded="' + open + '">' + cur + (n !== '' && n != null ? ' <b>' + n + '</b>' : '') +
-      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + (open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6') + '"/></svg></button>' +
+      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + (open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6') + '"/></svg></button>' +
       (open ? '<span class="ivddl" role="listbox">' + items.map(([set, lab, c, on]) => '<button type="button" role="option" class="ivddo" data-ivset="' + set + '" aria-selected="' + !!on + '">' + lab + (c !== '' && c != null ? '<b>' + c + '</b>' : '') + '</button>').join('') + '</span>' : '') + '</span>';
   }
   function subDD(key, tab, nTo, nDone, more){
@@ -2387,7 +2429,7 @@
   }, () => ties().length || '');
   /* Cancelled */
   /* 1.2.157 (approved demo): one board, sorted inside by the reason */
-  add('unav', ['Unavailable / On hold', '불가 / 보류'], () => {
+  add('unav', ['Unavailable', '불가'], () => {
     const all = [...AV.values()].filter(v => v.t && AVT[v.t] && !hidK(v.k));
     const cat = ['all', 'no', 'nokr', 'later'].includes(VS.avc) ? VS.avc : 'all';
     const list = all.filter(v => cat === 'all' || v.t === cat).sort((p, q) => String(q.at).localeCompare(String(p.at)));
@@ -2403,7 +2445,7 @@
   }, () => decided('cxl').length || '');
   /* 1.2.225 (user, 17 Nov 2026: "I want the approved/cancelled sub board in My Favorites"): the same Approved and Cancelled
      boards as under Team Vote, also as sub-boards of Favorites (Mine · Members · Approved · Cancelled) */
-  for(const [id, src] of [['fappr', 'appr'], ['fcxl', 'cxl']]){ const r = RAW.get(src); if(r) add(id, r.label, r.render, r.count); }
+  /* 1.2.282 (user, 24 Nov 2026: "From My Favorites, I want you to get rid of 'Approved' and 'Cancelled'"): those copies are gone - Approved and Cancelled stay under Team Vote and on Today's Board */
   document.addEventListener('click', e => { const g = e.target.closest && e.target.closest('[data-ivgo]'); if(g && window.__illuGo){ e.preventDefault(); window.__illuGo(g.dataset.ivgo); } });
 
   /* ---------- Today: waiting for your vote ---------- */
@@ -2415,7 +2457,7 @@
   }
   window.__illuVoteWaiting = () => waiting().length;
   /* for Data Analytics: everything the favourites and the votes know, read-only */
-  window.__illuVoteData = () => ({fav: FAV, votes: VT, open: OPEN, states: allStates(), people: people(), info, pname});
+  window.__illuVoteData = () => ({fav: FAV, votes: VT, open: OPEN, states: allStates(), people: people(), info, pname, av: AV});
   window.__illuVoteOnChange = fn => { (window.__illuVoteFns = window.__illuVoteFns || []).push(fn); };
   function todayBox(){
     /* 1.2.107 (user, 8 Nov 2026): no rows per day - a few filters and one grid, most urgent first, 24 at a time;
@@ -2917,7 +2959,7 @@ p.pnag{cursor:default}
 .ivfirst b{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .ivfirst s{text-decoration:none;opacity:.75;font-weight:600}
 .ivstrip{position:absolute;z-index:4;left:0;right:0;top:0;height:28px;padding:0 6px 0 9px;box-sizing:border-box;display:flex;align-items:center;gap:6px;background:linear-gradient(rgba(12,8,16,.74),rgba(12,8,16,.5));-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);color:#fff;font-size:11px;white-space:nowrap;pointer-events:auto}
-.ivsd{flex:1 1 auto;min-width:0;overflow:hidden;display:flex}.ivsd.cut i{display:none}.ivsd.cut2 b{visibility:hidden}.ivsd b{font-weight:700;flex:none}.ivsd i{font-style:normal;opacity:.8;overflow:hidden}
+.ivsd{flex:1 1 auto;min-width:0;overflow:hidden;display:flex}.ivsd.cut i{display:none}.ivsd.cut2 b{visibility:hidden}.ivsd b{font-weight:700;flex:none}.ivsd i{font-style:normal;opacity:.8;flex:none}   /* 1.2.282: the time of day shows whole or not at all - never cut to "11:" */
 .ivsv{display:none;flex:none;font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:10.5px}
 .ivclk{flex:none;display:inline-flex;align-items:center;gap:4px;padding:2px 7px 2px 6px;border-radius:999px;background:rgba(255,255,255,.16);font-variant-numeric:tabular-nums}
 .ivclk b{font-weight:700;letter-spacing:.02em}
@@ -3276,6 +3318,19 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
 .uc .ucimg:hover .ucchg,.uc .ucimg .ucchg:focus-visible{opacity:1}
 .uc .ucimg .ucchg:hover{background:var(--acc,#5A2C57)}
 @media (pointer:coarse){.uc .ucimg .ucchg{opacity:.92;height:30px}}
+/* 1.2.282: on a Team Vote card the Photo button sat on the date / countdown strip - it goes under the strip, as a round camera button */
+.ivpage [hidden]{display:none!important}
+.ivpager{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;margin:22px 0 8px;padding:14px 0 0;border-top:1px solid var(--line)}
+.ivpgc{font-size:12.5px;color:var(--mut);font-variant-numeric:tabular-nums}
+.ivpgr{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ivpgns{display:flex;align-items:center;gap:4px}
+.ivpgn{min-width:34px;height:34px;padding:0 8px;border-radius:9px;border:1px solid var(--line);background:var(--surf,#fff);color:var(--ink);font:600 13px var(--sans);cursor:pointer;font-variant-numeric:tabular-nums}
+.ivpgn:hover{border-color:var(--acc);color:var(--acc)}.ivpgn.on{background:var(--acc);border-color:var(--acc);color:var(--on-acc,#fff)}
+.ivpgdots{color:var(--faint);padding:0 2px}
+.ivpgb{height:34px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--surf,#fff);color:var(--ink);font:600 13px var(--sans);cursor:pointer;white-space:nowrap}
+.ivpgb.pri{background:var(--acc);border-color:var(--acc);color:var(--on-acc,#fff)}.ivpgb:disabled{opacity:.4;cursor:default}
+@media (max-width:760px){.ivpager{flex-direction:column;align-items:stretch;gap:10px}.ivpgc{text-align:center}.ivpgr{flex-wrap:nowrap;justify-content:space-between}.ivpgns{flex:1;justify-content:center;min-width:0;overflow:hidden}.ivpgn{min-width:30px;height:32px;padding:0 6px}.ivpgb{height:38px;padding:0 12px}}
+.uc .ucimg:has(> .ivtop) .ucchg{top:34px;width:30px;height:30px;padding:0;justify-content:center}.uc .ucimg:has(> .ivtop) .ucchg span{display:none}
 .uc .litpic.over{outline:3px dashed var(--acc,#5A2C57);outline-offset:-6px}`;
   document.head.appendChild(css);
 })();

@@ -39,7 +39,7 @@
      A place with several pages shows them as tabs along the top and remembers the last one. */
   const GROUPS = {
     'g-atlas': {label: ['Atlas', '아틀라스'], icon: 'atl', tabs: ['atl', 'dir', 'cmpb', 'ig', 'favag']},
-    'g-opus': {label: ['Booking & Selection', '부킹 & 셀렉션'], icon: 'bk', tabs: ['fav', 'mfav', 'fappr', 'fcxl', 'team', 'appr', 'tie', 'cxl', 'unav', 'bk', 'stay', 'cmp']},
+    'g-opus': {label: ['Booking & Selection', '부킹 & 셀렉션'], icon: 'bk', tabs: ['fav', 'mfav', 'team', 'appr', 'tie', 'cxl', 'unav', 'bk', 'stay', 'cmp']},
     /* 1.2.177 (user, 13 Nov 2026: "combine these 2 and name it more ... choose when selecting the icon"): Backlog and
        404 · Blind spots are one rail button, More; pointing at it (or clicking / tapping) opens a small menu */
     'g-more': {label: ['More', '더보기'], icon: 'more', tabs: ['bkl', '404', 'bld']}
@@ -52,9 +52,9 @@
      its boards; orange when a vote waits for you. Each tab remembers the board last opened in it. */
   const SETS = {
     'g-opus': [
-      {id: 'favs', label: ['Favorites', '즐겨찾기'], icon: 'fav', tabs: ['fav', 'mfav', 'fappr', 'fcxl'], sub: {fav: ['Mine', '내 즐겨찾기'], mfav: ['Members', '멤버'], fappr: ['Approved', '승인'], fcxl: ['Cancelled', '취소']}},   /* 1.2.225: Approved / Cancelled here too */
+      {id: 'favs', label: ['Favorites', '즐겨찾기'], icon: 'fav', tabs: ['fav', 'mfav'], sub: {fav: ['Mine', '내 즐겨찾기'], mfav: ['Members', '멤버']}}   /* 1.2.282 (user, 24 Nov 2026): Approved and Cancelled only under Team Vote and on Today's Board, not in My Favorites */,   /* 1.2.225: Approved / Cancelled here too */
       {id: 'vote', label: ['Team Vote', '팀 투표'], icon: 'team', tabs: ['team', 'tie', 'appr', 'cxl'], sub: {team: ['Voting', '투표 중'], tie: ['Tie-breaker', '타이브레이커'], appr: ['Approved', '승인'], cxl: ['Cancelled', '취소']}, hot: true},
-      {id: 'bkg', label: ['Booking', '부킹'], icon: 'bk', tabs: ['bk', 'unav', 'stay'], sub: {bk: ['Booking cards', '부킹 카드'], unav: ['Unavailable / On hold', '불가 / 보류'], stay: ['Current / On-Stay', '현재 / 체류 중']}},
+      {id: 'bkg', label: ['Booking', '부킹'], icon: 'bk', tabs: ['bk', 'unav', 'stay'], sub: {bk: ['Booking cards', '부킹 카드'], unav: ['Unavailable', '불가'], stay: ['On-Stay', '체류 중']}},
       {id: 'cmp', label: null, icon: 'cmp', tabs: ['cmp'], sub: {}}
     ]
   };
@@ -223,6 +223,7 @@
     later(); window.scrollTo(0, 0);
   }
   function go(v){
+    if(v === 'fappr') v = 'appr'; else if(v === 'fcxl') v = 'cxl';   /* 1.2.282: the old Favorites copies go to Team Vote's own */
     if(GROUPS[v]){ go(lastOf(v)); return; }
     if(v === 'today'){ leaveExtra(); showToday(); return; }
     if(EXTRA.has(v)){ showExtra(v); return; }

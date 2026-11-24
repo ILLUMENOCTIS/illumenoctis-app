@@ -2728,6 +2728,11 @@ function goWeek(w){
 }
 function renderArrivals(){
   const pane = document.getElementById('pane-arr');
+  /* 1.2.281 (user, 22 Nov 2026: "the old layout seems to still be somewhere in the app ... I want it completely gone"): this
+     page's own drawing (the old "Updates" with "Recommended for the Korean market") is never shown again - the New Face &
+     Development board (illu-dir2.js) draws this page; until it has loaded, the page shows only "Opening…" */
+  if(pane && !pane.querySelector('.rcbody')) pane.innerHTML = '<div class="skel">Opening…</div>';
+  return;
   if(!DB && logSettled){
     pane.innerHTML = '<div class="nomatch"><h2>Updates need this page’s storage</h2>' +
       '<p>It isn’t available in this view, so the morning’s scan can’t be read here. ' +

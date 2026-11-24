@@ -448,5 +448,32 @@
     }
   }
   window.__illuPhoto.repairBooked = repairBooked; window.__illuPhoto.expiryOf = expiryOf; window.__illuPhoto.stash = stash;
+  /* 1.2.282 (user, 24 Nov 2026: "Not able to see the photos on mobile. It had an image of a blank card"): a photo saved
+     onto a card (/_blob/mp.…) that cannot be opened here - the phone is not signed in to Dropbox, or the file never reached
+     Dropbox MEDIA › MODEL PHOTOS (17 such files on 24 Nov) - is replaced on screen by the agency's own photo of her, so
+     the card is never blank. Nothing is changed or saved; only what this screen shows. */
+  const BADPIC = new Set(), PICKEY = new Map();
+  const keyOfPic = id => {
+    if(!PICKEY.size || !PICKEY.has(id)) try{ PICKEY.clear(); for(const [k, v] of PICS) PICKEY.set(String(v).replace(/^\/_blob\//, ''), k); }catch(e){}
+    return PICKEY.get(id) || '';
+  };
+  function agencyPhoto(key){
+    let u = ''; try{ const f = litFacts0({key, g: '?'}); u = (f && f.photo) || ''; }catch(e){}
+    if(!u || BROKEN.has(u)) u = PLINK.get(key) || u;
+    if(u && window.illuPhotoFix) try{ u = window.illuPhotoFix(u); }catch(e){}
+    return u && !expired(u) ? u : '';
+  }
+  window.__illuPicFallback = id => { const k = keyOfPic(String(id || '').replace(/^\/_blob\//, '').split('?')[0]); return k ? agencyPhoto(k) : ''; };
+  document.addEventListener('error', e => {
+    const img = e.target; if(!img || img.tagName !== 'IMG') return;
+    const src = img.getAttribute('src') || ''; const m = /\/_blob\/([^?#]+)/.exec(src); if(!m || /^bk\./.test(m[1])) return;
+    if(img.dataset.picfb) return;                       // the agency photo failed too: leave it
+    const id = decodeURIComponent(m[1]); BADPIC.add(id);
+    const u = window.__illuPicFallback(id);
+    if(!u) return;
+    img.dataset.picfb = '1'; img.removeAttribute('srcset'); img.src = u;
+  }, true);
+  window.__illuPicBad = () => [...BADPIC];
+
   load().then(() => { if(window.illu && window.illu.photoThumb && !window.illu.web) setTimeout(repairBooked, 8000); setTimeout(backupLit, 15000); setTimeout(sweep, 60000); setInterval(sweep, 6 * 3600e3); });
 })();

@@ -67,7 +67,10 @@
     let all = []; try{ all = bkSorted(); }catch(e){ return []; }
     let term = ''; try{ term = (q.value || '').trim().toLowerCase(); }catch(e){}
     let me = null; try{ me = ME; }catch(e){}
-    return all.filter(c => { try{ if(!bkPasses(c, term)) return false; }catch(e){} return !S.mine || c.by === me; });
+    /* 1.2.284 (user, 24 Nov 2026: "I need the cards to appear from newest to oldest"): every list on the Booking board shows the
+       newest card first, by the date on the card (the day it was made) */
+    const t = c => { const v = Date.parse(c && c.at); return isNaN(v) ? 0 : v; };
+    return all.filter(c => { try{ if(!bkPasses(c, term)) return false; }catch(e){} return !S.mine || c.by === me; }).sort((a, b) => t(b) - t(a));
   }
   function render(){
     const pane = document.getElementById('pane-bk'), main = document.getElementById('bkmain');
@@ -527,7 +530,7 @@ body.bkpipeon #bkmain{display:none!important}
      reasons with no sign of their own (dates, guarantee, other) offer the sign to use - Not available first. */
   const PICK = [['no', ['Not available', '불가']], ['nokr', ['Not for Korea', '한국 불가']], ['later', ['On hold — ask again later', '보류 — 나중에 다시 문의']]];
   const markOf = r => r ? (r[3] || S.mt || 'no') : '';
-  window.__illuCxlLabel = x => { const r = R.find(y => y[0] === (x && x.r)); return r ? (x.r === 'own' && x.why ? x.why.slice(0, 60) : L(r[1][0], r[1][1])) : L('Cancelled', '취소'); };
+  window.__illuCxlLabel = x => { if(x && x.r === 'vote') return L('Cancelled in Team Vote', '팀 투표에서 취소'); const r = R.find(y => y[0] === (x && x.r)); return r ? (x.r === 'own' && x.why ? x.why.slice(0, 60) : L(r[1][0], r[1][1])) : L('Cancelled', '취소'); };
   const S = {bid: '', go: null, r: '', why: '', mark: true, mt: 'no'};
   function box(){ let b = document.getElementById('bkcxl'); if(!b){ b = document.createElement('div'); b.id = 'bkcxl'; document.body.appendChild(b); } return b; }
   function draw(){
@@ -567,6 +570,7 @@ body.bkpipeon #bkmain{display:none!important}
     if(typeof bkMoveTo !== 'function' || typeof bkDropInto !== 'function'){ setTimeout(wrap, 300); return; }
     if(window.__cxlWrapped) return; window.__cxlWrapped = true;
     const mv = bkMoveTo, dr = bkDropInto;
+    window.__illuBkMoveRaw = mv;   /* 1.2.284: the Team Vote's own cancel moves the card without asking why */
     window.bkMoveTo = function(bid, to){ const c = BOOK.get(bid); if(to === 'canc' && c && bkStOf(c) !== 'canc'){ ask(bid, () => mv(bid, to)); return false; }
       if(c && to !== 'canc' && bkStOf(c) === 'canc' && c.cxl){ c.cxlold = c.cxl; delete c.cxl; } return mv(bid, to); };
     window.bkDropInto = function(bid, to, overId, before){ const c = BOOK.get(bid); if(to === 'canc' && c && bkStOf(c) !== 'canc'){ ask(bid, () => dr(bid, to, overId, before)); return; }

@@ -61,6 +61,18 @@
         if(hr.width && r.width > hr.width * .7 && r.top - hr.top < 4 && r.height < 60) top = Math.max(top, r.height + 6);
       }
       el.style.top = top + 'px';
+      /* 1.2.282 (user, 24 Nov 2026: "the name initial and the 'Waiting' are overlapping"): on a Team Vote card the circle
+         with the initial of whoever sent her to the vote sits at the same spot - the marker moves to its right */
+      const fi = host.querySelector('.ivfirst');
+      if(fi && fi.offsetParent){
+        const r = fi.getBoundingClientRect(), hr = host.getBoundingClientRect(), er = el.getBoundingClientRect();
+        if(r.width && r.bottom > er.top && r.top < er.bottom && r.left < er.right && r.right > er.left){
+          el.style.left = Math.round(r.right - hr.left + 6) + 'px';
+          el.style.maxWidth = 'calc(100% - ' + Math.round(r.right - hr.left + 14) + 'px)';
+          /* (user: "I want the initial and the email notification aligned"): the same middle line as the circle */
+          el.style.top = Math.round(r.top + r.height / 2 - hr.top - el.offsetHeight / 2) + 'px';
+        }
+      }
     }
   }
   let BUSY = false, LASTV = '';

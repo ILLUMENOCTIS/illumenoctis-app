@@ -22,6 +22,18 @@
 .shhdph,#d2phflt,#d2phsheet,#d2phveil,.ivdd,.ivcos{display:none}
 .bemwrap{position:relative}
 @media (max-width:760px){
+/* 1.2.282: the photo viewer's top row wrapped onto two lines on the phone - its buttons ran past the screen and the rotate
+   button sat on top of the close button; "Connect Dropbox" was cut off */
+#illufv .fvtop{left:12px;right:62px;flex-wrap:wrap;align-items:center;gap:6px 8px}
+#illufv .fvnm{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#illufv .fvdbx{margin-left:0;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 1.2.281: Favorite Agencies fits the phone (the My favorites / Team switch and the people row were wider than the screen) */
+#pane-favag .fgseg{display:flex;width:100%;box-sizing:border-box}
+#pane-favag .fgseg button{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;padding:8px 8px}
+#pane-favag .fgwho{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-left:0;width:100%;max-width:100%}
+#pane-favag .fgwho::-webkit-scrollbar{display:none}
+#pane-favag .fgwho button{flex:none}
   /* ---- top bar (E1) ---- */
   html body #appbar{margin-top:-14px!important;border-radius:0!important;background:transparent!important}
   html body #appbar .abi{height:46px!important;padding:0 2px 0 4px!important}
