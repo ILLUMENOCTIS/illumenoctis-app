@@ -664,7 +664,10 @@ document.head.appendChild(st);
       const anchor = box.querySelector('.tplms') || box.querySelector('.tplto'); if (anchor) anchor.insertAdjacentHTML('afterend', cc);
     }
   }
-  document.addEventListener('change', e => { const c = e.target.closest && e.target.closest('#illutpl [data-tplcc]'); if (!c || !PK) return; const v = c.dataset.tplcc; PK.cc = PK.cc.filter(x => x.toLowerCase() !== v.toLowerCase()); if (c.checked) PK.cc.push(v); paintPick(); }, true);
+  document.addEventListener('change', e => { const c = e.target.closest && e.target.closest('#illutpl [data-tplcc]'); if (!c || !PK) return; const v = c.dataset.tplcc; PK.cc = PK.cc.filter(x => x.toLowerCase() !== v.toLowerCase()); if (c.checked) PK.cc.push(v); stayPaint(); }, true);
+  /* 1.2.296 (user, 26 Nov 2026: "everytime I select a CC, it brings me back to the top of the screen"): ticking a CC (or Tick all)
+     redraws the window - every scrolled part of it is put back where it was */
+  function stayPaint() { const box = document.getElementById('illutpl'); const keep = []; if (box) box.querySelectorAll('*').forEach((el, i) => { if (el.scrollTop > 0) keep.push([el.className, i, el.scrollTop]); }); const ws = window.scrollY; paintPick(); const b2 = document.getElementById('illutpl'); if (b2) { const all = b2.querySelectorAll('*'); for (const [cls, i, st] of keep) { let el = all[i]; if (!el || el.className !== cls) el = [...all].find(x => x.className === cls && x.scrollHeight > x.clientHeight); if (el) el.scrollTop = st; } } if (window.scrollY !== ws) window.scrollTo(0, ws); }
   function keepPaint() { const l0 = document.querySelector('#illutpl .tplml'); const st = l0 ? l0.scrollTop : 0; paintPick(); const l = document.querySelector('#illutpl .tplml'); if (l) l.scrollTop = Math.min(st, l.scrollHeight); }
   /* the measurement boxes: the list follows as you type, the cursor stays in the box */
   document.addEventListener('input', e => { const i = e.target.closest && e.target.closest('#illutpl [data-tplf]'); if (!i || !PK) return;
@@ -702,7 +705,7 @@ document.head.appendChild(st);
     if (b.hasAttribute('data-tplftog')) { PK.fopen = !PK.fopen; keepPaint(); return; }
     if (b.hasAttribute('data-tplfclr')) { PK.f = { bd: [], g: '', st: '', ht: ['', ''], bu: ['', ''], wa: ['', ''], hp: ['', ''] }; keepPaint(); return; }
     if (b.hasAttribute('data-tplmore')) { PK.open = !PK.open; PK.focusQ = PK.open; paintPick(); PK.focusQ = false; return; }
-    if (b.hasAttribute('data-tplccall')) { const all = [...box.querySelectorAll('[data-tplcc]')].map(x => x.dataset.tplcc); PK.cc = PK.cc.length === all.length ? [] : all; paintPick(); return; }
+    if (b.hasAttribute('data-tplccall')) { const all = [...box.querySelectorAll('[data-tplcc]')].map(x => x.dataset.tplcc); PK.cc = PK.cc.length === all.length ? [] : all; stayPaint(); return; }
     if (b.dataset.tploff) { PK.ms = PK.ms.filter(x => x.key !== b.dataset.tploff); paintPick(); return; }
     if (b.hasAttribute('data-tpluse')) {
       const id = b.dataset.tpluse, t = id ? list().find(x => x.id === id) : null;
