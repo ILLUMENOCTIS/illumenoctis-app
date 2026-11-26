@@ -2697,6 +2697,26 @@
     say(L(pname(v.by) + ' is waiting for your vote on ' + (still || n) + ((still || n) === 1 ? ' model' : ' models'), pname(v.by) + '님이 모델 ' + (still || n) + '명에 대한 투표를 기다립니다'), openMyVotes, null, L('Vote now', '지금 투표'));
   }
   setTimeout(() => { const d = db(); if(d) d.doc('vrem/last').onSnapshot(x => { try{ remindSeen(x && x.exists ? x.data() : null); }catch(e){} }, () => {}); }, 4000);
+  /* 1.2.299 (user, 26 Nov 2026: "let's do that for votes"): the number of cards waiting for my vote shows as a red
+     number on the program's taskbar icon (Windows); the program keeps running when ✕ is pressed (main.js). */
+  let BADGE = -1;
+  function badgePic(n){
+    const c = document.createElement('canvas'); c.width = c.height = 32; const x = c.getContext('2d');
+    x.fillStyle = '#E5484D'; x.beginPath(); x.arc(16, 16, 15.5, 0, Math.PI * 2); x.fill();
+    const t = n > 99 ? '99+' : String(n);
+    x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.font = 'bold ' + (t.length === 1 ? 22 : t.length === 2 ? 18 : 13) + 'px Segoe UI, Arial, sans-serif';
+    x.fillText(t, 16, 17);
+    return c.toDataURL('image/png');
+  }
+  function badgeNow(){
+    if(!window.illu || !window.illu.badge) return;
+    let n = 0; try{ n = (typeof SIGNED === 'function' && SIGNED()) ? allStates().filter(needMe).length : 0; }catch(e){ return; }
+    if(n === BADGE) return; BADGE = n;
+    try{ window.illu.badge(n, n ? badgePic(n) : ''); }catch(e){}
+  }
+  window.__illuBadgeNow = badgeNow;
+  setInterval(badgeNow, 4000); setTimeout(badgeNow, 1500);
   /* a notification tap opens …#team: straight to the cards waiting for me */
   function hashGo(){ if(location.hash === '#team'){ try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){} setTimeout(openMyVotes, 600); } }
   addEventListener('hashchange', hashGo); setTimeout(hashGo, 1500);
