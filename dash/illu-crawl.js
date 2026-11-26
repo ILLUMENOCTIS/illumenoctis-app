@@ -61,11 +61,15 @@
   /* a board is read again when most of its links are broken, or most of its "names" are really the
      measurements (2026-11-05: sites that put the measurements table inside the model's link -
      BIRDS, MGM, ROW... - were stored as "HEIGHT 178 cm / 5'10" BUST ..." instead of the name) */
+  const COUNTNAME = /^[\d.,\s]+(?:[kKmM]|mil|tys)?\+?(?:\s*(?:followers?|abonnés?|seguidores))?$/i;
   const MEASNAME = /\b(height|bust|chest|waist|hips?|shoes?)\b|\d{2,3}\s*cm\b/i;
   const broken = b => b.m.length && (b.m.filter(m => /\/null\//.test(hrefOf(b, m))).length > b.m.length / 2 ||
     b.m.filter(m => MEASNAME.test(String(m[0] || ''))).length > b.m.length / 3 ||
     /* listed without names (picture-only links, the name beside them - Contrebande): read again */
-    b.m.filter(m => !String(m[0] || '').trim()).length > b.m.length / 3);
+    b.m.filter(m => !String(m[0] || '').trim()).length > b.m.length / 3 ||
+    /* 1.2.293 (user, 26 Nov 2026 - Duo Model Mgmt: "the names are numbers of the amount of instagram followers"):
+       "names" that are counts (51.5k, 1.1K, 251): read again with the 1.2.292 board reader */
+    b.m.filter(m => COUNTNAME.test(String(m[0] || '').trim())).length > b.m.length / 3);
 
   /* ---------- saving, in small pieces ---------- */
   async function save(path, data){ for(let k = 0; k < 3; k++){ try{ await DB.doc(path).set(data); return true; }catch(e){ await wait(2000 * (k + 1)); } } return false; }
