@@ -82,7 +82,7 @@
     const of = k => rows.filter(c => bkStOf(c) === k);
     const P = of('proc'), D = of('done'), C = of('canc');
     const tab = (k, en, ko, n) => '<button type="button" role="tab" aria-selected="' + (S.tab === k) + '" class="' + (S.tab === k ? 'on' : '') + '" data-bptab="' + k + '">' + H(L(en, ko)) + ' <b>' + n + '</b></button>';
-    let h = '<div class="bphead"><div class="bptabs" role="tablist">' + tab('proc', 'Processing', '진행 중', P.length) + tab('done', 'Completed', '완료', D.length) + tab('canc', 'Cancelled', '취소', C.length) + '</div>' +
+    let h = '<div class="bphead"><div class="bptabs" role="tablist">' + tab('proc', 'Processing', '진행 중', P.length) + tab('done', 'Completed', '완료', D.length) + tab('canc', 'Cancelled', '취소', window.__illuCxlCount ? window.__illuCxlCount(C) : C.length) + '</div>' +
       '<div class="bpright"><button type="button" class="bpchip' + (S.mine ? ' on' : '') + '" data-bpmine aria-pressed="' + S.mine + '">' + L('Only mine', '내 카드만') + '</button>' +
       '</div></div>';
     if(S.on){
@@ -106,7 +106,9 @@
         if(allDone.length) h += '<p class="bpnote">' + H(L(allDone.length + ' card(s) have every stage done and are still in Processing — open one and press COMPLETED.', allDone.length + '개 카드가 모든 단계를 마쳤지만 아직 진행 중입니다 — 카드를 열어 완료를 누르세요.')) + '</p>';
       }else{
         const list = S.tab === 'done' ? D : C;
-        h += list.length ? '<div class="bpgrid">' + list.map(c => '<div class="bprw">' + cardHTML(c, Math.min(stageIdx(c), 4)) + (S.tab === 'canc' && c.cxl && window.__illuCxlLabel ? (() => { const t = window.__illuCxlLabel(c.cxl), f = t + (c.cxl.why && c.cxl.r !== 'own' ? ' — ' + c.cxl.why : ''); return '<div class="bpwhy" title="' + H(f) + '"><b>' + H(L('Why: ', '사유: ')) + '</b>' + H(f) + '</div>'; })() : '') + (S.tab === 'canc' || S.tab === 'done' ? '<button type="button" class="bprev" data-bprevive="' + H(c.id) + '">↺ ' + H(L('Back to Processing', '진행 중으로 되돌리기')) + '</button>' : '') + '</div>').join('') + '</div>'
+        let term = ''; try{ term = (q.value || '').trim(); }catch(e){}
+        if(S.tab === 'canc' && window.__illuCxlBoard) h += window.__illuCxlBoard(C, term);
+        else h += list.length ? '<div class="bpgrid">' + list.map(c => '<div class="bprw">' + cardHTML(c, Math.min(stageIdx(c), 4)) + (S.tab === 'canc' && c.cxl && window.__illuCxlLabel ? (() => { const t = window.__illuCxlLabel(c.cxl), f = t + (c.cxl.why && c.cxl.r !== 'own' ? ' — ' + c.cxl.why : ''); return '<div class="bpwhy" title="' + H(f) + '"><b>' + H(L('Why: ', '사유: ')) + '</b>' + H(f) + '</div>'; })() : '') + (S.tab === 'canc' || S.tab === 'done' ? '<button type="button" class="bprev" data-bprevive="' + H(c.id) + '">↺ ' + H(L('Back to Processing', '진행 중으로 되돌리기')) + '</button>' : '') + '</div>').join('') + '</div>'
           : '<p class="bpempty big">' + H(S.tab === 'done' ? L('Nothing completed yet.', '완료된 카드가 없습니다.') : L('Nothing cancelled.', '취소된 카드가 없습니다.')) + '</p>';
         /* 1.2.159: deleted cards, kept so they can come back */
         if(S.tab === 'canc' && TRASH.size) h += '<div class="bptrash"><h4>' + H(L('Deleted cards', '삭제된 카드')) + ' · ' + TRASH.size + '</h4><div class="bptl">' + [...TRASH.values()].sort((p, q) => String(q.at).localeCompare(String(p.at))).map(t => '<div class="bpti"><b>' + H((t.c && t.c.nm) || '?') + '</b><span>' + H(((t.c && t.c.ag) || '') + ' · ' + L('deleted ', '삭제 ') + String(t.at || '').slice(0, 10) + (t.by && PEOPLE.get(t.by) ? ' · ' + PEOPLE.get(t.by).n : '')) + '</span><button type="button" class="bprev" data-bprestore="' + H(t.c && t.c.id) + '">↺ ' + H(L('Restore', '되살리기')) + '</button></div>').join('') + '</div></div>';
@@ -116,6 +118,11 @@
   }
   const TRASH = new Map();
   (function lt(){ if(typeof DB === 'undefined' || !DB){ setTimeout(lt, 900); return; } try{ DB.collection('bktrash').onSnapshot(sn => { TRASH.clear(); for(const x of (sn.docs || [])){ const v = typeof docOf === 'function' ? docOf(x) : x.data(); if(v && v.c && v.c.id && !v.back && !BOOK.has(v.c.id)) TRASH.set(v.c.id, v); } render(); }, () => {}); }catch(e){} })();
+  document.addEventListener('click', e => {
+    const box = e.target.closest && e.target.closest('#bkpipe .cxhead, #bkpipe .cxgrid'); if(!box) return;
+    if(e.target.closest('[data-bprevive]')) return;
+    if(window.__illuVoteToggleHook && window.__illuVoteToggleHook(box, e)){ e.preventDefault(); e.stopPropagation(); if(e.target.closest('[data-ivset]')) render(); }
+  }, true);
   document.addEventListener('click', async e => {
     const r = e.target.closest && e.target.closest('#bkpipe [data-bprevive], #bkpipe [data-bprestore]'); if(!r) return;
     e.preventDefault(); e.stopPropagation();
@@ -128,6 +135,8 @@
     TRASH.delete(c.id); try{ renderBook(); }catch(er){} render();
   }, true);
   window.__illuPipe = {render, stageIdx, S};
+  /* 1.2.288: a model marked Not available / On hold elsewhere shows on Booking > Cancelled at once */
+  (function hook(){ if(!window.__illuVoteOnChange){ setTimeout(hook, 500); return; } window.__illuVoteOnChange(() => { try{ if(S.tab === 'canc') render(); }catch(e){} }); })();
   try{
     const o = window.renderBook;
     if(typeof o === 'function' && !o.__bp){ const w = function(){ const r = o.apply(this, arguments); try{ render(); }catch(e){} return r; }; w.__bp = true; window.renderBook = w; }

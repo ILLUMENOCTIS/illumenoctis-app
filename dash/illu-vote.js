@@ -1150,7 +1150,7 @@
     return '<section class="pns">' + pnSecH(L('Status', '상태'), right) + body + '</section>';
   }
   const MONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const shortDate = v => { const m = String(v || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if(!m) return v; const y = +m[3], now = new Date().getFullYear(); return (+m[1]) + ' ' + (isKO() ? (+m[2]) + '월' : MONS[+m[2] - 1]) + (y !== now && y !== now + 1 ? ' ' + y : ''); };
+  const shortDate = v => { const m = String(v || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if(!m) return v; /* 1.2.288: a date typed month first (07/15/2027) read the 15 as a month - "7 undefined" */ if(+m[2] > 12 && +m[1] <= 12){ const t = m[1]; m[1] = m[2]; m[2] = t; } const y = +m[3], now = new Date().getFullYear(); return (+m[1]) + ' ' + (isKO() ? (+m[2]) + '월' : MONS[+m[2] - 1]) + (y !== now && y !== now + 1 ? ' ' + y : ''); };
   function gSummary(k, c, compact){
     let g = {}, amt = '', sub = '', av = '', stay = '', ctd = '';
     const GN = {no: L('No Guarantee', '노 개런티'), cond: L('Condition Guarantee', '컨디션 개런티'), net: L('Net Guarantee', '넷 개런티')};
@@ -2317,6 +2317,17 @@
    board every card is as tall as the tallest in its row, the agency's note sits at the same place under each one, 3 lines at most */
 .ivunav{grid-auto-rows:1fr}.ivunav>.ivcw{height:100%}.ivunav>.ivcw>:first-child{flex:1 1 auto;display:flex;flex-direction:column}
 .ivunav>.ivcw>.avcap{flex:none;height:96px;overflow:hidden;margin-top:0}
+.avcap.cxbk{background:#F3EEF5;color:#4E2349}.avcap.cxbk>i{font-style:normal;color:#A3283F;font-weight:600}.ivunav>.ivcw>.cxrev{margin-top:6px;align-self:flex-start}
+.cxgrid>.ivcw>.avcap{height:104px}
+/* 1.2.288 (user: "can we also have it so the cards all aligned to make it look nice and tidy?"): every card on Booking > Cancelled
+   has the same parts at the same height - the card, the Dropbox line (or an empty space of the same height), the reason box,
+   and the Back to Processing button (or an empty space) */
+.cxgrid{align-items:stretch}.cxgrid>.ivcw{display:flex;flex-direction:column;gap:6px;height:100%}
+.cxgrid>.ivcw>article{flex:1 1 auto;margin:0}
+.cxgrid>.ivcw>.dxnote,.cxgrid>.ivcw>.cxdx{flex:none;height:42px;margin:0;box-sizing:border-box;overflow:hidden}
+.cxgrid>.ivcw>.dxnote+.cxdx{display:none}.cxgrid>.ivcw>.dxnote span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.cxgrid>.ivcw>.avcap{flex:none;margin:0;box-sizing:border-box}
+.cxgrid>.ivcw>.cxrev,.cxgrid>.ivcw>.cxnob{flex:none;height:32px;margin:0;box-sizing:border-box}#bkpipe .cxhead{margin:4px 0 12px;max-width:100%}#bkpipe .cxhead .ivseg{flex-wrap:nowrap;overflow-x:auto;max-width:100%;scrollbar-width:none}#bkpipe .cxhead .ivseg button{white-space:nowrap;flex:none}
 .ivunav>.ivcw>.avcap>*{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}.ivunav>.ivcw>.avcap>span,.ivunav>.ivcw>.avcap>q,.ivunav>.ivcw>.avcap>i{-webkit-line-clamp:2}.ivunav>.ivcw>.avcap>small{-webkit-line-clamp:1}.avcap small{opacity:.8}
 #illuwk{position:fixed;inset:0;z-index:9500;display:grid;place-items:center}#illuwk[hidden]{display:none}
 #illuwk .wkveil{position:absolute;inset:0;background:rgba(20,12,24,.35)}
@@ -2438,6 +2449,56 @@
       (list.length ? '<div class="ivgrid ivtv ivunav">' + list.map(v => '<div class="ivcw">' + (info(v.k).nm ? mcard(v.k) : (() => { try{ return (window.__illuCard({key: v.k, nm: v.nm || '', ag: v.ag || '', href: v.k}) || ''); }catch(e){ return ''; } })()) + '<div class="avcap ' + v.t + '" title="' + H(v.why || '') + '"><b>' + H(window.__illuAvailLabel(v)) + '</b>' + (v.why ? '<span>“' + H(v.why) + '”</span>' : '') + '<small>' + H([v.from, v.at ? new Date(v.at).toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short'}) : ''].filter(Boolean).join(' · ')) + '</small></div></div>').join('') + '</div>'
         : empty(L('No one here', '없음'), L('Models an agency said are not available, not for Korea, or on hold (for example a booking cancelled for that reason) show here.', '에이전시가 불가, 한국 불가, 보류라고 한 모델(예: 그 이유로 취소된 부킹)이 여기에 표시됩니다.')));
   }, () => [...AV.values()].filter(v => v.t && AVT[v.t]).length || '');
+  /* 1.2.288 (user, 24 Nov 2026: "Booking 'Unavailable' and 'Cancelled' are eventually the same thing ... I want the Unavailable
+     cards to be part of the Cancelled Board. I want all the cards from the Cancelled Board to just appear as normal card as it
+     appears in the Unavailable Board with the reasons showing as to why they got cancelled"): Booking > Cancelled is one board -
+     every cancelled booking card and every model an agency said Not available / Not for Korea / On hold, as normal model cards
+     with the reason under each (one card per model: a cancelled booking card also shows her availability mark). */
+  function cxlBoard(C, term){
+    const T = String(term || '').trim().toLowerCase();
+    const dOf = x => { const t = Date.parse(x || ''); return isNaN(t) ? 0 : t; };
+    const day = x => { const t = dOf(x); return t ? new Date(t).toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short'}) : ''; };
+    const nk = k => { try{ return normKey(k); }catch(e){ return k; } };
+    const items = [], byKey = new Map();
+    for(const c of (C || [])){
+      const k = c.k || ('bid:' + c.id);
+      const it = {k, c, nm: c.nm || info(k).nm || '', ag: c.ag || info(k).ag || '', at: (c.cxl && c.cxl.at) || c.at || '', av: null, kind: 'bk'};
+      items.push(it); if(c.k) byKey.set(nk(c.k), it);
+    }
+    for(const v of AV.values()){
+      if(!v.t || !AVT[v.t] || hidK(v.k)) continue;
+      const it = byKey.get(nk(v.k));
+      if(it){ it.av = v; continue; }
+      const m = info(v.k), nm = v.nm || m.nm || '', ag = v.ag || m.ag || '';
+      if(T && !(nm + ' ' + ag).toLowerCase().includes(T)) continue;
+      items.push({k: v.k, c: null, nm, ag, at: v.at || '', av: v, kind: v.t});
+    }
+    const kindOf = it => it.c ? 'bk' : it.kind;
+    const cat = ['all', 'bk', 'no', 'nokr', 'later'].includes(VS.cxc) ? VS.cxc : 'all';
+    const inCat = (it, c2) => c2 === 'all' || kindOf(it) === c2 || (c2 !== 'bk' && it.av && it.av.t === c2);
+    const list = items.filter(it => inCat(it, cat)).sort((a, b) => dOf(b.at) - dOf(a.at));
+    const chip = (c2, en, ko) => '<button type="button" class="' + (cat === c2 ? 'on' : '') + '" data-ivset="cxc=' + c2 + '">' + L(en, ko) + ' · ' + items.filter(it => inCat(it, c2)).length + '</button>';
+    const cardOf = it => {
+      if(info(it.k).nm) return mcard(it.k);
+      let h = ''; try{ h = window.__illuCard({key: it.k, nm: it.nm, ag: it.ag, href: /^https?:/.test(it.k) ? it.k : ''}) || ''; }catch(e){}
+      return h.replace(/<article class="uc((?: [^"]*)?)"/, (_, c) => '<article class="uc' + c + '" data-ivk="' + H(it.k) + '"');
+    };
+    const avLine = v => '<b>' + H(window.__illuAvailLabel(v)) + '</b>' + (v.why ? '<span>“' + H(v.why) + '”</span>' : '') + '<small>' + H([v.from, day(v.at)].filter(Boolean).join(' · ')) + '</small>';
+    const cap = it => {
+      if(!it.c) return '<div class="avcap ' + it.av.t + '" title="' + H(it.av.why || '') + '">' + avLine(it.av) + '</div>';
+      const x = it.c.cxl || {}, lab = window.__illuCxlLabel ? window.__illuCxlLabel(x) : L('Booking cancelled', '부킹 취소');
+      const why = x.why && x.r !== 'own' ? x.why : '';
+      return '<div class="avcap cxbk" title="' + H(lab + (why ? ' — ' + why : '')) + '"><b>' + H(lab) + '</b>' + (why ? '<span>' + H(x.r === 'vote' ? L('Team Vote ', '팀 투표 ') + why : '“' + why + '”') + '</span>' : '') +
+        (it.av ? '<i>' + H(window.__illuAvailLabel(it.av)) + (it.av.why ? ' — “' + H(it.av.why) + '”' : '') + '</i>' : '') +
+        '<small>' + H([L('Booking card', '부킹 카드'), x.by ? pname(x.by) : '', day(x.at || it.c.at)].filter(Boolean).join(' · ')) + '</small></div>' +
+        '<button type="button" class="bprev cxrev" data-bprevive="' + H(it.c.id) + '">↺ ' + H(L('Back to Processing', '진행 중으로 되돌리기')) + '</button>';
+    };
+    return '<div class="ivhead cxhead"><div class="ivseg">' + chip('all', 'All', '전체') + chip('bk', 'Booking cancelled', '부킹 취소') + chip('no', 'Not available', '불가') + chip('nokr', 'Not for Korea', '한국 불가') + chip('later', 'On hold', '보류') + '</div></div>' +
+      (list.length ? '<div class="ivgrid ivtv ivunav cxgrid">' + list.map(it => '<div class="ivcw">' + cardOf(it) + '<div class="cxdx" aria-hidden="true"></div>' + cap(it) + (it.c ? '' : '<div class="cxnob" aria-hidden="true"></div>') + '</div>').join('') + '</div>'
+        : '<p class="bpempty big">' + H(L('Nothing here.', '없음')) + '</p>');
+  }
+  window.__illuCxlBoard = cxlBoard;
+  window.__illuCxlCount = C => { const nk = k => { try{ return normKey(k); }catch(e){ return k; } }; const ks = new Set((C || []).filter(c => c.k).map(c => nk(c.k))); return (C || []).length + [...AV.values()].filter(v => v.t && AVT[v.t] && !hidK(v.k) && !ks.has(nk(v.k))).length; };
   add('cxl', ['Cancelled', '취소'], () => {
     const list = decided('cxl').filter(gw);
     return about('cxl', 'The team voted these out. Open a photo to see the result; reopen the vote if something changes.', '팀이 반대한 카드입니다. 사진을 열면 결과가 보이고, 사정이 바뀌면 투표를 다시 열 수 있습니다.') +
