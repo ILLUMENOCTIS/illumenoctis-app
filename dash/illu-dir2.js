@@ -525,7 +525,11 @@
         cnt = ms.length;
       } else cnt = peopleCount(n, bs);
       const fit = byMeas ? ms.filter(m => fits(m.key)).length : -1;
-      if(byMeas && !fit) continue;
+      /* 1.2.290 (user, 26 Nov 2026: "when I input the measurement filter, it restarted the board search on the agency, I want it
+         to continue on from the current search"): the agency that is open stays open (with its name search) when the
+         measurements leave it no model that fits - its panel then says so - instead of closing and sending the scout back to
+         the list. Putting it down lets it drop out like the rest. */
+      if(byMeas && !fit && !(D2.sel && D2.sel !== -1 && String(D2.sel).split('|')[0] === String(n.i))) continue;
       /* sorted by place, a network appears under each country it has an office in */
       const groups = new Map();
       if(D2.sort === 'place') for(const o of offM){ const g = subOf(o.region || 'Unknown', o.country) + '\u0001' + (o.country || ''); if(!groups.has(g)) groups.set(g, []); groups.get(g).push(o); }
@@ -720,7 +724,7 @@
       '<span class="d2seg" role="group" aria-label="Show as"><button type="button" data-d2names="0" aria-pressed="' + !D2.names + '">Photos</button><button type="button" data-d2names="1" aria-pressed="' + D2.names + '">Names</button></span>' +
       '</div></div>';
     const body = !ms.length
-      ? '<div class="d2empty"><p>' + (mq ? 'No model at ' + esc(a.name) + ' has a name with “' + esc(D2.mq.trim()) + '”.' : byMeas ? 'No model on this board fits the measurements.' : (a.boards.length ? 'No models on this board.' : 'Its boards have not been read yet.')) + '</p></div>'
+      ? '<div class="d2empty"><p>' + (mq && byMeas ? 'No model at ' + esc(a.name) + ' with “' + esc(D2.mq.trim()) + '” in the name fits the measurements.' : mq ? 'No model at ' + esc(a.name) + ' has a name with “' + esc(D2.mq.trim()) + '”.' : byMeas ? 'No model on this board fits the measurements.' : (a.boards.length ? 'No models on this board.' : 'Its boards have not been read yet.')) + '</p></div>'
       : D2.names ? '<div class="mlist d2names">' + ms.map(m => nameRow(m, a)).join('') + '</div>'
       : '<div class="d2grid">' + (wkTop.length ? G.map((g, i) => g.length ? '<div class="d2wkh' + (i === 1 ? ' mdih' : '') + '"><i></i>' + GL[i] + '</div>' + g.map(wkTile).join('') : '').join('') + (rest.length ? '<div class="d2wkh rest">Everyone else</div>' + rest.map(wkTile).join('') : '')
         : ms.map(wkTile).join('')) + '</div>';

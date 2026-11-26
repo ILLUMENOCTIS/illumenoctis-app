@@ -7,25 +7,35 @@
 (function(){
   if(window.__illuHdr) return; window.__illuHdr = true;
   const css = `
-  #shsub2:not([hidden]){background:#4E2349!important;border-color:#4E2349!important;box-shadow:0 1px 2px rgba(40,10,40,.18)}
-  #shsub2 button{color:#E9DCEB!important}
-  #shsub2 button:hover{color:#fff!important}
-  #shsub2 button.on{background:#fff!important;color:#4E2349!important;box-shadow:0 1px 3px rgba(0,0,0,.18)!important}
-  #shsub2 button em{background:rgba(255,255,255,.16)!important;color:#F4E8F5!important}
-  #shsub2 button.on em{background:#F3E7F2!important;color:#6E2A6B!important}
-  #shsub2 button em.hot{background:#FDE7D6!important;color:#B4540A!important}
-  /* filters: white chips under a FILTER label */
-  #fbar .fbf,#d2bar .fbf{background:#fff!important;border:1px solid #E4DDE8!important}
-  #fbar input[type=search],#fbar input[type=text],#fbar .fbq input,#d2bar input[type=search],#d2bar input[type=text]{background:#fff!important}
-  #fbar .fbr1::before,#d2bar .fbr1::before{content:"FILTER";flex:none;align-self:center;font:700 10px/1 var(--sans,system-ui);letter-spacing:.14em;color:#9A8F9E;margin:0 2px 0 2px}
+  /* 1.2.290 (user: "let's change this back to the previous setting"): the board tabs are back to their light look; they keep
+     their place beside the board's controls. */
+  /* 1.2.290 (user: "the filter in the 'New Faces & Development' Board, 'Directory' Board, and 'Booking' Board are all different.
+     make it the same universal design"): one filter bar everywhere - a white box as tall as the board tabs (44 px), a FILTER
+     label, the search field, grey filter buttons the same size as the tabs' buttons, then the count, Reset and (Directory)
+     Maximize and Sort on the right. Nothing slides out of sight: what does not fit goes on to a second line. */
+  #fbar .fbr1::before,#d2bar .d2r1::before{content:"FILTER";flex:none;align-self:center;font:700 10px/1 var(--sans,system-ui);letter-spacing:.14em;color:#9A8F9E;margin:0 4px 0 4px}
   @media (min-width:761px){
-    #shsub2:not([hidden]) + #fbar.hdrside{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important}
+    #fbar.fpbar:not(.hdrside),#d2bar.fpbar{margin:12px 0 0!important}
+    #fbar.fpbar,#d2bar.fpbar{background:var(--surf,#fff)!important;border:1px solid var(--line,#E7E2EA)!important;border-radius:14px!important;box-shadow:0 1px 2px rgba(27,23,36,.05)!important;padding:4px 6px!important;min-height:44px;box-sizing:border-box;gap:6px!important}
+    #fbar .fbr1,#d2bar .d2r1{display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:6px!important;row-gap:6px!important;min-height:34px}
+    #fbar .fpscroll,#d2bar .fpscroll{display:flex!important;flex-wrap:wrap!important;overflow:visible!important;gap:6px!important;max-width:100%}
+    #fbar .fbq,#d2bar .d2q{flex:0 1 240px!important;min-width:170px;height:34px!important;box-sizing:border-box;border-radius:9px!important;background:var(--surf2,#F4F1F5)!important;border:1px solid transparent!important;padding:0 10px!important;display:flex;align-items:center;gap:7px}
+    #fbar .fbq input,#d2bar .d2q input{background:transparent!important;border:0!important;font-size:13px!important;min-width:0;flex:1;width:auto!important;max-width:none!important}
+    #fbar .fbq svg,#d2bar .d2q svg{width:15px!important;height:15px!important;flex:none}
+    #fbar .fbf,#d2bar .d2f{height:34px!important;box-sizing:border-box;padding:0 11px!important;border-radius:9px!important;background:var(--surf2,#F4F1F5)!important;border:1px solid transparent!important;font-size:12.5px!important;font-weight:500!important;white-space:nowrap}
+    #fbar .fbf:hover,#d2bar .d2f:hover{border-color:var(--line,#E7E2EA)!important}
+    #fbar .fbf[aria-expanded="true"],#d2bar .d2f[aria-expanded="true"],#fbar .fbf.on,#d2bar .d2f.on,#fbar .fbf.act,#d2bar .d2f.act,#d2bar .d2f[aria-pressed="true"]{background:#F3E7F2!important;border-color:#E2C9DF!important;color:#5A2C57!important}
+    #fbar .fbsp,#d2bar .d2sp{flex:1 1 0!important;min-width:0}
+    #fbar .fbcnt{font-size:12px;color:var(--mut,#6D6577);white-space:nowrap;margin:0 2px}
+    #fbar .fbreset,#d2bar .d2maxb{height:34px!important;box-sizing:border-box;border-radius:9px!important;background:transparent!important;border:1px solid var(--line,#E7E2EA)!important;padding:0 12px!important;font-size:12.5px!important;font-weight:500!important}
+    #d2bar .d2sort{height:34px!important;display:flex;align-items:center;gap:6px;font-size:12.5px}
+    #d2bar .d2sort select{height:34px!important;border-radius:9px!important;border:1px solid var(--line,#E7E2EA)!important;background:var(--surf,#fff)!important;font-size:12.5px!important}
     /* 1.2.289 (user: "I want to make sure it isn't hidden"): when the window is too narrow for every filter on the tabs' line,
        the filters go on to a second line instead of sliding out of sight */
     #shsub2:not([hidden]) + #fbar.hdrside .fbr1{flex-wrap:wrap!important;row-gap:8px}
     #shsub2:not([hidden]) + #fbar.hdrside .fpscroll{flex-wrap:wrap!important;overflow:visible!important;max-width:100%;row-gap:8px}
     #shsub2:not([hidden]) + #fbar.hdrside input{max-width:230px}
-    #shsub2:not([hidden]) + #fbar.hdrside .fbq,#shsub2:not([hidden]) + #fbar.hdrside label:has(input){flex:1 1 180px;min-width:160px;max-width:260px}
+    #shsub2:not([hidden]) + #fbar.hdrside .fbq,#shsub2:not([hidden]) + #fbar.hdrside label:has(input){flex:1 1 150px!important;min-width:140px!important;max-width:240px}
   }`;
   const st = document.createElement('style'); st.id = 'illu-hdr'; st.textContent = css; document.head.appendChild(st);
   /* what sits beside the tabs: the filter bar right after them, or the open board's top row of buttons. It is moved up onto
