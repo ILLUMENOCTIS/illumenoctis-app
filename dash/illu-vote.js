@@ -2375,7 +2375,7 @@
     const chip = (v, lab, n) => '<button type="button" class="ivchip' + ((VS.cwho || 'all') === v ? ' on' : '') + '" data-ivset="cwho=' + H(v) + '">' + lab + (n != null ? ' <span>' + n + '</span>' : '') + '</button>';
     const head = '<div class="ivhead"><span class="ivbig">' + allStates().filter(s => s.open).length + '</span><span class="ivkick">' + L('Faces up for the team vote', '팀 투표에 오른 얼굴') + '</span><span class="ivdot"></span>' +
       chip('all', L('Everyone', '모두')) + ppl.map(p => chip(p, capDisc(p) + H(pname(p)), all.filter(s => s.o.by === p).length)).join('') +
-      ddList('cwhodd', pick ? H(pname(pick)) : L('Everyone', '모두'), '', [['cwho=all', L('Everyone', '모두'), allStates().filter(s => s.open).length, !pick]].concat(ppl.map(p => ['cwho=' + H(p), capDisc(p) + H(pname(p)), all.filter(s => s.o.by === p).length, pick === p]))) +
+      ddList('cwhodd', '<span class="ivddk">' + L('Sent by', '보낸 사람') + '</span>' + (pick ? capDisc(pick) + H(pname(pick)) : L('Everyone', '모두')), '', [['cwho=all', L('Everyone', '모두'), allStates().filter(s => s.open).length, !pick]].concat(ppl.map(p => ['cwho=' + H(p), capDisc(p) + H(pname(p)), all.filter(s => s.o.by === p).length, pick === p]))) +
       '<span class="ivsp"></span>' + remindBtn() + (tab === 'to' ? seg('corder', [['old', L('Oldest first', '오래된 순')], ['new', L('Newest first', '최신 순')]]) +
         '<select class="ivts ivcos" data-ivcorder aria-label="' + H(L('Order', '순서')) + '"><option value="old"' + ((VS.corder || 'old') === 'old' ? ' selected' : '') + '>' + L('Oldest first', '오래된 순') + '</option><option value="new"' + (VS.corder === 'new' ? ' selected' : '') + '>' + L('Newest first', '최신 순') + '</option></select>' : '') + '</div>' +
       subTabs('vsub', tab, to.length, vd.length);

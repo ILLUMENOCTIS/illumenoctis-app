@@ -14,7 +14,23 @@
      label, the search field, grey filter buttons the same size as the tabs' buttons, then the count, Reset and (Directory)
      Maximize and Sort on the right. Nothing slides out of sight: what does not fit goes on to a second line. */
   #fbar .fbr1::before,#d2bar .d2r1::before{content:"FILTER";flex:none;align-self:center;font:700 10px/1 var(--sans,system-ui);letter-spacing:.14em;color:#9A8F9E;margin:0 4px 0 4px}
+  /* 1.2.291 (user, 26 Nov 2026: Team Vote people row "looks too messy and out of style" -> Option A): on the computer the
+     row of name bubbles becomes one "Sent by: Everyone" button styled like the filter buttons; it opens the list of
+     people with their counts (the same list the phone uses). The phone keeps its button without the "Sent by" word. */
+  .ivddk{display:none}
   @media (min-width:761px){
+    #pane-team .ivhead>.ivchip,#pane-team .ivhead>.ivdot{display:none!important}
+    #pane-team .ivhead>.ivdd{position:relative;display:inline-block!important;flex:none}
+    #pane-team .ivhead>.ivdd .ivddb{height:34px;display:inline-flex;align-items:center;gap:7px;padding:0 12px;border-radius:9px;border:1px solid transparent;background:var(--surf2,#F4F1F5);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;color:var(--ink,#211C26)}
+    #pane-team .ivhead>.ivdd .ivddb:hover{border-color:var(--line,#E7E2EA)}
+    #pane-team .ivhead>.ivdd .ivddb[aria-expanded="true"]{background:#F3E7F2;border-color:#E2C9DF;color:#5A2C57}
+    #pane-team .ivhead .ivddk{display:inline;color:var(--mut,#7A7283);margin-right:2px}
+    #pane-team .ivhead>.ivdd .ivddb b{font-weight:500;color:var(--mut,#7A7283)}
+    #pane-team .ivhead>.ivdd .ivddl{position:absolute;top:40px;left:0;z-index:50;min-width:220px;background:var(--surf,#fff);border:1px solid var(--line,#E7E2EA);border-radius:12px;box-shadow:0 10px 30px rgba(27,23,36,.14);padding:6px;display:flex;flex-direction:column}
+    #pane-team .ivhead>.ivdd .ivddo{display:flex;align-items:center;gap:8px;border:0;background:none;padding:8px 10px;border-radius:8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;color:var(--ink,#211C26)}
+    #pane-team .ivhead>.ivdd .ivddo:hover{background:var(--surf2,#F4F1F5)}
+    #pane-team .ivhead>.ivdd .ivddo b{margin-left:auto;font-weight:500;color:var(--mut,#7A7283)}
+    #pane-team .ivhead>.ivdd .ivddo[aria-selected="true"]{background:#F3E7F2;color:#5A2C57}
     #fbar.fpbar:not(.hdrside),#d2bar.fpbar{margin:12px 0 0!important}
     #fbar.fpbar,#d2bar.fpbar{background:var(--surf,#fff)!important;border:1px solid var(--line,#E7E2EA)!important;border-radius:14px!important;box-shadow:0 1px 2px rgba(27,23,36,.05)!important;padding:4px 6px!important;min-height:44px;box-sizing:border-box;gap:6px!important}
     #fbar .fbr1,#d2bar .d2r1{display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:6px!important;row-gap:6px!important;min-height:34px}
