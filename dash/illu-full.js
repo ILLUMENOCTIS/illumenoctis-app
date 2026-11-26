@@ -379,6 +379,7 @@
     /* the model's other photos, from the agency's page */
     if(href && /^https?:/i.test(href) && window.illu && window.illu.modelPhotos){
       box.querySelector('.fvmsg').textContent = L('Looking for more photos…', '사진을 더 찾는 중…');
+      S.ahref = href;
       window.illu.modelPhotos(href).then(r => {
         if(my !== seq || !S) return;
         box.querySelector('.fvmsg').textContent = '';
@@ -393,6 +394,17 @@
       }).catch(() => { if(my === seq){ box.querySelector('.fvmsg').textContent = ''; pubFill(); } });
     }
   }
+  /* 1.2.300: the repeat check now runs after the photos are shown - it says which photos to leave out */
+  if(window.illu && window.illu.onPhotosCleaned) window.illu.onPhotosCleaned(d => {
+    try{
+      if(!S || S.ahref !== d.page || !S.araw || !S.src || !S.src.agency) return;
+      const drop = new Set(d.drop || []); const keepIdx = []; S.araw.forEach((u, j) => { if(!drop.has(u)) keepIdx.push(j); });
+      if(keepIdx.length === S.araw.length) return;
+      S.src.agency = keepIdx.map(j => S.src.agency[j]).filter(Boolean); S.araw = keepIdx.map(j => S.araw[j]);
+      if(S.tab === 'agency'){ const keep = S.photos[S.i]; S.photos = S.src.agency.slice(); S.raw = S.araw.slice(); S.i = Math.max(0, S.photos.indexOf(keep)); }
+      draw();
+    }catch(e){}
+  });
   function tabTo(t){
     if(!S || !S.src || !S.src[t] || !S.src[t].length) return;
     S.tab = t; S.photos = S.src[t].slice(); S.raw = t === 'agency' ? S.araw.slice() : S.src[t].slice(); S.i = 0; strip.dataset.sig = '';

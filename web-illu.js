@@ -41,6 +41,8 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
   /* 1.2.137 (user, 11 Nov 2026: "my biggest issue was that the photos didn't appear during the slideshow"):
      a phone browser may not read an agency's page, so the Supabase function model-photos reads it and
      gives back the photo addresses (the same reading the computer program does). Signed-in members only. */
+  /* 1.2.300: the computer program tells open slideshows which repeated photos to leave out; the web copy never does */
+  window.illu.onPhotosCleaned = cb => { (window.__illuPCL = window.__illuPCL || []).push(cb); };
   const GAL = new Map();
   window.illu.modelPhotos = async page => {
     page = String(page || '');

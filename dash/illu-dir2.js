@@ -1464,8 +1464,14 @@
   const IC_EXIT = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5V6H2.5M13.5 6H10V2.5M10 13.5V10h3.5M2.5 10H6v3.5"/></svg>';
   /* 1.2.196: Undo of a hidden photo (its button, Ctrl + Z, or a hide by someone else) reads her slideshow again, staying on the same slide */
   document.addEventListener('illu-phide', () => { try{ const m = D2.openM; if(SL.self){ SL.self = false; return; } if(!D2.open || !m || SL.key !== m.key) return; if(SL.undo && window.__illuPhotoHidden && window.__illuPhotoHidden(SL.undo.page, SL.undo.url)) return; SL.undo = null; const i = SL.i; slLoad(m.key, m.href); SL.keepI = i; }catch(e){} });
+  /* 1.2.300: the repeat check now runs after the photos are shown - it says which photos to leave out */
+  if(window.illu && window.illu.onPhotosCleaned) window.illu.onPhotosCleaned(d => {
+    const drop = new Set((d && d.drop) || []); if(!drop.size) return;
+    try{ if(SL.href === d.page && SL.photos){ const cur = SL.i > 0 ? SL.photos[SL.i - 1] : null; const ph = SL.photos.filter(x => !drop.has(x.url)); if(ph.length !== SL.photos.length){ SL.photos = ph; SL.i = cur ? (ph.indexOf(cur) + 1 || Math.min(SL.i, ph.length)) : 0; SL.state = ph.length ? 'ok' : 'none'; const C = $('.d2card'); if(C) slideApply(C); } } }catch(e){}
+    try{ for(const [k, t] of TS) if(t && t.href === d.page && t.list){ const n = t.list.length, cur = t.list[t.i]; t.list = t.list.filter((u, j) => j === 0 || !drop.has(u)); if(t.list.length !== n){ const j = t.list.indexOf(cur); t.i = j >= 0 ? j : Math.min(t.i, t.list.length - 1); document.querySelectorAll('.uc').forEach(x => { if(ucTileKey(x) === k) ucTilePaint(x); }); } } }catch(e){}
+  });
   function slLoad(key, href){
-    SL.key = key; SL.i = 0; SL.photos = null; SL.state = 'loading'; SL.why = '';
+    SL.href = href; SL.key = key; SL.i = 0; SL.photos = null; SL.state = 'loading'; SL.why = '';
     if(!(window.illu && window.illu.modelPhotos)){ SL.state = 'none'; SL.why = 'off'; return; }
     if(!/^https?:/i.test(href || '')){ SL.state = 'none'; SL.why = 'nolink'; return; }
     window.illu.modelPhotos(href).then(r => {
@@ -2377,7 +2383,7 @@
       const im = u.querySelector('.ucph img.ivmat') || u.querySelector('.ucph img');
       const first = im ? (im.dataset.orig || im.currentSrc || im.src || '') : '';
       t = {list: first ? [first] : [], i: 0, state: 'loading'}; TS.set(k, t); ucTilePaint(u);
-      const href = ucTileHref(u, k);
+      const href = ucTileHref(u, k); t.href = href;
       try{
         if(!(window.illu && window.illu.modelPhotos) || !href) throw 0;
         const r = await window.illu.modelPhotos(href);

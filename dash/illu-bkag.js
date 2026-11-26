@@ -111,6 +111,17 @@
     const n = count(c) || 0; if(n < 2) return;
     bv.agi = ((bv.agi || 0) + d + n) % n; draw(c);
   }
+  /* 1.2.300: the repeat check now runs after the photos are shown - it says which photos to leave out */
+  if(window.illu && window.illu.onPhotosCleaned) window.illu.onPhotosCleaned(d => {
+    try{
+      const rec = CACHE.get(d.page); if(!rec || rec.st !== 'ok') return;
+      const drop = new Set(d.drop || []); const cur = rec.ps[(bv && bv.agi) || 0];
+      const ps = rec.ps.filter(u => !drop.has(u)); if(ps.length === rec.ps.length || !ps.length) return;
+      rec.ps.length = 0; rec.ps.push(...ps);
+      const c = bv && BOOK.get(bv.id);
+      if(c && hrefOf(c) === d.page){ const j = rec.ps.indexOf(cur); bv.agi = j >= 0 ? j : Math.min(bv.agi || 0, rec.ps.length - 1); if(bv.ag) draw(c); else { const sp = bvStage.querySelector('.bkagoffer .bvcnt'); if(sp) sp.textContent = rec.ps.length; } }
+    }catch(e){}
+  });
   /* a picture that does not load leaves the slideshow */
   document.addEventListener('error', e => {
     const t = e.target; if(!t || t.tagName !== 'IMG' || !bv || !bv.ag || !bvStage.contains(t)) return;
