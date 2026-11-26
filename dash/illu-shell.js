@@ -525,7 +525,8 @@
   /* the panel reaches down to the bottom of the window; its halves scroll on their own */
   function sizeSide(){
     const sd = pane && pane.querySelector('#shside'); if(!sd) return;
-    if(matchMedia('(max-width:1100px)').matches){ if(sd.style.height) sd.style.height = ''; return; }
+    /* 1.2.289: the panel is as tall as what is in it (CSS), no longer stretched to the bottom of the window */
+    if(sd.style.height) sd.style.height = ''; return;
     let sp = sd.parentElement; while(sp && sp !== document.body && !/(auto|scroll)/.test(getComputedStyle(sp).overflowY)) sp = sp.parentElement;
     const top = sd.getBoundingClientRect().top + (sp && sp !== document.body ? sp.scrollTop : scrollY) - (sp && sp !== document.body ? sp.getBoundingClientRect().top : 0);
     const vh = sp && sp !== document.body ? sp.clientHeight : innerHeight;
@@ -561,9 +562,33 @@
     if(window.__illuVoteToggleHook && window.__illuVoteToggleHook(pane, e)){ renderToday(); return; }
     const k = e.target.closest('[data-shk]'); if(k){ openK(); return; }
     const g = e.target.closest('[data-shgo]'); if(g){ go(g.dataset.shgo); return; }
-    const b = e.target.closest('[data-shbk]'); if(b){ openBooking(b.dataset.shbk); return; }
+    /* 1.2.289 (user: "When I select the model slot, it goes directly to the booking card ... I want the option to go to the booking
+       card, and the card showing all the important details when I select the card"): an arriving / departing row first shows her
+       card and her stay (dates, flight, visa, guarantee, notes) in a window, with Open booking card */
+    const b = e.target.closest('[data-shbk]'); if(b){ if(b.classList.contains('shad')) adPop(b.dataset.shbk); else openBooking(b.dataset.shbk); return; }
     if(e.target.closest('[data-shkor] .ucph')){ try{ localStorage.setItem('illu.rctab', 'kor'); }catch(er){} go('arr');
       setTimeout(() => { const t = document.querySelector('#pane-arr [data-rctab="kor"]'); if(t && t.getAttribute('aria-selected') !== 'true') t.click(); }, 300); }
+  }
+  function adPop(id){
+    const c = typeof BOOK !== 'undefined' && BOOK.get(id); if(!c){ openBooking(id); return; }
+    let m = document.getElementById('shadpop'); if(m) m.remove();
+    m = document.createElement('div'); m.id = 'shadpop'; m.className = 'shadpop'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+    let card = '', stay = '';
+    try{ card = window.__illuModelCard ? window.__illuModelCard(c.k || ('bid:' + c.id), c) : ''; }catch(er){}
+    try{ stay = window.__illuArrStay ? window.__illuArrStay(c) : ''; }catch(er){}
+    m.innerHTML = '<div class="shadpb"><div class="shadph"><b>' + H(c.nm || '') + '</b>' + (c.ag ? '<span>' + H(c.ag) + '</span>' : '') + '<button type="button" class="shadpx" data-shadpx aria-label="' + H(L('Close', '닫기')) + '">×</button></div>' +
+      '<div class="shadpc"><div class="shadpl ivcw">' + card + '</div><div class="shadpr">' + stay + '</div></div>' +
+      '<div class="shadpf"><button type="button" class="shadpgo" data-shadpgo="' + H(c.id) + '">' + H(L('Open booking card', '부킹 카드 열기')) + ' →</button><button type="button" class="shadpno" data-shadpx>' + H(L('Close', '닫기')) + '</button></div></div>';
+    document.body.appendChild(m);
+    const close = () => { m.remove(); document.removeEventListener('keydown', esc, true); };
+    const esc = ev => { if(ev.key === 'Escape' && !(document.getElementById('illufv') && !document.getElementById('illufv').hidden)){ ev.stopPropagation(); close(); } };
+    document.addEventListener('keydown', esc, true);
+    m.addEventListener('click', ev => {
+      if(ev.target === m || ev.target.closest('[data-shadpx]')){ close(); return; }
+      const g = ev.target.closest('[data-shadpgo]'); if(g){ close(); openBooking(g.dataset.shadpgo); return; }
+      if(ev.target.closest('.shadpl') && window.__illuVoteToggleHook && window.__illuVoteToggleHook(m.querySelector('.shadpl'), ev)){ ev.preventDefault(); return; }
+    });
+    setTimeout(() => { try{ m.querySelector('[data-shadpgo]').focus(); }catch(er){} }, 30);
   }
   function openBooking(id){
     go('bk');
@@ -833,6 +858,25 @@ body.shtoday #appbar #ababout,body.shtoday #appbar #abtools,body.shtoday #appbar
 .shtoday .shhalf>p{margin:0}
 .shtoday .shscr{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:7px;padding:0 2px 12px;overscroll-behavior:contain}
 .shtoday .shtabs{display:none}
+.shadpop{position:fixed;inset:0;z-index:2147483000;background:rgba(20,12,24,.45);display:flex;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px}
+.shadpb{background:var(--surf,#fff);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:min(860px,100%);max-height:calc(100vh - 32px);display:flex;flex-direction:column;overflow:hidden}
+.shadph{display:flex;align-items:baseline;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--line,#eee)}.shadph b{font-size:16px}.shadph span{color:var(--mut,#6D6577);font-size:13px}
+.shadpx{margin-left:auto;border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:var(--mut,#6D6577)}
+.shadpc{display:grid;grid-template-columns:260px minmax(0,1fr);gap:16px;padding:14px 16px;overflow:auto}
+.shadpl>article{margin:0}.shadpr{min-width:0}
+.shadpf{display:flex;gap:8px;justify-content:flex-end;padding:10px 16px 14px;border-top:1px solid var(--line,#eee)}
+.shadpgo{border:0;border-radius:10px;background:#5A2C57;color:#fff;font:600 13.5px/1 inherit;padding:11px 16px;cursor:pointer}
+.shadpno{border:1px solid var(--line,#ddd);border-radius:10px;background:none;font:500 13.5px/1 inherit;padding:11px 16px;cursor:pointer;color:inherit}
+@media (max-width:700px){.shadpc{grid-template-columns:minmax(0,1fr)}.shadpl{max-width:280px;margin:0 auto}.shadpop{align-items:flex-end;padding:0}.shadpb{border-radius:16px 16px 0 0;max-height:92vh}}
+/* 1.2.289 (user: "I want the side panel to expand/contract depending on the amount of information ... very constricted"): on a
+   wide screen the side panel is as tall as what is in it - not squeezed to the height of the greeting column. Needs my action
+   shows up to about two thirds of the screen before it scrolls; Arriving / Departing always shows every row. */
+@media (min-width:1101px){
+  .shtoday .shside{align-self:start}
+  .shtoday .shhalf,.shtoday .shhalf[data-shh="act"]{flex:none;max-height:none}
+  .shtoday .shhalf[data-shh="act"] .shscr{max-height:min(66vh,640px)}
+  .shtoday .shhalf:not([data-shh="act"]) .shscr{max-height:none;overflow:visible}
+}
 .shtoday .shweek{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .shtoday .shwd{border:1px solid var(--line);border-radius:9px;padding:5px 0 6px;background:var(--surf);font:inherit;color:inherit;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
 .shtoday .shwd small{font-size:9.5px;font-weight:700;letter-spacing:.05em;color:var(--faint);white-space:nowrap}

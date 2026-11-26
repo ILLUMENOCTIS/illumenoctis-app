@@ -2498,6 +2498,8 @@
         : '<p class="bpempty big">' + H(L('Nothing here.', '없음')) + '</p>');
   }
   window.__illuCxlBoard = cxlBoard;
+  /* 1.2.289: a model's normal card for other places (Today's Arriving / Departing preview) */
+  window.__illuModelCard = (k, c) => { try{ if(k && info(k).nm) return mcard(k); let h = window.__illuCard({key: k || ('bid:' + (c && c.id)), nm: (c && c.nm) || '', ag: (c && c.ag) || '', href: /^https?:/.test(k || '') ? k : ''}) || ''; return h.replace(/<article class="uc((?: [^"]*)?)"/, (_, x) => '<article class="uc' + x + '" data-ivk="' + H(k || '') + '"'); }catch(e){ return ''; } };
   window.__illuCxlCount = C => { const nk = k => { try{ return normKey(k); }catch(e){ return k; } }; const ks = new Set((C || []).filter(c => c.k).map(c => nk(c.k))); return (C || []).length + [...AV.values()].filter(v => v.t && AVT[v.t] && !hidK(v.k) && !ks.has(nk(v.k))).length; };
   add('cxl', ['Cancelled', '취소'], () => {
     const list = decided('cxl').filter(gw);

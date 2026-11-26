@@ -54,8 +54,9 @@
     b.type = 'button'; b.className = 'bvtab bkagtab' + (n === 0 ? ' empty' : ''); b.setAttribute('role', 'tab'); b.dataset.bkag = '1';
     b.setAttribute('aria-selected', String(!!bv.ag)); b.title = T('Her photos on the agency’s website', '에이전시 웹사이트의 사진');
     b.innerHTML = E(T('Website', '웹사이트')) + '<s>' + (n == null ? '…' : n) + '</s>';
-    const vid = bvTabs.querySelector('[data-bvtab="3. VIDEOS"]');
-    if(vid) vid.after(b); else bvTabs.appendChild(b);
+    /* 1.2.289 (user: "I want the 'Website' to be in front of 'Book'") */
+    const book = bvTabs.querySelector('[data-bvtab="1. BOOK"]'), vid = bvTabs.querySelector('[data-bvtab="3. VIDEOS"]');
+    if(book) book.before(b); else if(vid) vid.after(b); else bvTabs.appendChild(b);
     if(bv.ag){ bvTabs.querySelectorAll('[data-bvtab],[data-bvmail]').forEach(x => x.setAttribute('aria-selected', 'false')); }
     if(n == null) load(c).then(() => { if(bv && bv.id === c.id) addTab(); });
   }
