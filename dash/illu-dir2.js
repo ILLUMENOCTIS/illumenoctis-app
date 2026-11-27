@@ -743,10 +743,13 @@
   }
   /* the list and the photos scroll inside their own columns; together they fill the window
      below the clocks and the filter bar, so the page itself does not need to scroll */
+  /* 1.2.305: the strip under the boards is kept only while a status pill floats in the bottom corner (no room for it in the left menu) */
+  function bottomGap(){ const f = document.querySelector('#illuusage.float, #hwstat.bar'); return f && f.getClientRects().length ? 46 : 16; }
+  window.__illuBottomGap = bottomGap;
   function fitWrap(){
     const w = $('.d2wrap'); if(!w) return;
     const top = w.getBoundingClientRect().top + (D2.max ? 0 : scrollY);
-    w.style.height = Math.max(D2.max ? 300 : 480, Math.round(innerHeight - top - (D2.max ? 16 : 46))) + 'px';
+    w.style.height = Math.max(D2.max ? 300 : 480, Math.round(innerHeight - top - (D2.max ? 16 : bottomGap()))) + 'px';
   }
   addEventListener('resize', () => { if(VIEW === 'dir') fitWrap(); });
   async function removeAg(n, id){
@@ -2593,7 +2596,7 @@
   }
   /* the board reaches down to the bottom of the window (scrolls inside), whatever the window's height */
   function rcFit(){ const w = document.querySelector('#pane-arr .rcwrap'); if(!w || RC.full) { if(w) w.style.height = ''; return; }
-    const top = w.getBoundingClientRect().top + scrollY; w.style.height = Math.max(520, Math.round(innerHeight - top - 46)) + 'px'; }
+    const top = w.getBoundingClientRect().top + scrollY; w.style.height = Math.max(520, Math.round(innerHeight - top - (window.__illuBottomGap ? window.__illuBottomGap() : 46))) + 'px'; }
   addEventListener('resize', () => { if(VIEW === 'arr') rcFit(); });
   /* 1.2.237 (phone): Back closes an agency opened in the Directory and returns to the list */
   window.__illuDirAgOpen = () => { try{ return VIEW === 'dir' && D2.sel !== -1 && D2.sel != null && !!document.querySelector('#pane-dir .d2panel') && !document.querySelector('#pane-dir .d2panel .d2blank'); }catch(e){ return false; } };

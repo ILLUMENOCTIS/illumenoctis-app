@@ -70,6 +70,11 @@ css.textContent = `
 #illuusage.rail{display:flex;flex-direction:column;align-items:center;gap:3px;margin:0 auto 8px;width:52px;box-sizing:border-box;padding:6px 2px;border-radius:12px;font:600 9.5px/1.15 system-ui,-apple-system,sans-serif;letter-spacing:.01em;text-align:center;white-space:normal}
 #illuusage.rail i{width:8px;height:8px;flex:0 0 8px}
 #illuusage.rail .t{display:block}#illuusage.rail .t b{display:block;font-size:11px;font-weight:700}
+/* 1.2.305 (user, 27 Nov 2026 - demo "Status in the side menu": the boards use the full height): in the left menu the status is a
+   small round dot; its words show beside it on hover, and a click opens the status as before */
+@media (min-width:761px){#illuusage.rail{position:relative;width:34px;height:34px;padding:0;margin:0 auto 6px;border-radius:50%;justify-content:center;flex:none}
+#illuusage.rail i{width:10px;height:10px;flex:0 0 10px}#illuusage.rail .t{display:none}
+}
 html[data-theme="dim"] #illuusage.rail.green{background:#22372a;color:#b9e4c5;border-color:#2f5a3b}
 #illuubar{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:2147483001;max-width:min(760px,calc(100vw - 32px));padding:9px 14px;border-radius:10px;font:500 13px/1.45 system-ui,-apple-system,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.18);display:flex;gap:12px;align-items:center}
 #illuubar.amber{background:#FFF4E0;color:#5C3A00;border:1px solid #F3D9A6}#illuubar.red{background:#FDE8E8;color:#701515;border:1px solid #F3C2C2}
@@ -118,6 +123,7 @@ function paint() {
   const rail = chip.classList.contains('rail');
   chip.className = (rail ? 'rail ' : 'float ') + (st.braked || st.saver ? 'red' : col(worst));
   chip.innerHTML = rail ? '<i></i><span class="t">Supabase<b>' + worst + '%</b></span>' : '<i></i><span class="t">' + esc('Supabase ' + worst + '%') + '</span>';
+  chip.title = T('Supabase ' + worst + '% - click for the status', 'Supabase ' + worst + '% - 클릭하면 상태를 봅니다');
   /* banner */
   let msg = '', cls = '', key = '', resume = false;
   if (st.braked) { cls = 'red'; key = 'brake'; resume = true; msg = T('Downloads from Supabase are paused on this computer: it downloaded far more than normal (' + esc(st.braked.replace(/^(hour|day):/, '')) + ' in the last ' + (/^day/.test(st.braked) ? 'day' : 'hour') + '). The program keeps working from its own copy.', '이 컴퓨터의 Supabase 다운로드가 일시 중지되었습니다: 평소보다 훨씬 많이 다운로드했습니다 (' + esc(st.braked.replace(/^(hour|day):/, '')) + '). 프로그램은 저장된 사본으로 계속 작동합니다.'); }
