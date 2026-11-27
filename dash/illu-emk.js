@@ -105,7 +105,9 @@
     /* a card that no longer has an email on record (or was redrawn for another model) loses its marker */
     for(const el of document.querySelectorAll('.emk')){ if(!seen.has(el.parentElement)) el.remove(); }
   }
-  function soon(){ if(BUSY) return; BUSY = true; setTimeout(() => { try{ pass(); }catch(e){ BUSY = false; console.warn('email markers', e); } }, 250); }
+  /* 1.2.305 (lag: kang's computer counted 53 passes = 5.6 s in 10 minutes): at most one pass every 1.5 s */
+  let LASTP = 0;
+  function soon(){ if(BUSY) return; BUSY = true; const wait = Math.max(250, 1500 - (Date.now() - LASTP)); setTimeout(() => { LASTP = Date.now(); try{ pass(); }catch(e){ BUSY = false; console.warn('email markers', e); } }, wait); }
   const mo = new MutationObserver(ms => { for(const m of ms){ if(m.addedNodes.length && [...m.addedNodes].some(n => n.nodeType === 1 && !(n.classList && n.classList.contains('emk')))){ soon(); return; } } });
   function start(){ if(!document.body){ setTimeout(start, 200); return; } mo.observe(document.body, {childList: true, subtree: true}); soon(); }
   start();

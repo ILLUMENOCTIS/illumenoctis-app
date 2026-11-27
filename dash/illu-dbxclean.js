@@ -54,6 +54,9 @@
     }
     return out;
   }
+  /* 1.2.305 (lag): the card notes are redrawn from a list worked out at most every 5 s (it was worked out again for every new card on screen) */
+  let OLC = null, OLT = 0;
+  const outListC = () => { if(!OLC || Date.now() - OLT > 5000){ OLC = outList(); OLT = Date.now(); } return OLC; };
   window.__illuDxcList = outList;
   const of = k => outList().find(e => e.k === k) || null;
   /* the files to erase: her Dropbox folder (by its names) and her saved photos / booking files */
@@ -76,11 +79,11 @@
     for(let i = 0; i < 60 && (typeof DB === 'undefined' || !DB); i++) await new Promise(r => setTimeout(r, 500));
     if(typeof DB === 'undefined' || !DB) return;
     try{ const sn = await DB.collection('dbxdel').limit(5000).get(); for(const d of (sn.docs || sn || [])){ const x = docOf(d); if(x && x.k) REC.set(d.id || idOf(x.k), x); } }catch(e){}
-    try{ DB.collection('dbxdel').onSnapshot(sn => { REC.clear(); for(const d of (sn.docs || [])){ const x = docOf(d); if(x && x.k) REC.set(d.id || idOf(x.k), x); } paint(); }, () => {}); }catch(e){}
+    try{ DB.collection('dbxdel').onSnapshot(sn => { REC.clear(); OLC = null; for(const d of (sn.docs || [])){ const x = docOf(d); if(x && x.k) REC.set(d.id || idOf(x.k), x); } paint(); }, () => {}); }catch(e){}
     LOADED = true; paint(); setTimeout(localRun, 20000);
   }
   let LOADED = false;
-  const save = (id, x) => { REC.set(id, x); try{ return DB.doc('dbxdel/' + id).set(x); }catch(e){ return null; } };
+  const save = (id, x) => { REC.set(id, x); OLC = null; try{ return DB.doc('dbxdel/' + id).set(x); }catch(e){ return null; } };
   /* the Admin's program erases what is due (a computer with Dropbox), every 30 minutes */
   let BUSY = false;
   async function run(){
@@ -151,7 +154,7 @@
   let PT = 0;
   function paint(){
     clearTimeout(PT); PT = setTimeout(() => {
-      const list = new Map(outList().map(e => [e.k, e])), ids = new Map([...list.values()].filter(e => e.card).map(e => [e.card.id, e]));
+      const list = new Map(outListC().map(e => [e.k, e])), ids = new Map([...list.values()].filter(e => e.card).map(e => [e.card.id, e]));
       const hosts = [];
       document.querySelectorAll(PANES).forEach(p => {
         p.querySelectorAll('article.uc[data-ivk]').forEach(a => hosts.push([a, list.get(a.dataset.ivk)]));
@@ -174,7 +177,7 @@
     if(typeof SIGNED === 'function' && !SIGNED()){ try{ nudgeSignIn(); }catch(er){} return; }
     const k = (k1 || k2).getAttribute(k1 ? 'data-dxkeep' : 'data-dxund'), id = idOf(k);
     if(k1) save(id, {k, st: 'keep', at: new Date().toISOString(), by: (typeof ME !== 'undefined' && ME) || ''});
-    else { REC.delete(id); try{ DB.doc('dbxdel/' + id).delete(); }catch(er){} }
+    else { REC.delete(id); OLC = null; try{ DB.doc('dbxdel/' + id).delete(); }catch(er){} }
     paint();
   }, true);
   const mo = new MutationObserver(ms => { for(const m of ms) for(const n of m.addedNodes) if(n.nodeType === 1 && !(n.classList && n.classList.contains('dxnote')) && (n.matches && (n.matches('article.uc, .bprw, .ivgrid, .bpgrid') || n.querySelector && n.querySelector('article.uc, .bprw')))){ paint(); return; } });

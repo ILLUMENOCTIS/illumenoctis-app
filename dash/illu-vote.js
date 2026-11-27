@@ -1656,11 +1656,15 @@
   try{ new MutationObserver(() => { if(!fpT) fpT = requestAnimationFrame(() => { fpT = 0; if(document.querySelector('.d2card .vmk:not([data-ivdone])')) fillPanels(); }); }).observe(document.body, {childList: true, subtree: true}); }catch(e){}
 
   /* ---------- when anything changes: redraw what shows it ---------- */
-  let cT = 0;
+  let cT = 0, cLast = 0, cWait = 0;
+  /* 1.2.305 (lag): a burst of changes (many votes arriving after a reconnect - Daniel's computer counted 737 in 10 minutes)
+     redraws the boards at most about twice a second instead of once per change */
   function changed(){
-    if(cT) return;
+    if(cT || cWait) return;
+    const gap = Date.now() - cLast;
+    if(gap < 450){ cWait = setTimeout(() => { cWait = 0; changed(); }, 450 - gap); return; }
     cT = requestAnimationFrame(() => {
-      cT = 0;
+      cT = 0; cLast = Date.now();
       /* the first time all votes are in: anything drawn before with the old lamps is drawn again */
       if(ready === 7 && !changed.once){ changed.once = true; try{ if(document.querySelector('.mk[data-mk]')) refresh(); }catch(e){} }
       repaintAll(); fillPanels();
@@ -1869,34 +1873,56 @@
      600 freezes in 10 minutes, one a second): the clocks are updated in passes - first everything is read, then
      everything is written - so the page is laid out once a second instead of once per card. Nothing runs while the
      window is hidden or no vote card is on screen. */
+  /* 1.2.305 (user, 27 Nov 2026: "the program seems to lag here and there ... I need it to run smoother"; Min's computer
+     reported this clock as 607 runs = 15 s of work in 10 minutes): only the cards actually on screen are looked at (the
+     browser tells which, instead of measuring every card each second), and all measuring is done before anything is
+     changed, so the page is laid out once per second at most. Cards that left the vote are tidied every 10 s. */
+  const ONSCR = new Set(), WATCHED = new WeakSet();
+  const IO = typeof IntersectionObserver === 'function' ? new IntersectionObserver(es => { for(const e of es){ if(e.isIntersecting) ONSCR.add(e.target); else ONSCR.delete(e.target); } }, {rootMargin: '150px'}) : null;
+  let tickN = 0;
   function tick(){
     if(document.hidden || !document.documentElement.classList.contains('shready')) return;
+    tickN++;
     const vis = [];
-    document.querySelectorAll('.vmk[data-at]').forEach(b => { const uc = b.closest('.uc'); if(uc && uc.offsetParent) vis.push([b, uc]); });
+    document.querySelectorAll('.vmk[data-at]').forEach(b => { const uc = b.closest('.uc'); if(!uc) return;
+      if(IO){ if(!WATCHED.has(uc)){ WATCHED.add(uc); IO.observe(uc); } if(ONSCR.has(uc) && uc.isConnected) vis.push([b, uc]); }
+      else if(uc.offsetParent) vis.push([b, uc]); });
+    for(const uc of [...ONSCR]) if(!uc.isConnected) ONSCR.delete(uc);
     /* the glow speeds (reads the animations before anything is written) */
     for(const [b] of vis) if(b.classList.contains('open') && !b.classList.contains('voted')) rate(b);
-    const strips = [];
+    /* 1: make missing strips (writes) */
+    const rows = [];
     for(const [b, uc] of vis){
-      const at = b.dataset.at, h = ageH(at), late = b.classList.contains('need') && h >= 3;
-      if(b.classList.contains('late') !== late) b.classList.toggle('late', late);
       const ph = uc.querySelector('.ucimg') || uc.querySelector('.ucph'); if(!ph) continue;
-      /* 1.2.107 (user, 8 Nov 2026): the date and the live clock in one strip across the top of the photo;
-         after 3 hours without my vote the strip turns amber and says "Vote" before the clock */
       let sp = ph.querySelector(':scope > .ivstrip');
       if(!sp){ sp = document.createElement('div'); sp.className = 'ivstrip'; sp.innerHTML = '<span class="ivsd"><b></b><i></i></span><span class="ivsv">' + L('Vote', '투표') + '</span><span class="ivclk">' + CLKI + '<b></b></span>'; ph.appendChild(sp); }
+      rows.push([b, sp]);
+    }
+    /* 2: read every width once */
+    for(const r of rows) r.push(r[1].clientWidth);
+    /* 3: write the clocks */
+    const strips = [];
+    for(const [b, sp, w] of rows){
+      const at = b.dataset.at, h = ageH(at), late = b.classList.contains('need') && h >= 3;
+      if(b.classList.contains('late') !== late) b.classList.toggle('late', late);
       if(sp.__at !== at){ sp.__at = at; const d = new Date(at); let ds = ''; try{ ds = d.toLocaleDateString(isKO() ? 'ko-KR' : 'en-GB', {day: 'numeric', month: 'short'}); }catch(e){} sp.querySelector('.ivsd b').textContent = ds; sp.querySelector('.ivsd i').textContent = ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); sp.title = L('On the vote since ', '투표에 오른 시각: ') + dfmt(at); }
       if(sp.classList.contains('late') !== late) sp.classList.toggle('late', late);
-      /* 1.2.282 (user, 24 Nov 2026: "is it supposed to overlap here?" - "18 Nov" cut off by "5 days 17:55:39" on the phone):
-         on a narrow card the clock says "5d 17:55:39" so the date fits beside it */
-      const t = clk(at, sp.clientWidth > 0 && sp.clientWidth < 250), cb = sp.querySelector('.ivclk b'); if(cb.textContent !== t) cb.textContent = t;
-      strips.push([sp, late, t.length]);
+      const t = clk(at, w > 0 && w < 250), cb = sp.querySelector('.ivclk b'); if(cb.textContent !== t) cb.textContent = t;
+      strips.push([sp, late, t.length, w]);
     }
     /* the time of day only when it fits whole - never cut in half (measured all together, then changed) */
     const refit = [];
-    for(const [sp, late, tl] of strips){ const key = sp.clientWidth + '|' + late + '|' + tl; if(sp.__fit !== key){ sp.__fit = key; refit.push(sp); } }
-    for(const sp of refit){ const sd = sp.querySelector('.ivsd'); sd.classList.remove('cut', 'cut2'); if(sd.scrollWidth > sd.clientWidth){ sd.classList.add('cut'); if(sd.scrollWidth > sd.clientWidth) sd.classList.add('cut2'); } }
+    for(const [sp, late, tl, w] of strips){ const key = w + '|' + late + '|' + tl; if(sp.__fit !== key){ sp.__fit = key; refit.push(sp); } }
+    if(refit.length){
+      const sds = refit.map(sp => sp.querySelector('.ivsd'));
+      sds.forEach(sd => sd.classList.remove('cut', 'cut2'));
+      const over = sds.map(sd => sd.scrollWidth > sd.clientWidth);
+      sds.forEach((sd, i) => { if(over[i]) sd.classList.add('cut'); });
+      const over2 = sds.map((sd, i) => over[i] && sd.scrollWidth > sd.clientWidth);
+      sds.forEach((sd, i) => { if(over2[i]) sd.classList.add('cut2'); });
+    }
     /* a card whose vote is decided (or that left the vote) loses its clock and ribbon */
-    document.querySelectorAll('.uc .ivstrip').forEach(x => { const uc = x.closest('.uc'); if(uc && !uc.querySelector('.vmk[data-at]')) x.remove(); });
+    if(tickN % 10 === 0) document.querySelectorAll('.uc .ivstrip').forEach(x => { const uc = x.closest('.uc'); if(uc && !uc.querySelector('.vmk[data-at]')) x.remove(); });
   }
   setInterval(tick, 1000);
   /* a glow that starts (a card drawn, a page shown) gets its speed at once, not up to a second later */

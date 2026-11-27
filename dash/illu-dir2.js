@@ -2450,7 +2450,7 @@
   /* a redrawn card keeps the photo it was on */
   setInterval(() => { if(!TS.size) return; document.querySelectorAll('.uc').forEach(u => { const t = TS.get(ucTileKey(u)); if(t && (t.i || t.state !== 'ok')) ucTilePaint(u); }); }, 600);
   let ucFitT = 0;
-  const ucFitAll = () => { ucFitT = 0; if(!document.documentElement.classList.contains('shready')) return; document.querySelectorAll('.uc .ucmx:not(.tight):not(.none)').forEach(e => { if(e.scrollWidth > e.clientWidth + 1) e.classList.add('tight'); }); };
+  const ucFitAll = () => { ucFitT = 0; if(!document.documentElement.classList.contains('shready')) return; /* 1.2.305 (lag): all measured first, then changed - one layout instead of one per card */ const l = [...document.querySelectorAll('.uc .ucmx:not(.tight):not(.none)')]; const over = l.map(e => e.scrollWidth > e.clientWidth + 1); l.forEach((e, i) => { if(over[i]) e.classList.add('tight'); }); };
   try{ new MutationObserver(() => { if(!ucFitT && document.documentElement.classList.contains('shready')) ucFitT = requestAnimationFrame(ucFitAll); }).observe(document.body, {childList: true, subtree: true}); }catch(e){}
   try{ new MutationObserver(() => { if(document.documentElement.classList.contains('shready') && !ucFitT) ucFitT = requestAnimationFrame(ucFitAll); }).observe(document.documentElement, {attributes: true, attributeFilter: ['class']}); }catch(e){}
   addEventListener('resize', () => { document.querySelectorAll('.uc .ucmx.tight').forEach(e => e.classList.remove('tight')); ucFitAll(); });
@@ -3634,7 +3634,7 @@ body.d2max #d2bar{margin-top:0}
   const SEL = '.d2card .litpic img, #illufv .fvimg, #illufv .fvt img, .d2slstrip img, .litpic img.agimg, .litpic.has > img, .ucimg img';
   function applyAll(){ if(!ROT.size && !document.querySelector('[data-rotd]')) return; document.querySelectorAll(SEL).forEach(apply); }
   /* 1.2.268: a new picture is turned as soon as it loads (below); this backstop now looks every 3 s, not every 0.7 s */
-  setInterval(() => { if(!document.hidden) applyAll(); }, 3000);
+  setInterval(() => { if(!document.hidden) applyAll(); }, 10000);   /* 1.2.305 (lag): a new picture is turned when it loads; this backstop every 10 s */
   addEventListener('resize', () => { document.querySelectorAll('[data-rotsig]').forEach(im => { delete im.dataset.rotsig; }); applyAll(); });
   document.addEventListener('load', e => { if(e.target && e.target.tagName === 'IMG' && e.target.matches(SEL)){ delete e.target.dataset.rotsig; apply(e.target); } }, true);
   /* the picture the ⟲ ⟳ buttons turn: the photo shown in that viewer */
