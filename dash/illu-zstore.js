@@ -19,16 +19,17 @@
     if(!(window.__illuDxcReady && window.__illuDxcReady())) return null;          // the erased list must be known first
     BUSY = true;
     try{
-      const cards = [];
+      const cards = [], skip = [];
       for(const c of BOOK.values()){
         if(!c || !c.id || c.del) continue;
-        const st = stOf(c); if(st === 'canc') continue;
         let folder = ''; try{ folder = bvFolderName(c); }catch(e){}
+        const st = stOf(c); if(st === 'canc'){ if(folder) skip.push(folder); continue; }
         if(!folder) continue;
         cards.push({id: c.id, folder, first: String(c.nm || '').trim(), nm: String(c.nm || '').trim(), nat: String(c.nat || c.country || '').trim(), zsrc: c.zsrc || '', done: st === 'done'});
       }
+      const live = new Set(cards.map(c => c.folder)); for(let i = skip.length - 1; i >= 0; i--) if(live.has(skip[i])) skip.splice(i, 1);   /* another card of the same name is still going */
       const gone = window.__illuDxcGone ? window.__illuDxcGone() : [];
-      const r = await window.illu.zstore(cards, gone);
+      const r = await window.illu.zstore(cards, gone, skip);
       LAST = r;
       if(r && r.ok && Array.isArray(r.links)) for(const l of r.links){
         const c = BOOK.get(l.id); if(!c || c.zsrc) continue;
