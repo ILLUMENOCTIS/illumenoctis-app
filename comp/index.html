@@ -314,6 +314,7 @@ async function upload(d, file){
   }catch(e){ d.classList.add('err'); d.title = e.message; msg(e.message); }
   finally{ BUSY.delete(slot); bar.remove(); count(); }
 }
+document.addEventListener('input', e => { if(e.target && e.target.id === 'vl'){ e.target.classList.remove('bad'); const m = $('vlmsg'); if(m) m.textContent = ''; } });
 document.addEventListener('change', e => { const i = e.target; if(i.type !== 'file' || !i.files[0]) return; const d = i.closest('.drop'); if(d) upload(d, i.files[0]); i.value = ''; });
 
 /* ---------- countries, ears, tattoos ---------- */
