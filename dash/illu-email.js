@@ -131,7 +131,7 @@
       const done = REC(c.id), v = await bodies(c.id);
       const todo = emOf(c).list.filter(e => !excluded(c, e) && v.b[e.k] && !done.has(e.k)); if(!todo.length) return;
       let z = false; try{ const st = illu.zbookStatus ? await illu.zbookStatus() : null; z = !!(st && st.there); }catch(e){}
-      const where = ['pc', 'dbx'].concat(z ? ['z'] : []);
+      const where = ['pc', 'dbx'];   /* 1.2.304: 'pc' is Z:\ILLUMENOCTIS\Booking itself whenever it can be reached */
       const folder = typeof bvFolderName === 'function' ? bvFolderName(c) : (c.nm + ' - ' + c.ag), first = String(c.nm || '').trim();
       for(const e of todo){
         const m = e.dt.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
@@ -318,7 +318,7 @@
     m.querySelector('.clbox').innerHTML = '<h3>' + T('Get files', '파일 받기') + ' · ' + E(c.nm || '') + '</h3>' +
       '<p class="clsub">' + E(P.source) + ' · <b>' + E(P.title || '') + '</b>' + (P.models > 1 ? ' · ' + T('package of ', '패키지 모델 ') + P.models + T(' models; this model’s book', '명 중 이 모델') : '') + '</p>' +
       tiles(P) +      '<p class="clsub">' + T('Videos always go to 3. VIDEOS. Subfolders are kept. A file already there is skipped; nothing is replaced or deleted.', '영상은 항상 3. VIDEOS로 갑니다. 하위 폴더는 유지됩니다. 이미 있는 파일은 건너뛰며, 어떤 것도 덮어쓰거나 지우지 않습니다.') + '</p>' +
-      '<div class="gfwhere"><span class="gfwt">' + T('Save to', '저장 위치') + ' · <b>' + E(bvFolderName(c)) + '</b></span><label><input type="checkbox" data-gfw="pc" checked> ' + T('This computer (Desktop › ILLUMENOCTIS › BOOKING)', '이 컴퓨터 (바탕화면 › ILLUMENOCTIS › BOOKING)') + '</label> <label><input type="checkbox" data-gfw="dbx" checked> Dropbox</label> <label class="gfz" hidden><input type="checkbox" data-gfw="z" checked> ' + T('Z: drive (ILLUMENOCTIS › Booking)', 'Z: 드라이브 (ILLUMENOCTIS › Booking)') + '</label></div>' +
+      '<div class="gfwhere"><span class="gfwt">' + T('Save to', '저장 위치') + ' · <b>' + E(bvFolderName(c)) + '</b></span><label><input type="checkbox" data-gfw="pc" checked> ' + T('Z: drive (ILLUMENOCTIS › Booking)', 'Z: 드라이브 (ILLUMENOCTIS › Booking)') + '</label> <label><input type="checkbox" data-gfw="dbx" checked> Dropbox</label></div>' +
       '<p class="gfsum">' + E(T(P.groups.reduce((a, g) => a + (g.tab ? g.files.length : 0), 0) + ' of ' + P.groups.reduce((a, g) => a + g.files.length, 0) + ' files will be saved', P.groups.reduce((a, g) => a + g.files.length, 0) + '개 중 ' + P.groups.reduce((a, g) => a + (g.tab ? g.files.length : 0), 0) + '개를 저장합니다')) + '</p>' +
       '<div class="gfprog" hidden><div class="gfbar"><i></i></div><span class="gfnow"></span></div>' +
       '<div class="clbtns"><button type="button" class="bvbtn" data-clx>' + T('Cancel', '취소') + '</button><button type="button" class="bvbtn clokb" data-gfgo>' + T('Get files', '파일 받기') + '</button></div>';
@@ -398,7 +398,7 @@
     JOB = null;
     if(m.isConnected){
       const w = r.where || {};
-      const line = k => w[k] ? (k === 'pc' ? T('This computer', '이 컴퓨터') : k === 'z' ? T('Z: drive', 'Z: 드라이브') : 'Dropbox') + ': ' + w[k].saved + T(' saved', '개 저장') + (w[k].same ? ', ' + w[k].same + T(' already there', '개 이미 있음') : '') + (w[k].failed ? ', ' + w[k].failed + T(' not saved', '개 저장 못 함') + (w[k].why ? ' (' + E(w[k].why) + ')' : '') : '') : '';
+      const line = k => w[k] ? (k === 'pc' ? T('Z: drive', 'Z: 드라이브') : k === 'z' ? T('Z: drive', 'Z: 드라이브') : 'Dropbox') + ': ' + w[k].saved + T(' saved', '개 저장') + (w[k].same ? ', ' + w[k].same + T(' already there', '개 이미 있음') : '') + (w[k].failed ? ', ' + w[k].failed + T(' not saved', '개 저장 못 함') + (w[k].why ? ' (' + E(w[k].why) + ')' : '') : '') : '';
       m.querySelector('.clbox').innerHTML = '<h3>' + (r.stopped ? T('Stopped', '중지됨') : T('Done', '완료')) + '</h3>' +
         '<p class="clsub"><b>' + E(T('Chosen: ' + (m.__chosen || 0) + ' files · saved ' + (r.saved || 0) + ' · already there ' + (r.same || 0) + ' · not saved ' + ((r.failed || []).length), '선택 ' + (m.__chosen || 0) + '개 · 저장 ' + (r.saved || 0) + ' · 이미 있음 ' + (r.same || 0) + ' · 저장 못 함 ' + ((r.failed || []).length))) + '</b><br>' + E(T('A zip counts as one file here; the photos inside it are counted as saved.', 'zip은 여기서 1개로 셉니다. 안의 사진은 저장 개수에 들어갑니다.')) + '</p><p class="clsub">' + where.map(line).filter(Boolean).join('<br>') + '</p>' +
         ((r.failed || []).length ? '<div class="clsub gfbad"><b>' + T('Could not get these ' + r.failed.length + ' (you can open the link and save them by hand):', '받지 못한 ' + r.failed.length + '개 (링크를 열어 직접 저장할 수 있습니다):') + '</b><ul>' + r.failed.slice(0, 40).map(x => '<li>' + E(x) + '</li>').join('') + '</ul>' + (r.failed.length > 40 ? '…' : '') + '</div>' : '') +

@@ -326,7 +326,7 @@
     }
     if(S.arm !== raw){
       let w = null; try{ w = await window.illu.bookingWhere(raw); }catch(er){}
-      const where = w && w.ok ? (w.place === 'dbx' ? 'Dropbox' : w.place === 'z' ? L('the Z: drive', 'Z: 드라이브') : L('this computer', '이 컴퓨터')) : L('her folder', '폴더');
+      const where = w && w.ok ? (w.place === 'dbx' ? 'Dropbox' : w.place === 'z' ? L('the Z: drive', 'Z: 드라이브') : L('the Z: drive', 'Z: 드라이브')) : L('her folder', '폴더');
       S.arm = raw; S.armTxt = L('Delete from ' + where + '? Press again', where + '에서 삭제할까요? 한 번 더'); clearTimeout(S.armT);
       S.armT = setTimeout(() => { if(S && S.arm === raw){ S.arm = null; draw(); } }, 5000); draw(); return;
     }

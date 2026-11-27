@@ -225,7 +225,7 @@
   document.addEventListener('keydown', e => { if(e.key === 'Escape' && DIM){ e.stopPropagation(); close(); } }, true);
   function openPicker(c, slot, cap){
     const vid = slot === 'v';
-    const S = [['dbx', 'Her Dropbox folder']].concat(WEB ? [] : [['pc', 'This computer']]).concat([['up', 'Upload']]);
+    const S = [['dbx', 'Her Dropbox folder']].concat(WEB ? [] : [['pc', 'Z: drive']]).concat([['up', 'Upload']]);
     const d = sheet('Choose: ' + cap, '', S.map(([k, l], i) => '<button type="button" data-cmpsrc="' + k + '"' + (i ? '' : ' class="on"') + '>' + l + '</button>').join(''));
     const sb = d.querySelector('.cmpsb');
     const show = k => { d.querySelectorAll('[data-cmpsrc]').forEach(b => b.classList.toggle('on', b.dataset.cmpsrc === k)); drawSrc(c, slot, vid, k, sb); };
@@ -245,7 +245,7 @@
   async function drawSrc(c, slot, vid, k, sb){
     if(k === 'up') return drawUpload(c, slot, vid, sb, false);
     sb.innerHTML = '<p class="cmphint">Looking…</p>';
-    const places = k === 'dbx' ? [['dbx', 'Dropbox']] : [['pc', 'Desktop › ILLUMENOCTIS › BOOKING'], ['z', 'Z: › ILLUMENOCTIS › Booking']].concat(c.zsrc ? [['zsrc', 'Z: › her office folder']] : []);
+    const places = k === 'dbx' ? [['dbx', 'Dropbox']] : [['pc', 'Z: › ILLUMENOCTIS › Booking']].concat(c.zsrc ? [['zsrc', 'Z: › her office folder']] : []);
     let html = '';
     for(const [p, label] of places){
       const L = await listing(c, p, true);

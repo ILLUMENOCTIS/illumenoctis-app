@@ -519,6 +519,7 @@
       : (stopped ? L('Stopped · ', '중지됨 · ') : '') + (booked ? L(booked + ' new booking ' + (booked === 1 ? 'card' : 'cards') + ' · ', '새 부킹 카드 ' + booked + '개 · ') : '') + L(cardsDone + ' cards and ' + agDone + ' agencies read · ' + Math.max(0, s1 - s0) + ' new sent · ' + Math.max(0, r1 - r0) + ' new received', '카드 ' + cardsDone + '개, 에이전시 ' + agDone + '곳 확인 · 새로 보낸 메일 ' + Math.max(0, s1 - s0) + ' · 새로 받은 메일 ' + Math.max(0, r1 - r0)) + (fails ? L(' · ' + fails + ' could not be read', ' · ' + fails + '개 읽지 못함') : '');
     const afMsg = af && (af.done || af.which || af.failed) ? ' · ' + L('material: ' + af.done + ' saved' + (af.which ? ', ' + af.which + ' need you' : '') + (af.failed ? ', ' + af.failed + ' failed' : ''), '자료: 저장 ' + af.done + (af.which ? ', 확인 필요 ' + af.which : '') + (af.failed ? ', 실패 ' + af.failed : '')) : '';
     UPDLAST = {at: new Date().toISOString(), msg: (auto ? L('Morning run · ', '아침 자동 실행 · ') : '') + msg + afMsg, signin}; try{ localStorage.setItem('illu.bemail.upd', JSON.stringify(UPDLAST)); }catch(e){}
+    try{ window.__illuHwReport && window.__illuHwReport(auto ? 'morning' : 'update', {signin, read: cardsDone + agDone}); }catch(e){}   /* 1.2.304: shared with everyone */
     draw();
     return !signin;
   }

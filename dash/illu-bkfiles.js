@@ -10,7 +10,7 @@
   const ko = () => typeof LANG !== 'undefined' && LANG === 'ko';
   const say = t => { try{ bvSay(t); }catch(e){} };
   const srcOf = c => { const g = BVLOAD.get(c.id); return g && g.loc ? g.loc : 'dbx'; };
-  const place = src => src === 'dbx' ? 'Dropbox' : (ko() ? '이 컴퓨터' : 'this computer');
+  const place = src => src === 'dbx' ? 'Dropbox' : (ko() ? 'Z: 드라이브' : 'the Z: drive');
   let busy = false;
 
   window.bvAddFiles = async function(files){

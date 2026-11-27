@@ -731,8 +731,8 @@ async function bvCounts(c){
   /* in the program both places are read directly: no folder to pick, nothing to upload */
   const sm = bvEl.querySelector('.bvchoose ~ small');
   if(sm) sm.innerHTML = LANG === 'ko'
-    ? '<b>이 컴퓨터에서</b>는 바탕화면 › ILLUMENOCTIS › BOOKING › <code>' + esc(bvFolderName(c)) + '</code>을, <b>Dropbox에서</b>는 Dropbox의 같은 폴더를 바로 엽니다. 폴더에 파일을 옮긴 뒤에는 <b>새로고침</b>을 누르세요.'
-    : '<b>On this computer</b> opens Desktop › ILLUMENOCTIS › BOOKING › <code>' + esc(bvFolderName(c)) + '</code>; <b>In Dropbox</b> opens the same folder in Dropbox. After moving files into the folder, press <b>Refresh</b>.';
+    ? '<b>이 컴퓨터에서</b>는 Z: › ILLUMENOCTIS › Booking › <code>' + esc(bvFolderName(c)) + '</code>을, <b>Dropbox에서</b>는 Dropbox의 같은 폴더를 바로 엽니다. 폴더에 파일을 옮긴 뒤에는 <b>새로고침</b>을 누르세요.'
+    : '<b>On this computer</b> opens Z: › ILLUMENOCTIS › Booking › <code>' + esc(bvFolderName(c)) + '</code>; <b>In Dropbox</b> opens the same folder in Dropbox. After moving files into the folder, press <b>Refresh</b>.';
   const fill = (src, got) => {
     const el = bvEl.querySelector('[data-bvcnt="' + src + '"]'); if(!el) return;
     const n = got && got.groups ? [...got.groups.values()].reduce((a, x) => a + x.length, 0) + ((got.other || []).length) : null;

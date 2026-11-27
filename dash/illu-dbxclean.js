@@ -67,7 +67,9 @@
     const ids = new Set();
     try{ const p = PICS.get(e.k); if(p && /^mp\./.test(String(p).replace(/^\/_blob\//, ''))) ids.add(String(p).replace(/^\/_blob\//, '')); }catch(er){}
     if(e.card){ for(const m of JSON.stringify(e.card).matchAll(/(?:mp|bf)\.[a-z0-9]{8,40}\.[a-z0-9]{2,5}/g)) ids.add(m[0]); }
-    return {names: [...new Set(names.filter(Boolean))], ids: [...ids]};
+    /* 1.2.304: her office folder in Z:\1. 현재모델, when her card is linked to one */
+    const zsrcs = new Set(); try{ for(const c of cardsOf(e.k)) if(c && c.zsrc) zsrcs.add(String(c.zsrc)); }catch(er){}
+    return {names: [...new Set(names.filter(Boolean))], ids: [...ids], zsrcs: [...zsrcs]};
   }
   /* records */
   async function load(){
@@ -75,8 +77,9 @@
     if(typeof DB === 'undefined' || !DB) return;
     try{ const sn = await DB.collection('dbxdel').limit(5000).get(); for(const d of (sn.docs || sn || [])){ const x = docOf(d); if(x && x.k) REC.set(d.id || idOf(x.k), x); } }catch(e){}
     try{ DB.collection('dbxdel').onSnapshot(sn => { REC.clear(); for(const d of (sn.docs || [])){ const x = docOf(d); if(x && x.k) REC.set(d.id || idOf(x.k), x); } paint(); }, () => {}); }catch(e){}
-    paint();
+    LOADED = true; paint(); setTimeout(localRun, 20000);
   }
+  let LOADED = false;
   const save = (id, x) => { REC.set(id, x); try{ return DB.doc('dbxdel/' + id).set(x); }catch(e){ return null; } };
   /* the Admin's program erases what is due (a computer with Dropbox), every 30 minutes */
   let BUSY = false;
@@ -86,16 +89,31 @@
     BUSY = true;
     try{
       for(const e of outList()){
-        if(e.due > Date.now() || (e.rec && (e.rec.st === 'keep' || e.rec.st === 'done'))) continue;
+        /* 1.2.304: an erase from before 1.2.304 (Dropbox only) is done again everywhere - Dropbox (her folder had come back from the
+           Desktop copy), Z:\ILLUMENOCTIS\Booking, Z:\1. 현재모델 and this computer */
+        if(e.due > Date.now() || (e.rec && (e.rec.st === 'keep' || (e.rec.st === 'done' && e.rec.v >= 304)))) continue;
         const t = targets(e); if(!t.names.length && !t.ids.length) continue;
-        let r = null; try{ r = await window.illu.dbxErase(t.names, t.ids); }catch(er){ r = {ok: false, why: String(er && er.message || er)}; }
+        if(e.rec && e.rec.names) for(const n of e.rec.names) if(!t.names.includes(n)) t.names.push(n);
+        let r = null; try{ r = await window.illu.dbxErase(t.names, t.ids, t.zsrcs); }catch(er){ r = {ok: false, why: String(er && er.message || er)}; }
         if(!r || !r.ok){ console.warn('dropbox erase', e.k, r && r.why); if(r && /no Dropbox|office PC copy/.test(r.why || '')) break; continue; }
-        await save(e.id, {k: e.k, st: 'done', at: new Date().toISOString(), by: (typeof ME !== 'undefined' && ME) || '', why: e.why, names: t.names, folders: r.folders || [], files: r.files || [], where: r.where || ''});
+        await save(e.id, {k: e.k, st: 'done', v: 304, at: (e.rec && e.rec.st === 'done' && e.rec.at) || new Date().toISOString(), again: e.rec && e.rec.st === 'done' ? new Date().toISOString() : undefined, by: (typeof ME !== 'undefined' && ME) || '', why: e.why, names: t.names, folders: r.folders || [], files: r.files || [], local: r.local || [], where: (r.where || '') + (r.local ? '+local' : '')});
       }
     }finally{ BUSY = false; }
     paint();
   }
   window.__illuDxcRun = run;
+  /* 1.2.304: what the other parts need - the names of every model whose files were erased (illu-zstore.js) */
+  window.__illuDxcGone = () => { const out = []; for(const x of REC.values()) if(x && x.st === 'done' && Array.isArray(x.names)) out.push(...x.names); return [...new Set(out)]; };
+  window.__illuDxcReady = () => LOADED;
+  /* every computer (not only the Admin's) puts its own Desktop copy of an erased model in the Recycle Bin, once */
+  async function localRun(){
+    if(!(window.illu && window.illu.localErase) || window.illu.web || !LOADED) return;
+    let seen = {}; try{ seen = JSON.parse(localStorage.getItem('illu.dxc.local') || '{}') || {}; }catch(e){}
+    const todo = [...REC.entries()].filter(([id, x]) => x && x.st === 'done' && Array.isArray(x.names) && seen[id] !== (x.again || x.at));
+    if(!todo.length) return;
+    for(const [id, x] of todo){ try{ const r = await window.illu.localErase(x.names); if(r && r.ok) seen[id] = x.again || x.at; }catch(e){} }
+    try{ localStorage.setItem('illu.dxc.local', JSON.stringify(seen)); }catch(e){}
+  }
   /* 1.2.284 (user, 24 Nov 2026: "if a model gets cancelled from the voting board, I want the booking cards to automatically go to
      the cancelled Board and I want the booking card to disappear from the Booking Board ... this also means that all the
      folders/files in Dropbox should be deleted for those specific models"): when her vote ends Cancelled, her booking card that is
@@ -124,10 +142,10 @@
   /* ---------- the note on her card ---------- */
   const dd = t => { const d = new Date(t); return d.getDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]; };
   function noteHTML(e){
-    if(e.rec && e.rec.st === 'done') return '<div class="dxnote done">' + E(L('Dropbox files erased · ' + dd(e.rec.at), 'Dropbox 파일 삭제됨 · ' + dd(e.rec.at))) + '</div>';
-    if(e.rec && e.rec.st === 'keep') return '<div class="dxnote keep"><span>' + E(L('Dropbox files kept', 'Dropbox 파일 보관')) + '</span><button type="button" data-dxund="' + E(e.k) + '">' + E(L('Undo', '취소')) + '</button></div>';
+    if(e.rec && e.rec.st === 'done') return '<div class="dxnote done">' + E(L('Files erased · ' + dd(e.rec.again || e.rec.at), '파일 삭제됨 · ' + dd(e.rec.again || e.rec.at))) + '</div>';
+    if(e.rec && e.rec.st === 'keep') return '<div class="dxnote keep"><span>' + E(L('Files kept', '파일 보관')) + '</span><button type="button" data-dxund="' + E(e.k) + '">' + E(L('Undo', '취소')) + '</button></div>';
     const n = Math.max(0, Math.ceil((e.due - Date.now()) / DAY));
-    return '<div class="dxnote"><span>' + E(n ? L('Dropbox files erased in ' + n + (n === 1 ? ' day' : ' days'), n + '일 후 Dropbox 파일 삭제') : L('Dropbox files erased today', '오늘 Dropbox 파일 삭제')) + '</span><button type="button" data-dxkeep="' + E(e.k) + '">' + E(L('Keep files', '파일 보관')) + '</button></div>';
+    return '<div class="dxnote" title="' + E(L('Her files in Dropbox, Z:\\ILLUMENOCTIS\\Booking, Z:\\1. 현재모델 and the computers', 'Dropbox, Z:\\ILLUMENOCTIS\\Booking, Z:\\1. 현재모델, 컴퓨터의 파일')) + '"><span>' + E(n ? L('Files erased in ' + n + (n === 1 ? ' day' : ' days') + ' (Dropbox, Z:, computers)', n + '일 후 파일 삭제 (Dropbox, Z:, 컴퓨터)') : L('Files erased today (Dropbox, Z:, computers)', '오늘 파일 삭제 (Dropbox, Z:, 컴퓨터)')) + '</span><button type="button" data-dxkeep="' + E(e.k) + '">' + E(L('Keep files', '파일 보관')) + '</button></div>';
   }
   const PANES = '#pane-cxl, #pane-unav, .ivtoday, #pane-bk, #pane-opus, .bv';
   let PT = 0;
