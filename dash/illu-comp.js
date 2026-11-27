@@ -30,7 +30,27 @@
     for(const k in L){ if(k === 'm' || k === 'v') o[k] = L[k]; else o.a[k] = L[k]; }
     return o;
   };
+  /* 1.2.302 (user, 27 Nov 2026: "when inputting a photo in the slots on the comp sheet, it tends to reset back to the top
+     of the page ... make it not do that"): saving a photo, video or link redraws the booking window - every scrolled part of
+     it (and the page) is put back where it was, for the redraws that follow the save */
+  function holdScroll(){
+    const root = (typeof bvEl !== 'undefined' && bvEl) || document.body;
+    const all = () => [...root.querySelectorAll('*')];
+    const keep = []; const ws = window.scrollY;
+    all().forEach(el => { if(el.scrollTop > 0){ const cls = String(el.className || ''); keep.push([cls, all().filter(x => String(x.className || '') === cls).indexOf(el), el.scrollTop]); } });
+    if(!keep.length && !ws) return;
+    let stop = 0;
+    const put = () => { const els = all();
+      for(const [cls, i, top] of keep){ const same = els.filter(x => String(x.className || '') === cls); const el = same[i] || same[0];
+        if(el && el.scrollHeight > el.clientHeight && Math.abs(el.scrollTop - top) > 2) el.scrollTop = top; }
+      if(ws && Math.abs(window.scrollY - ws) > 2) window.scrollTo(0, ws); };
+    const mo = new MutationObserver(() => { requestAnimationFrame(put); if(!stop) stop = setTimeout(() => mo.disconnect(), 600); });
+    mo.observe(root, {childList: true, subtree: true});
+    setTimeout(() => mo.disconnect(), 4000);
+  }
+  window.__illuHoldScroll = holdScroll;
   function setSlot(c, slot, ref, extra){
+    holdScroll();
     const loc = Object.assign({}, LOCAL.get(c.id) || {});
     delete loc[slot];
     const cp = (c.comp && typeof c.comp === 'object') ? JSON.parse(JSON.stringify(c.comp)) : {};
@@ -44,6 +64,7 @@
     try{ saveBook(c.id, true); }catch(e){}
   }
   function setLink(c, url, rel){
+    holdScroll();
     const cp = (c.comp && typeof c.comp === 'object') ? JSON.parse(JSON.stringify(c.comp)) : {};
     if(url){ cp.vl = url; if(rel) cp.vlr = rel; else delete cp.vlr; } else { delete cp.vl; delete cp.vlr; }
     c.comp = cp; try{ saveBook(c.id, true); }catch(e){}
