@@ -75,7 +75,21 @@
     const html = '<button type="button" class="hwhead' + (bad.length ? ' warn' : '') + '" data-hwtoggle aria-expanded="' + OPEN + '">' + E(head) + '</button>' +
       (OPEN ? '<ul>' + rows.map(line).join('') + '</ul><p>' + E(L('Each person\'s program reads their own Hiworks mail; what it finds is shared with everyone.', '각자의 프로그램이 자신의 Hiworks 메일을 읽고, 찾은 내용은 모두에게 공유됩니다.')) + '</p>' : '');
     if(b.__h !== html){ b.innerHTML = html; b.__h = html; }
+    place();
   }
+  /* 1.2.305 (user, 27 Nov 2026: "there is overlapping going on here"): the bar sits to the right of the Supabase meter
+     (bottom-left) instead of on top of it */
+  let RO = null;
+  function place(){
+    const b = document.getElementById('hwstat'); if(!b) return;
+    const u = document.querySelector('#illuusage.float');
+    let left = '';
+    if(u && u.getClientRects().length && innerWidth > 640){ const r = u.getBoundingClientRect(); if(r.width && innerHeight - r.bottom < 40) left = Math.round(r.right + 8) + 'px'; }
+    if(b.style.left !== left) b.style.left = left;
+    if(u && !RO && typeof ResizeObserver === 'function'){ RO = new ResizeObserver(place); RO.observe(u); }
+  }
+  addEventListener('resize', place);
+  setInterval(place, 2000);
   setInterval(paint, 60e3);
   document.addEventListener('click', e => {
     const t = e.target.closest && e.target.closest('#hwstat [data-hwtoggle], #hwstat [data-hwsignin]'); if(!t) return;
