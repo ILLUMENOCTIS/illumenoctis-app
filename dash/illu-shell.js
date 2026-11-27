@@ -454,7 +454,7 @@
        two halves are tabs. */
     const ckOn = W.clk || W.map;
     const h =
-      '<div class="shlay' + (ckOn ? '' : ' noclk') + '">' +
+      '<div class="shlay' + (ckOn ? '' : ' noclk') + (SP.col ? ' shcol' : '') + '">' +
       '<div class="shclk' + (W.clk ? '' : ' noclk') + (W.map ? '' : ' nomap') + (ckOn ? '' : ' none') + '" id="shclk"></div>' +
       /* 1.2.274 (user, phone: "I like D"): on a phone one compact line - short date, greeting, and the Processing count as a button */
       '<div class="shhdph"><div class="shhdpt"><div class="shkick2">' + H(shortDate()) + '</div><b class="shgr2">' + H(greet() + (nm ? ', ' + nm + (isKO() ? '님' : '') : '')) + '</b></div>' +
@@ -477,16 +477,22 @@
   window.__illuTodayRender = () => renderToday();
   /* ---------- the side panel (1.2.114) ---------- */
   const SP = {tab: 'act', f: 'all', day: -1};
-  try{ const v = JSON.parse(localStorage.getItem('illu.shside') || '{}') || {}; if(v.tab === 'ad') SP.tab = 'ad'; if(['a', 'd'].includes(v.f)) SP.f = v.f; }catch(e){}
-  const keepSP = () => { try{ localStorage.setItem('illu.shside', JSON.stringify({tab: SP.tab, f: SP.f})); }catch(e){} };
+  try{ const v = JSON.parse(localStorage.getItem('illu.shside') || '{}') || {}; if(v.tab === 'ad') SP.tab = 'ad'; if(['a', 'd'].includes(v.f)) SP.f = v.f; if(v.col) SP.col = true; }catch(e){}
+  const keepSP = () => { try{ localStorage.setItem('illu.shside', JSON.stringify({tab: SP.tab, f: SP.f, col: !!SP.col})); }catch(e){} };
   function soon(){ try{ return window.__illuArrSoon ? window.__illuArrSoon(7) : []; }catch(e){ return []; } }
+  /* 1.2.301 (user, 26 Nov 2026: "I want this side panel to be able to open and close (left to right)"): › closes the
+     side panel to a slim strip on the right (the page gets the room); the strip, or its ‹, opens it again. Remembered. */
+  const COLB = (open) => '<button type="button" class="shcolb" data-shcol aria-expanded="' + open + '" title="' + H(open ? L('Close the side panel', '사이드 패널 닫기') : L('Open the side panel', '사이드 패널 열기')) + '" aria-label="' + H(open ? L('Close the side panel', '사이드 패널 닫기') : L('Open the side panel', '사이드 패널 열기')) + '"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="' + (open ? 'M6 3l5 5-5 5' : 'M10 3L5 8l5 5') + '"/></svg></button>';
   function sidePanel(list){
     const ev = soon();
+    if(SP.col) return '<aside class="shside shmini" id="shside" data-shcol aria-label="' + H(L('Side panel (closed)', '사이드 패널 (닫힘)')) + '">' + COLB(false) +
+      '<span class="shmv"><b class="shtag y">' + list.length + '</b><em>' + H(L('Needs my action', '내가 처리할 일')) + '</em></span>' +
+      '<span class="shmv"><b class="shtag">' + ev.length + '</b><em>' + H(L('Arriving / Departing', '입국/출국')) + '</em></span></aside>';
     const tabs = '<div class="shtabs" role="tablist">' +
       '<button type="button" role="tab" data-shtab="act" aria-selected="' + (SP.tab === 'act') + '">' + L('Needs my action', '내가 처리할 일') + '<b>' + list.length + '</b></button>' +
       '<button type="button" role="tab" data-shtab="ad" aria-selected="' + (SP.tab === 'ad') + '">' + L('Arriving/Departing', '입국/출국') + '<b>' + ev.length + '</b></button>' + (SP.tab === 'act' ? '<button type="button" class="shinfo shtabi" data-shinfo aria-expanded="' + !!SP.info + '" aria-label="' + H(L('What is this list?', '이 목록은?')) + '" title="' + H(L('What is this list?', '이 목록은?')) + '">i</button>' : '') + '</div>';
     return '<aside class="shside" id="shside" aria-label="' + H(L('Side panel', '사이드 패널')) + '">' + tabs +
-      '<section class="shhalf" data-shh="act"' + (SP.tab === 'act' ? '' : ' data-off') + '><div class="shph"><h3>' + L('Needs my action', '내가 처리할 일') + ' ' + '<button type="button" class="shinfo" data-shinfo aria-expanded="' + !!SP.info + '" aria-label="' + H(L('What is this list?', '이 목록은?')) + '" title="' + H(L('What is this list?', '이 목록은?')) + '">i</button>' + '</h3><span class="shtag y">' + list.length + '</span></div>' +
+      '<section class="shhalf" data-shh="act"' + (SP.tab === 'act' ? '' : ' data-off') + '><div class="shph"><h3>' + L('Needs my action', '내가 처리할 일') + ' ' + '<button type="button" class="shinfo" data-shinfo aria-expanded="' + !!SP.info + '" aria-label="' + H(L('What is this list?', '이 목록은?')) + '" title="' + H(L('What is this list?', '이 목록은?')) + '">i</button>' + '</h3><span class="shphr"><span class="shtag y">' + list.length + '</span>' + COLB(true) + '</span></div>' +
         (SP.info ? '<div class="shinfop" role="note">' + L('Booking cards you are in charge of, at the stage each is on — then cards nobody has taken yet.', '내가 담당하는 부킹 카드와 현재 단계 — 그다음 담당자가 없는 카드.') + '</div>' : '') + '<div class="shscr">' + ovRows() + bookRows(list) + '</div></section>' +
       '<section class="shhalf" data-shh="ad"' + (SP.tab === 'ad' ? '' : ' data-off') + '>' + adHalf(ev) + '</section></aside>';
   }
@@ -556,6 +562,7 @@
     const wt = e.target.closest('[data-shwid]'); if(wt){ setWid(wt.dataset.shwid); return; }
     if(e.target.closest('[data-shinfo]')){ SP.info = !SP.info; renderToday(); return; }
     if(SP.info && !e.target.closest('.shinfop')){ SP.info = false; renderToday(); }
+    const cb = e.target.closest('[data-shcol]'); if(cb){ SP.col = !SP.col; keepSP(); renderToday(); return; }
     const tb = e.target.closest('[data-shtab]'); if(tb){ SP.tab = tb.dataset.shtab; keepSP(); renderToday(); return; }
     const fc = e.target.closest('[data-shf]'); if(fc){ SP.f = fc.dataset.shf; keepSP(); renderToday(); return; }
     const dy = e.target.closest('[data-shday]'); if(dy){ const i = +dy.dataset.shday; SP.day = SP.day === i ? -1 : i; renderToday(); return; }
@@ -942,6 +949,16 @@ html[data-theme="dark"] .shtoday .shad.d,html[data-theme="dim"] .shtoday .shad.d
 .shtoday .shgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:18px;align-items:start}
 .shtoday .shpanel{background:var(--surf);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0;box-sizing:border-box}
 .shtoday .shph{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.shtoday .shphr{display:flex;align-items:center;gap:6px}
+.shtoday .shcolb{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--surf);color:var(--ink);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex:none}
+.shtoday .shcolb:hover{background:var(--soft,#f4eff6);border-color:var(--accent,#5a2a5e)}
+.shtoday .shcolb svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media (min-width:1101px){.shtoday .shlay.shcol{grid-template-columns:minmax(0,1fr) 46px}}
+@media (max-width:1100px){.shtoday .shph .shcolb{display:none}.shtoday .shside.shmini{flex-direction:row!important;justify-content:center;padding:10px 14px!important}.shtoday .shside.shmini .shmv{flex-direction:row}.shtoday .shside.shmini .shmv em{writing-mode:horizontal-tb}}
+.shtoday .shside.shmini{cursor:pointer;align-items:center;padding:10px 0;gap:18px}
+.shtoday .shside.shmini:hover{background:var(--soft,#f7f3f8)}
+.shtoday .shmv{display:flex;flex-direction:column;align-items:center;gap:8px}
+.shtoday .shmv em{writing-mode:vertical-rl;font-style:normal;font-size:12px;font-weight:600;color:var(--mut);letter-spacing:.02em;white-space:nowrap}
 .shtoday .shph h3{font-size:15px;font-weight:700;margin:0;display:flex;align-items:center;gap:6px}
 .shtoday .shinfo{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--faint);background:none;color:var(--faint);font:italic 700 12px/1 Georgia,'Times New Roman',serif;display:inline-grid;place-items:center;padding:0;cursor:pointer;flex:none}
 .shtoday .shinfo:hover,.shtoday .shinfo[aria-expanded="true"]{border-color:var(--acc);color:var(--acc)}

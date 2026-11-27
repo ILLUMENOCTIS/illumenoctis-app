@@ -1163,9 +1163,13 @@
     let hover = false, picked = false, sent = '';
     /* 1.2.246 (user, 18 Nov 2026 - New Face & Development full screen: "the top bar with the filters/selections ... I want
        the board to expand with only the cards"): the New Face page's grid (.rcbody .rc2grid) counts as the photo area too */
-    const send = () => { const t = window.__illuZoomDoc || (DV() && (hover || picked) && (VIEW === 'arr' ? $('#pane-arr .rcbody .rc2grid') : $('.d2body .d2grid'))) ? 'photos' : 'page'; if(t !== sent){ sent = t; if(bridge) try{ illu.zoomTarget(t); }catch(e){} document.body.classList.toggle('d2pzon', t === 'photos'); } };
-    document.addEventListener('pointerover', e => { const h = !!(e.target.closest && e.target.closest('.d2body')); if(h !== hover){ hover = h; send(); } });
-    document.addEventListener('pointerdown', e => { picked = !!(e.target.closest && e.target.closest('.d2body')); send(); }, true);
+    /* 1.2.301 (user, 26 Nov 2026: "zoom in and out for just the cards on the panel without having the whole display page changing shape"):
+       the Team Vote boards' cards (.ivgrid - Today, Waiting / I voted / Approved / Cancelled) zoom the same way as the Directory's photos */
+    const ivOn = () => { const g = document.querySelector('.ivgrid'); return !!(g && g.offsetParent); };
+    const send = () => { const t = window.__illuZoomDoc || ((hover || picked) && ((DV() && (VIEW === 'arr' ? $('#pane-arr .rcbody .rc2grid') : $('.d2body .d2grid'))) || ivOn())) ? 'photos' : 'page'; if(t !== sent){ sent = t; if(bridge) try{ illu.zoomTarget(t); }catch(e){} document.body.classList.toggle('d2pzon', t === 'photos'); } };
+    const ZW = '.d2body, .ivgrid';
+    document.addEventListener('pointerover', e => { const h = !!(e.target.closest && e.target.closest(ZW)); if(h !== hover){ hover = h; send(); } });
+    document.addEventListener('pointerdown', e => { picked = !!(e.target.closest && e.target.closest(ZW)); send(); }, true);
     document.addEventListener('mouseleave', () => { hover = false; send(); });
     setInterval(send, 700); window.__illuZoomSend = send;                    // view changes, the photos going away
     window.__illuPhotoZoom = d => {
@@ -1177,6 +1181,7 @@
       const GB = () => VIEW === 'arr' ? $('#pane-arr .rcbody') : $('.d2body');     // the scroll box of the page in view
       const G = GB(), ratio = G && G.scrollHeight ? G.scrollTop / G.scrollHeight : 0;
       document.body.style.setProperty('--pz', String(D2.pz));
+      try{ if(window.__illuFitGrids) window.__illuFitGrids(); }catch(e){}
       refresh();
       const G2 = GB(); if(G2) G2.scrollTop = ratio * G2.scrollHeight;
     };

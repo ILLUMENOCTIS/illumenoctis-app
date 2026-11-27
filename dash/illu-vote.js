@@ -3322,7 +3322,9 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
   function fitGrids(){
     for(const g of document.querySelectorAll('.ivgrid')){
       const w = g.clientWidth; if(!w) continue;
-      const cw = Math.max(140, Math.floor((w * ZF - 4 * 14) / 5));
+      /* 1.2.301: the card zoom over the cards (Ctrl +/− or Ctrl + wheel, as in the Directory) makes them bigger or smaller */
+      let pz = 1; try{ pz = parseFloat(getComputedStyle(document.body).getPropertyValue('--pz')) || 1; }catch(e){}
+      const cw = Math.max(110, Math.floor((w * ZF - 4 * 14) / 5 * pz));
       if(g.__cw !== cw){ g.__cw = cw; g.style.setProperty('--ivcw', cw + 'px'); }
     }
   }
@@ -3332,6 +3334,7 @@ html[data-theme="dim"] .ivdst.email,html[data-theme="dark"] .ivdst.email{backgro
   try{ new MutationObserver(() => { if(RDY()) fitSoon(); }).observe(document.documentElement, {attributes: true, attributeFilter: ['class']}); }catch(e){}
   try{ new MutationObserver(fitSoon).observe(document.body, {childList: true, subtree: true}); }catch(e){}
   addEventListener('resize', () => { zRead(); fitSoon(); });
+  window.__illuFitGrids = () => fitGrids();
   zRead(); setInterval(zRead, 3000);
   window.__illuFitGrids = () => { zRead(); fitGrids(); };
   /* a photo that does not load leaves the plain tile, not a broken-image icon */
