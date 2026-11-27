@@ -28,6 +28,10 @@
     o.a = o.a || {};
     const L = LOCAL.get(c.id) || {};
     for(const k in L){ if(k === 'm' || k === 'v') o[k] = L[k]; else o.a[k] = L[k]; }
+    /* 1.2.303: vx = a pasted video link (WeTransfer, Drive, Vimeo...) kept beside the video file; vl/vlr = the view-only Dropbox
+       link of the file itself. An older pasted link (vl without vlr) counts as vx. */
+    if(!o.vx && o.vl && !o.vlr) o.vx = o.vl;
+    if(o.vl && !o.vlr) delete o.vl;
     return o;
   };
   /* 1.2.302 (user, 27 Nov 2026: "when inputting a photo in the slots on the comp sheet, it tends to reset back to the top
@@ -58,7 +62,7 @@
     if(ref && ref.p === 'mem'){ loc[slot] = ref; if(slot === 'm' || slot === 'v') delete cp[slot]; else delete cp.a[slot]; }
     else if(slot === 'm' || slot === 'v'){ if(ref) cp[slot] = ref; else delete cp[slot]; }
     else { if(ref) cp.a[slot] = ref; else delete cp.a[slot]; }
-    if(slot === 'v'){ delete cp.vl; delete cp.vlr; if(extra && extra.vl){ cp.vl = extra.vl; if(extra.vlr) cp.vlr = extra.vlr; } }
+    if(slot === 'v'){ if(cp.vl && !cp.vlr && !cp.vx) cp.vx = cp.vl; delete cp.vl; delete cp.vlr; if(extra && extra.vl){ cp.vl = extra.vl; if(extra.vlr) cp.vlr = extra.vlr; } }
     LOCAL.set(c.id, loc);
     c.comp = cp;
     try{ saveBook(c.id, true); }catch(e){}
@@ -66,7 +70,8 @@
   function setLink(c, url, rel){
     holdScroll();
     const cp = (c.comp && typeof c.comp === 'object') ? JSON.parse(JSON.stringify(c.comp)) : {};
-    if(url){ cp.vl = url; if(rel) cp.vlr = rel; else delete cp.vlr; } else { delete cp.vl; delete cp.vlr; }
+    if(rel){ if(url){ cp.vl = url; cp.vlr = rel; } else { delete cp.vl; delete cp.vlr; } }
+    else { if(cp.vl && !cp.vlr) delete cp.vl; if(url) cp.vx = url; else delete cp.vx; }
     c.comp = cp; try{ saveBook(c.id, true); }catch(e){}
   }
 
@@ -105,9 +110,12 @@
   function panel(c){
     const o = compOf(c);
     const nA = ANG.filter(([k]) => o.a[k]).length;
-    const vl = o.vl ? '<p class="cmphint cmpok">✓ Link ready — the client sees this video only. <button type="button" class="cmplk" data-cmplink>Change link</button></p>'
-      : o.v ? '<p class="cmphint">No link yet. <button type="button" class="cmplk" data-cmpmk>Make the link</button> · <button type="button" class="cmplk" data-cmplink>Paste a link</button></p>'
-      : '<p class="cmphint">The client clicks it in the PDF to watch it in their browser. <button type="button" class="cmplk" data-cmplink>Or paste a link</button></p>';
+    /* 1.2.303 (user, 27 Nov 2026: "a slot by the video for people attach a link in case the video file is too big") */
+    const vfile = o.v ? (o.vl && o.vlr === o.v.r ? '<p class="cmphint cmpok">✓ The client sees this video only.</p>' : '<p class="cmphint">The view-only link is made when the PDF is made. <button type="button" class="cmplk" data-cmpmk>Make it now</button></p>')
+      : '<p class="cmphint">The client clicks it in the PDF to watch it in their browser.</p>';
+    const vl = '<div class="cmpvl"><label class="cmpvlab" for="cmpvx-' + H(c.id) + '">Video link</label><p class="cmphint">Too big to upload? Paste a link (WeTransfer, Google Drive, Vimeo, YouTube…)</p>' +
+      '<div class="cmpvlrow"><input class="cmpin" type="url" id="cmpvx-' + H(c.id) + '" placeholder="https://" value="' + H(o.vx || '') + '" data-cmpvx><button type="button" class="cmpbtn" data-cmpvxsave>Save</button></div>' +
+      '<p class="cmphint cmpvxmsg">' + (o.vx ? (o.v ? 'Kept with the video. The PDF uses the video file; this link is the spare.' : '✓ The PDF opens this link.') : '') + '</p></div>';
     return '<div class="bvprof cmpp">' +
       '<div class="cmplab">Profile photo</div>' +
       '<div class="cmprow">' + slotH(c, 'm', 'Profile photo', o.m) +
@@ -115,9 +123,9 @@
       '<div class="cmplab">Angle photos <em>' + nA + ' of 6</em></div>' +
       '<div class="cmpang">' + ANG.map(([k, l]) => slotH(c, k, l, o.a[k])).join('') + '</div>' +
       '<div class="cmplab">Video</div>' +
-      '<div class="cmpvid">' + slotH(c, 'v', 'Video', o.v, true) + vl + '</div>' +
+      '<div class="cmpvid"><div class="cmpvf">' + slotH(c, 'v', 'Video', o.v, true) + vfile + '</div>' + vl + '</div>' +
       '<div class="cmpbtns"><button type="button" class="cmpbtn" data-cmpdl>Download PDF</button><button type="button" class="cmpbtn o" data-cmppv>Preview</button></div>' +
-      '<p class="cmpmsg" aria-live="polite"></p>' +
+      '<p class="cmpmsg" aria-live="polite"></p><p class="cmphint cmpkeep" aria-live="polite">' + (PDFREL.has(c.id) ? '✓ Kept in her Dropbox folder › ' + H(PDFREL.get(c.id).replace(/\//g, ' › ')) + ' <button type="button" class="cmpbtn o" data-cmpcl>Copy client link</button>' : '') + '</p>' +
       '<p class="cmpnote">Only where each file is gets saved on her card — the photos and video stay in her folder.</p></div>';
   }
   async function fillThumbs(c){
@@ -168,8 +176,12 @@
     const s = t.closest('[data-cmpslot]');
     if(s){ e.stopPropagation(); openPicker(c, s.dataset.cmpslot, s.dataset.cmpcap); return; }
     if(t.closest('[data-cmplink]')){ e.stopPropagation(); pasteLink(c); return; }
+    if(t.closest('[data-cmpvxsave]')){ e.stopPropagation(); const inp = bvSide.querySelector('[data-cmpvx]'), m = bvSide.querySelector('.cmpvxmsg'); const v = inp ? inp.value.trim() : '';
+      if(v && !/^https?:\/\/\S+$/i.test(v)){ if(m) m.textContent = 'A link starts with https:// — please paste the whole link.'; if(inp) inp.focus(); return; }
+      setLink(c, v, ''); bvSideRefresh(true); return; }
     if(t.closest('[data-cmpmk]')){ e.stopPropagation(); makeLink(c, compOf(c).v); return; }
     if(t.closest('[data-cmpdl]')){ e.stopPropagation(); run(c, 'pdf', t.closest('[data-cmpdl]')); return; }
+    if(t.closest('[data-cmpcl]')){ e.stopPropagation(); clientLink(c); return; }
     if(t.closest('[data-cmppv]')){ e.stopPropagation(); run(c, 'pv', t.closest('[data-cmppv]')); return; }
   }, true);
   document.addEventListener('keydown', e => {
@@ -191,8 +203,8 @@
     const o = compOf(c);
     const d = sheet('Video link', '<div class="cmpup">' + (why ? '<p class="cmpwarn">' + H(why) + '.</p>' : '') +
       '<p>Paste the link the client should open (a Dropbox, YouTube, Vimeo or Google Drive link to the video).</p>' +
-      '<input class="cmpin" type="url" placeholder="https://" value="' + H(o.vl || '') + '" data-cmpurl>' +
-      '<div class="cmpbtns"><button type="button" class="cmpbtn" data-cmpsave>Save link</button>' + (o.vl ? '<button type="button" class="cmpbtn o" data-cmpclear>Remove link</button>' : '') + '</div></div>', null);
+      '<input class="cmpin" type="url" placeholder="https://" value="' + H(o.vx || '') + '" data-cmpurl>' +
+      '<div class="cmpbtns"><button type="button" class="cmpbtn" data-cmpsave>Save link</button>' + (o.vx ? '<button type="button" class="cmpbtn o" data-cmpclear>Remove link</button>' : '') + '</div></div>', null);
     const inp = d.querySelector('[data-cmpurl]'); setTimeout(() => inp.focus(), 50);
     d.querySelector('[data-cmpsave]').onclick = () => { const v = inp.value.trim(); if(v && !/^https?:\/\//i.test(v)){ inp.focus(); return; } setLink(c, v, ''); close(); bvSideRefresh(true); };
     const cl = d.querySelector('[data-cmpclear]'); if(cl) cl.onclick = () => { setLink(c, '', ''); close(); bvSideRefresh(true); };
@@ -522,7 +534,11 @@
     const hf = []; for(const [u, l] of F.hf) hf.push([await ph(u), l]);
     const angles = []; for(const [k, l] of ANG){ if(!o.a[k]) continue; say('Gathering the photos… ' + l); const u = await urlOf(c, o.a[k]); if(u) angles.push([await ph(u), l]); }
     let vid = null;
-    if(o.v || o.vl){ say('Reading the video…'); const u = await urlOf(c, o.v); const pv = await poster(u); if(pv.pic) PICS.push(pv.pic); vid = {pic: pv.pic ? PICS.length - 1 : -1, len: pv.len, url: o.vl || ''}; }
+    /* 1.2.303: the video file first (its view-only Dropbox link, made now if it has none), then the pasted link */
+    let vurl = o.v && o.vl && o.vlr === o.v.r ? o.vl : '';
+    if(o.v && !vurl && o.v.p === 'dbx' && window.illu && window.illu.bookingShareFile){ say('Making the video link…'); try{ const r = await window.illu.bookingShareFile(fold(c), first(c), o.v.r); if(r && r.ok && r.url){ vurl = r.url; setLink(c, r.url, o.v.r); } }catch(e){} }
+    if(!vurl) vurl = o.vx || '';
+    if(o.v || vurl){ say('Reading the video…'); const u = await urlOf(c, o.v); const pv = await poster(u); if(pv.pic) PICS.push(pv.pic); vid = {pic: pv.pic ? PICS.length - 1 : -1, len: pv.len, url: vurl}; }
     const earL = PICS.push(await svgPic(earSvg(F.pl, true))) - 1, earR = PICS.push(await svgPic(earSvg(F.pr, false))) - 1;
     const pimg = (i, cls) => '<div class="' + cls + '" data-pimg="' + i + '"' + (PICS[i] && PICS[i].fit ? '' : '') + '>' + (PICS[i] ? '<img alt="" src="' + PICS[i].data + '">' : '') + '</div>';
     const page2 = angles.length || vid;
@@ -612,6 +628,26 @@
     return doc.output('blob');
   }
 
+  /* 1.2.303 (user, 27 Nov 2026: "what if I want to send this completed file with images/videos for them to view? and keep as a file?"
+     - "to clients"): every PDF made is also kept in her Dropbox folder (1. BOOK › Comp sheet; a new version never replaces an older
+     one), and "Copy client link" gives a view-only link to that one PDF - for an email instead of a big attachment. */
+  const PDFREL = new Map();          // card id -> path of the last kept PDF inside her folder
+  async function keepPdf(c, fname, blob){
+    if(!(window.illu && window.illu.bookingPut)) return;
+    let r = null; try{ r = await window.illu.bookingPut('dbx', fold(c), first(c), '1. BOOK', fname, WEB ? blob : await blob.arrayBuffer(), 'Comp sheet'); }catch(e){ r = {ok: false, why: String(e && e.message || e)}; }
+    const m = bvSide.querySelector('.cmpkeep'); if(!m) return;
+    if(r && r.ok){ const rel = (r.sub || '1. BOOK/Comp sheet') + '/' + r.name; PDFREL.set(c.id, rel);
+      m.innerHTML = '✓ Kept in her Dropbox folder › ' + H(rel.replace(/\//g, ' › ')) + ' <button type="button" class="cmpbtn o" data-cmpcl>Copy client link</button>'; }
+    else m.textContent = 'The PDF could not be kept in her Dropbox folder' + (r && r.why ? ' (' + r.why + ')' : r && r.need === 'connect' ? ' (Dropbox is not connected)' : '') + '.';
+  }
+  async function clientLink(c){
+    const rel = PDFREL.get(c.id), m = bvSide.querySelector('.cmpkeep'); if(!rel || !m) return;
+    let r = null; try{ r = await window.illu.bookingShareFile(fold(c), first(c), rel); }catch(e){ r = {ok: false, why: String(e && e.message || e)}; }
+    if(!(r && r.ok && r.url)){ m.insertAdjacentHTML('beforeend', '<span class="cmpwarn"> The link could not be made' + (r && r.why ? ': ' + H(r.why) : '') + '.</span>'); return; }
+    let copied = false; try{ await navigator.clipboard.writeText(r.url); copied = true; }catch(e){}
+    m.innerHTML = '✓ Kept in her Dropbox folder › ' + H(rel.replace(/\//g, ' › ')) + '<br>' + (copied ? 'Client link copied — paste it into your email. ' : 'Client link: ') +
+      '<input class="cmpin" readonly value="' + H(r.url) + '" aria-label="Client link" onclick="this.select()"><span class="cmphint">Anyone with this link can open this PDF only — nothing else in Dropbox.</span>';
+  }
   let BUSY = false;
   async function run(c, what, btn){
     if(BUSY) return; BUSY = true; if(btn) btn.classList.add('busy');
@@ -625,6 +661,7 @@
       else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname; document.body.appendChild(a); a.click(); a.remove(); }
       msg('PDF ready — ' + fname + ' (' + (blob.size / 1048576).toFixed(1) + ' MB)');
       window.__illuCompLast = blob;
+      keepPdf(c, fname, blob);
     }catch(e){ msg('The PDF could not be made' + (e && e.message ? ' — ' + e.message : '')); }
     finally{ if(B && B.box) B.box.remove(); BUSY = false; if(btn) btn.classList.remove('busy'); }
   }
@@ -663,6 +700,12 @@
 .cmpang .cmpslot{font-size:10px;padding:3px}.cmpang .cmpplus{font-size:16px;margin-bottom:2px}
 .bvsidewide .cmpang,.cmpang{container-type:inline-size}
 @media (max-width:760px){.cmpang{grid-template-columns:repeat(3,1fr)}.cmpx{width:28px;height:28px}}
+.cmpvid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:640px){.cmpvid{grid-template-columns:1fr}}
+.cmpvf,.cmpvl{min-width:0}
+.cmpvlab{display:block;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mut,#8a8291)}
+.cmpvl .cmphint{margin:2px 0 6px}
+.cmpvlrow{display:flex;gap:6px;align-items:center}.cmpvlrow .cmpin{margin:0;min-width:0;flex:1}
 .cmpvid .cmpslot{aspect-ratio:16/9;max-width:240px}
 .cmpvid .cmpslot.has .cmpph::after{content:'';position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:rgba(255,255,255,.92)}
 .cmpvid .cmpslot.has .cmpph::before{content:'';position:absolute;left:50%;top:50%;margin:-7px 0 0 -3px;border-left:11px solid var(--acc,#6b2a5e);border-top:7px solid transparent;border-bottom:7px solid transparent;z-index:1}

@@ -10,7 +10,7 @@
   if(window.__illuCompReq) return; window.__illuCompReq = true;
   if(typeof bvDrawSide !== 'function' || typeof bvSide === 'undefined') return;
   const H = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]);
-  const SB = () => window.__sb;
+  const SB = () => window.__illuSb || window.__sb;   /* 1.2.303: the program's Supabase client is window.__illuSb - __sb never existed, so every call went out signed out (401) */
   const CFG = window.ILLU_CONFIG || {};
   const FN = (CFG.url || '') + '/functions/v1/comp-form';
   const PAGE = 'https://illumenoctis.github.io/illumenoctis-app/comp/?t=';
@@ -40,6 +40,23 @@
     return j || {ok: false, why: 'no answer (' + r.status + ')'};
   }
   async function dbxStatus(force){ if(DBX && !force) return DBX; try{ DBX = await fnCall({action: 'status'}); }catch(e){ DBX = {ok: false, why: String(e && e.message || e)}; } return DBX; }
+  /* 1.2.303 (user, 27 Nov 2026: "can we just have it automatically linked without me having to manually do it?"): when the form has
+     no working Dropbox connection and this computer is already connected to Dropbox, its connection is given to the form by itself -
+     no button, no sign-in window. Never replaces a connection that works (the function checks that too). */
+  let AUTOTRIED = false;
+  async function autoLink(){
+    if(AUTOTRIED || WEB || !(window.illu && window.illu.dbxFormKey)) return;
+    try{ if(typeof SIGNED === 'function' && !SIGNED()) return; }catch(e){}
+    if(!(await jwt())) return;
+    AUTOTRIED = true;
+    const st = await dbxStatus(true);
+    if(st && st.ok) return;
+    if(!st || !/not connected|no longer works/i.test(st.why || '')) return;
+    let k = null; try{ k = await window.illu.dbxFormKey(false); }catch(e){}
+    if(!k || !k.ok || !k.key) return;
+    const r = await fnCall({action: 'connect', refresh: k.key, auto: true});
+    if(r && r.ok) DBX = {ok: true, base: r.base, auto: true};
+  }
 
   /* what the program already knows about her (the crawler's figures) - shown in the form where her card is empty */
   function prefillOf(c){
@@ -172,10 +189,11 @@
 
   async function tick(){
     await load(); pop(); backup();
+    try{ await autoLink(); }catch(e){}
     try{ if(bv && bv.view === 'c'){ const c = BOOK.get(bv.id); if(c) repaint(c); } }catch(e){}
   }
   setTimeout(tick, 8000); setInterval(tick, 120000);
-  window.__illuCompReq = {load, make, box, backup, state: () => ({ALL, DBX, me})};
+  window.__illuCompReq = {load, make, box, backup, autoLink, state: () => ({ALL, DBX, me})};
 
   const css = document.createElement('style');
   css.textContent = [

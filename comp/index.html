@@ -67,8 +67,11 @@ section.card{background:var(--surf);border:1px solid var(--line);border-radius:1
 .phrow p{margin:0;color:var(--mut);font-size:13px}
 .vid{padding:14px 16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
 .vid .drop{aspect-ratio:16/9}
-.vid .or{font-size:12.5px;color:var(--mut)}
-.vid .or input{margin-top:6px;width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:var(--soft);color:var(--ink);font:14px Inter,sans-serif}
+.vid .or{display:flex;flex-direction:column;justify-content:center;gap:6px;aspect-ratio:16/9;border:1.5px dashed var(--line);border-radius:12px;padding:14px;background:var(--soft);font-size:12.5px;color:var(--mut)}
+.vid .or b{font:600 13px Inter,sans-serif;color:var(--ink);letter-spacing:.02em}
+.vid .or input{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:#fff;color:var(--ink);font:14px Inter,sans-serif}
+.vid .or input.bad{border-color:#B3261E}
+.vid .or .vlmsg{min-height:1em;color:#B3261E}
 .send{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:6px}
 .btn{border:0;border-radius:999px;background:var(--pl);color:#fff;font:600 15px Inter,sans-serif;padding:13px 26px;cursor:pointer}
 .send p{margin:0;color:var(--mut);font-size:12.5px;max-width:52ch}
@@ -198,8 +201,8 @@ body.sent .wrap>*:not(.done-msg){display:none}body.sent .done-msg{display:block}
 </section>
 
 <section class="card" id="s-video"><div class="ch"><h2>Video</h2><small>walk + turn, about 30 seconds</small></div>
-  <div class="vid"><label class="drop" data-slot="v"><b>+</b>Upload a video<small>MP4 or MOV · up to 100 MB</small><input type="file" accept="video/*"></label>
-  <div class="or">Bigger than 100 MB, or already online? Paste a link instead (WeTransfer, Google Drive, Vimeo, YouTube…)<input type="url" data-c data-k="vl" aria-label="Video link"></div></div>
+  <div class="vid"><label class="drop" data-slot="v"><b>+</b>Upload a video<small>MP4 or MOV · up to 150 MB</small><input type="file" accept="video/*"></label>
+  <div class="or"><b>Video link</b>Too big to upload (over 150 MB), or already online? Paste the link here — WeTransfer, Google Drive, Vimeo, YouTube…<input type="url" data-c data-k="vl" id="vl" placeholder="https://" aria-label="Video link"><span class="vlmsg" id="vlmsg"></span></div></div>
 </section>
 
 <div class="send"><button class="btn" id="send">Send to MDI</button><p class="msg" id="msg" role="alert"></p><p>What you send goes straight onto her card at MDI. You can open this link again and change anything until it closes.</p></div>
@@ -296,6 +299,9 @@ function putFile(link, file, onp){
 }
 async function upload(d, file){
   const slot = d.dataset.slot, ext = (file.name.split('.').pop() || '').toLowerCase();
+  /* 1.2.303: too big for the upload - say so before anything is sent, and point at the Video link box */
+  if(slot === 'v' && file.size > 150 * 1024 * 1024){ msg('This video is ' + Math.round(file.size / 1048576) + ' MB — the most is 150 MB. Please paste a link to it in the Video link box instead.'); const v = $('vl'); if(v){ v.focus(); v.scrollIntoView({block: 'center', behavior: 'smooth'}); } return; }
+  if(slot !== 'v' && file.size > 30 * 1024 * 1024){ msg('This photo is ' + Math.round(file.size / 1048576) + ' MB — the most is 30 MB.'); return; }
   d.classList.remove('done', 'err'); d.querySelectorAll('img,video,.was').forEach(x => x.remove());
   const u = URL.createObjectURL(file);
   d.insertAdjacentHTML('afterbegin', /^video/.test(file.type) || /^(mp4|mov|m4v|webm)$/.test(ext) ? '<video muted autoplay loop playsinline src="' + u + '"></video>' : '<img alt="" src="' + u + '">');
@@ -381,6 +387,8 @@ function markUploaded(upl){
 
 $('send').addEventListener('click', async () => {
   if(BUSY.size) return; msg('');
+  { const v = $('vl'), w = v ? v.value.trim() : ''; v && v.classList.remove('bad'); $('vlmsg').textContent = '';
+    if(w && !/^https?:\/\/\S+$/i.test(w)){ v.classList.add('bad'); $('vlmsg').textContent = 'Please paste the whole link — it starts with https://'; v.focus(); return; } }
   const b = $('send'); b.disabled = true; b.textContent = 'Sending…';
   try{
     await call({action: 'submit', fields: fields(), files: FILES});
