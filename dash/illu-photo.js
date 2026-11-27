@@ -98,8 +98,12 @@
   function paintCell(key, force){
     document.querySelectorAll('.litpic[data-pic="' + CSS.escape(key) + '"]').forEach(cell => {
       if(cell.classList.contains('has') && !force && !PMAIN.has(key)) return;   /* 1.2.229: a chosen card photo repaints a card that shows a saved copy */
-      if(force && cell.closest('.d2card')){ const im = cell.querySelector(':scope > img'), u2 = pmSrc(PMAIN.get(key)) || (litFacts0({key}) || {}).photo || PLINK.get(key) || ''; if(im && PMAIN.has(key) && !im.dataset.orig) im.dataset.orig = im.getAttribute('src') || '';
-        if(im && !PMAIN.has(key) && im.dataset.orig){ im.src = im.dataset.orig; delete im.dataset.orig; return; }   /* back to the photo the card had */
+      /* 1.2.305: the photo the card had is kept in data-pmold (it was kept in data-orig, which is also the address the photo
+         turning reads - so a turned card photo stayed turned on the new photo, and Hide on slide 1 hid the old address) */
+      if(force && cell.closest('.d2card')){ const im = cell.querySelector(':scope > img'), pm = PMAIN.get(key), u2 = pmSrc(pm) || (litFacts0({key}) || {}).photo || PLINK.get(key) || '';
+        if(im && PMAIN.has(key) && im.dataset.pmold == null){ im.dataset.pmold = im.getAttribute('src') || ''; im.dataset.pmorig = im.dataset.orig || ''; }
+        if(im && !PMAIN.has(key) && im.dataset.pmold != null){ im.src = im.dataset.pmold; if(im.dataset.pmorig) im.dataset.orig = im.dataset.pmorig; else delete im.dataset.orig; delete im.dataset.pmold; delete im.dataset.pmorig; return; }   /* back to the photo the card had */
+        if(u2 && im && pm && pm.u) im.dataset.orig = pm.u;
         if(u2){ if(im) im.src = u2; else cell.insertAdjacentHTML('afterbegin', '<img class="agimg" alt="" referrerpolicy="no-referrer" decoding="async" src="' + String(u2).replace(/"/g, '&quot;') + '">'); } return; }   // the open card keeps its slideshow; only its picture changes
       let u = pmSrc(PMAIN.get(key)) || PLINK.get(key); if(!u && force){ try{ u = (litFacts0({key: key, g: '?'}) || {}).photo || ''; }catch(e){} }
       try{ cell.outerHTML = picCell(key, nmOf(cell), u || ''); }catch(e){}

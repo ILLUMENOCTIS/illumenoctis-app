@@ -26,7 +26,22 @@
   };
   window.__illuVoteFx = (k, v, el) => {
     try{
-      const card = el || cardOf(k); if(!card) return;
+      let card = el || cardOf(k); if(!card) return;
+      /* 1.2.305 (user, 27 Nov 2026: "when selecting go or pass, when the panel lights up momentarily, I want it to circle around
+         the whole side panel"): a vote cast in a model's side panel lights the whole panel (the part on screen), not the vote box */
+      const pnl = card.closest && (card.closest('.mx.pn2') || (card.matches && card.matches('.mx.pn2') ? card : null));
+      if(pnl){ let box = pnl; for(let p = pnl; p && p !== document.body; p = p.parentElement){ const o = getComputedStyle(p).overflowY; if(o === 'auto' || o === 'scroll'){ box = p; break; } }
+        const r = box.getBoundingClientRect(), top = Math.max(r.top, 0), bot = Math.min(r.bottom, innerHeight);
+        if(r.width < 40 || bot - top < 40) return;
+        const col = v === 'r' ? '#E5484D' : '#2FBF4A', rad = getComputedStyle(box).borderTopLeftRadius;
+        const fx = document.createElement('div'); fx.className = 'vfx vfxpn'; fx.setAttribute('aria-hidden', 'true');
+        fx.style.cssText = 'left:' + r.left + 'px;top:' + top + 'px;width:' + r.width + 'px;height:' + (bot - top) + 'px;--c:' + col + ';--r:' + (rad && rad !== '0px' ? rad : '12px');
+        fx.innerHTML = '<span class="vfxring"></span>';
+        document.body.appendChild(fx);
+        requestAnimationFrame(() => fx.classList.add('play'));
+        setTimeout(() => fx.classList.add('out'), 1250);
+        setTimeout(() => fx.remove(), 1600);
+        return; }
       const r = card.getBoundingClientRect(); if(r.width < 40 || r.height < 40 || r.bottom < 0 || r.top > innerHeight) return;
       const pr = photoOf(card) || r;
       const col = v === 'r' ? '#E5484D' : '#2FBF4A';
@@ -57,6 +72,7 @@
 .vfx .vfxst{position:absolute;width:72px;height:72px;margin:-36px 0 0 -36px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 92%,transparent);color:#fff;font:800 36px/1 system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.28);opacity:0}
 .vfx.play .vfxst{animation:vfxstamp 1.1s .15s cubic-bezier(.2,1.4,.4,1) forwards}
 @keyframes vfxstamp{0%{opacity:0;transform:scale(2.2)}25%{opacity:1;transform:scale(.92)}40%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:scale(1)}}
+.vfx.vfxpn .vfxring{inset:0;border-radius:var(--r)}.vfx.vfxpn::after{inset:3px;border-radius:calc(var(--r) - 3px)}
 @media (prefers-reduced-motion:reduce){.vfx .vfxring,.vfx .vfxst{animation:none!important}.vfx::after{transition:none}}
 `;
   document.head.appendChild(st);

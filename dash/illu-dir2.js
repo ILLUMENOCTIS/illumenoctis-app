@@ -248,6 +248,27 @@
   window.__illuWkByNet = () => wkByNet(true);
   const wkFaces = (items, max) => { const ps = []; for(const e of items) if(e.who && !ps.includes(e.who)) ps.push(e.who); let h = ''; try{ h = ps.slice(0, max).map(p => window.__illuDiscOf ? window.__illuDiscOf(p) : '').join(''); }catch(e){} return h ? '<span class="wkavs">' + h + '</span>' : ''; };
   const wkWho = p => { try{ return (PEOPLE.get(p) || {}).n || ''; }catch(e){ return ''; } };
+  /* 1.2.305 (user, 27 Nov 2026: the Directory list "looks like there is just so much going on" - approved demo v4,
+     "I still need all the information"): an agency row has two quiet lines under its name -
+     1) the email status (envelope + word) and what is in progress / worked with,
+     2) who in the team is in contact (their face and name: from the models worked on and from the Hiworks mail) and the place. */
+  const MAILI = '<svg class="d2mi" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>';
+  function rowLines(x, wr){
+    const o = mailOf(x.net), w = D2.showRemoved ? null : wkByNet().get(x.net.i);
+    const l1 = [];
+    if(o) l1.push('<u class="mlt ' + o.st + '" title="' + esc(mlTip(o)) + '">' + MAILI + (isKo() ? MLL[o.st][1] : MLL[o.st][0]) + '</u>');
+    if(w){ const live = w.live > 0; l1.push('<em class="wkt"><i></i>' + (live ? (w.live > 1 ? w.live + ' in progress' : 'In progress') : 'Worked with') + '</em>'); }
+    const ps = [];
+    if(w) for(const e of (w.live > 0 ? w.items.filter(e => e.live) : w.items)) if(e.who && !ps.includes(e.who)) ps.push(e.who);
+    if(o) o.who.forEach(p => { if(p && !ps.includes(p)) ps.push(p); });
+    const who = ps.filter(p => wkWho(p)).slice(0, 3).map(p => { let d = ''; try{ d = window.__illuDiscOf ? window.__illuDiscOf(p) : ''; }catch(e){}
+      const n = wkWho(p); return '<span class="d2who" title="' + esc(n + ' is in contact with ' + x.a.name) + '">' + d + esc(n) + '</span>'; });
+    const more = ps.filter(p => wkWho(p)).length - who.length;
+    const place = esc(([x.a.city, x.a.country].filter(Boolean).join(', ') || 'Location not stated') + (x.a.offices.length > 1 ? ' · ' + x.a.offices.length + ' offices' : ''));
+    const sep = '<u class="wksep">·</u>';
+    return (l1.length ? '<s class="d2stl">' + l1.join(sep) + '</s>' : '') +
+      '<s class="d2wl">' + (who.length ? '<span class="d2whos">' + who.join('') + (more > 0 ? '<span class="d2who">+' + more + '</span>' : '') + '</span>' + sep : '') + '<span class="d2pl">' + place + '</span></s>';
+  }
   function wkRow(w){
     if(!w) return {cls: '', html: '', tip: ''};
     const live = w.live > 0;
@@ -1284,7 +1305,7 @@
           (D2.confirm === x.id
             ? '<div class="d2agw d2conf"><span>Hide <b>' + esc(x.a.name) + '</b>? Its ' + dirN(x.n) + ' models stop showing for everyone. Nothing is deleted.</span><button type="button" class="d2cy" data-d2rmyes="' + esc(x.id) + '">Hide</button><button type="button" class="d2cn" data-d2rmno>Cancel</button></div>'
             : (wr = wkRow(D2.showRemoved ? null : WKR.get(x.net.i)), '') + '<div class="d2agw' + (D2.showRemoved ? ' rmd' : '') + (mdiOf(x.net) ? ' mdiw" title="MDI Agency Contact · ' + esc(mdiOf(x.net).a) : '') + '"><button type="button" class="d2ag' + (x === r ? ' on' : '') + wr.cls + '" data-d2ag="' + esc(x.id) + '"' + (wr.tip ? ' title="' + esc(wr.tip) + '"' : '') + '>' +
-          '<span class="d2agt"><b>' + esc(x.a.name) + newTag(x.net.added) + '</b><s>' + (function(){ const o = mailOf(x.net); return o ? '<u class="mlt ' + o.st + '" title="' + esc(mlTip(o)) + '">✉ ' + (isKo() ? MLL[o.st][1] : MLL[o.st][0]) + '</u><u class="wksep">·</u>' : ''; })() + wr.html + (wr.html ? '<u class="wksep">·</u>' : '') + esc(([x.a.city, x.a.country].filter(Boolean).join(', ') || 'Location not stated') + (x.a.offices.length > 1 ? ' · ' + x.a.offices.length + ' offices' : '')) + '</s></span>' +
+          '<span class="d2agt"><b>' + esc(x.a.name) + newTag(x.net.added) + '</b>' + rowLines(x, wr) + '</span>' +
           '<span class="d2agn">' + (byMeas ? '<b>' + dirN(x.fit) + '</b><s>of ' + dirN(x.n) + '</s>' : '<b>' + dirN(x.n) + '</b>') + '</span></button>' +
           (!x.a.country && x.a.domain && !D2.showRemoved ? '<button type="button" class="d2locb" data-d2loc="' + esc(x.a.domain) + '" title="Set this agency’s country">+ Set country</button>' : '') +
           (canRemove() ? (D2.showRemoved ? '<button type="button" class="d2rs" data-d2restore="' + esc(x.id) + '">Show again</button>'
@@ -1549,11 +1570,15 @@
     const PH = window.__illuPhoto, picked = PH && PH.PMAIN && PH.PMAIN.get(m.key);
     if(cur && !curV && PH && PH.setMain) h += '<button type="button" class="d2slmain" data-d2slmain title="Show this photo on the model’s card, for everyone (the photo is not saved — only which one to show)">★ Use as card photo</button>';
     else if(!cur && picked && PH.clearMain) h += '<button type="button" class="d2slmain back" data-d2slunmain title="Go back to the photo the program found">↺ Back to the original photo</button>';
+    /* 1.2.305 (user, 27 Nov 2026: "after rotating, I don't see the hide / setting the image as the main card photo"): slide 1
+       is the card photo itself, so it had neither - it now says so, and it can be hidden too (the next photo becomes the card photo) */
+    else if(!cur && n > 1 && !curV) h += '<span class="d2slmain on" title="This is the photo on her card. Go to another photo and press “Use as card photo” to change it.">✓ Card photo</span>';
     /* 1.2.196 (user, 15 Nov 2026: "what happened to the hide photo function?"): since cards open straight in this full view
        (1.2.192) the "Not her - Hide" of the other photo viewer (1.2.174) was out of reach - it is here too now, for a photo
        from her agency page (slide 2 on; slide 1 is her card photo). Hidden for the whole team; the agency site is not changed. */
     if(SL.undo && Date.now() - SL.undo.at < 6000) h += '<button type="button" class="d2slhide und" data-d2slundo title="Put the photo back in her slideshow (Ctrl + Z works too)">✓ Photo hidden · <u>Undo</u></button>';
     else if(cur && window.__illuHidePhoto && /^https?:/i.test(m.href || '')) h += '<button type="button" class="d2slhide" data-d2slhide title="Hide this photo from the slideshows, for everyone (the agency site is not changed)">⊘ Hide</button>';
+    else if(!cur && n > 1 && SL.photos && SL.photos[0] && window.__illuHidePhoto && PH && PH.setMain && /^https?:/i.test(m.href || '')) h += '<button type="button" class="d2slhide" data-d2slhide1 title="Not her - hide this photo for everyone; the next photo becomes her card photo (the agency site is not changed)">⊘ Hide</button>';
     /* 1.2.148: turn the photo shown (for everyone) */
     if(!curV && (cur || pic.querySelector(':scope > img')) && window.__illuRotBtns) h += window.__illuRotBtns('d2rot');
     if(n > 1){
@@ -1620,7 +1645,25 @@
         /* the slideshow is read again: the new card photo is slide 1, the old one goes back among the others */
         const C = $('.d2card'); slLoad(m.key, m.href); SL.i = 0; if(C) slideApply(C);
       }); return; }
-    if(e.target.closest('[data-d2slundo]')){ e.preventDefault(); e.stopPropagation(); const u = SL.undo; SL.undo = null; if(u && window.__illuUnhidePhoto) window.__illuUnhidePhoto(u.page, u.url); else { const C = $('.d2card'); if(C) slideApply(C); } return; }
+    if(e.target.closest('[data-d2slundo]')){ e.preventDefault(); e.stopPropagation(); const u = SL.undo; SL.undo = null;
+      /* the card photo that was hidden (slide 1): her card goes back to it too */
+      if(u && u.main){ const PH = window.__illuPhoto, m = D2.openM; if(window.__illuUnhidePhoto) window.__illuUnhidePhoto(u.page, u.url);
+        if(PH && m) Promise.resolve(u.main.u ? PH.setMain(m.key, u.main.u, u.main.r || m.href) : PH.clearMain(m.key)).then(() => { const C = $('.d2card'); slLoad(m.key, m.href); SL.i = 0; if(C) slideApply(C); });
+        return; }
+      if(u && window.__illuUnhidePhoto) window.__illuUnhidePhoto(u.page, u.url); else { const C = $('.d2card'); if(C) slideApply(C); } return; }
+    if(e.target.closest('[data-d2slhide1]')){ e.preventDefault(); e.stopPropagation(); const m = D2.openM, PH = window.__illuPhoto; if(!m || !PH || !window.__illuHidePhoto) return;
+      try{ if(typeof SIGNED === 'function' && !SIGNED()){ if(typeof nudgeSignIn === 'function') nudgeSignIn(); return; } }catch(err){}
+      const C = $('.d2card'), main = C && C.querySelector('.litpic > img'), next = SL.photos && SL.photos[0]; if(!main || !next) return;
+      let raw = main.dataset.orig0 || main.dataset.orig || main.getAttribute('src') || '';
+      const mm = /^illuimg:\/\/p\/([^?]+)/.exec(raw); if(mm){ try{ raw = decodeURIComponent(mm[1]); }catch(err){} }
+      const mw = /^https:\/\/images\.weserv\.nl\/\?url=([^&]+)/.exec(raw); if(mw){ try{ raw = decodeURIComponent(mw[1]); }catch(err){} }
+      if(!/^https?:/i.test(raw)) return;
+      const was = PH.PMAIN && PH.PMAIN.get(m.key);
+      SL.self = true; window.__illuHidePhoto(m.href, raw);
+      SL.undo = {page: m.href, url: raw, at: Date.now(), main: was ? {u: was.u, r: was.r} : {u: ''}};
+      Promise.resolve(PH.setMain(m.key, next.url, m.href)).then(() => { const C2 = $('.d2card'); slLoad(m.key, m.href); SL.i = 0; if(C2) slideApply(C2);
+        setTimeout(() => { const C3 = $('.d2card'); if(C3 && SL.undo && Date.now() - SL.undo.at >= 5900){ SL.undo = null; slideApply(C3); } }, 6100); });
+      return; }
     if(e.target.closest('[data-d2slhide]')){ e.preventDefault(); e.stopPropagation(); const m = D2.openM; if(!m || !window.__illuHidePhoto) return;
       try{ if(typeof SIGNED === 'function' && !SIGNED()){ if(typeof nudgeSignIn === 'function') nudgeSignIn(); return; } }catch(err){}
       const j = SL.i - 1, cur = j >= 0 && SL.photos ? SL.photos[j] : null; if(!cur) return;
@@ -3517,6 +3560,7 @@ body.d2max #d2bar{margin-top:0}
 @media (max-width:560px){.d2sl .d2slhide{bottom:82px}.d2card.d2full .d2sl .d2slhide{bottom:58px;left:12px}}
 .d2sl .d2slhide.und{background:#2b2230}.d2sl .d2slhide.und:hover{background:var(--acc,#5A2C57)}.d2sl .d2slhide.und u{text-underline-offset:2px}
 .d2sl .d2slmain.back{background:rgba(255,255,255,.88);color:#3a2c3f}
+.d2sl .d2slmain.on{cursor:default;background:rgba(20,14,24,.55);display:inline-flex;align-items:center;line-height:30px}.d2sl .d2slmain.on:hover{background:rgba(20,14,24,.55)}
 .d2card.d2full .d2sl .d2slmain{bottom:20px}
 `;
   document.head.appendChild(css);
@@ -3680,6 +3724,57 @@ body.d2max #d2bar{margin-top:0}
 .d2card.d2full .d2sl .illurot.d2rot{bottom:20px}
 #illufv .illurot.fvrot button{background:rgba(255,255,255,.14)}
 #illufv .illurot.fvrot button:hover{background:rgba(255,255,255,.3)}
-.d2sli,.fvimg,.litpic img{transition:transform .2s ease}`;
+.d2sli,.fvimg,.litpic img{transition:transform .2s ease}
+/* 1.2.305 Directory list, clean style (user, 27 Nov 2026, approved demo v4): a light header with the count and a segmented
+   region switch, small grey labels for regions and countries, soft rounded rows, one quiet highlight for the chosen agency */
+.d2list.d2list.d2list{padding:8px 10px;gap:0;background:var(--surf,#fff)}
+.d2list.d2list.d2list .d2lh{top:-8px;margin:-8px -10px 4px;padding:12px 14px 10px;background:var(--surf,#fff);color:var(--ink,#2b2230);border-bottom:0;gap:0 7px}
+.d2list.d2list.d2list .d2lh b{font-family:inherit;font-size:22px;font-weight:600;letter-spacing:0}
+.d2list.d2list.d2list .d2lh span{font-size:12.5px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--mut,#8a8291)}
+.d2list.d2list.d2list .d2lh em{flex-basis:auto;margin:0;font-size:12.5px;opacity:1;color:var(--mut,#8a8291)}
+.d2list.d2list.d2list .d2lh em::before{content:"· "}
+.d2list.d2list.d2list .d2sub{gap:2px;padding:3px;margin-top:10px;border-radius:12px;background:color-mix(in srgb,var(--ink,#2b2230) 5%,var(--surf,#fff))}
+.d2list.d2list.d2list .d2sub button{flex-direction:column-reverse;border:0;background:none;color:var(--mut,#6d6577);border-radius:9px;padding:6px 0 5px;font-size:11.5px;font-weight:500}
+.d2list.d2list.d2list .d2sub button i{font-size:14px;font-weight:600;color:var(--ink,#2b2230)}
+.d2list.d2list.d2list .d2sub button:hover:not([disabled]):not(.on){background:color-mix(in srgb,var(--surf,#fff) 60%,transparent)}
+.d2list.d2list.d2list .d2sub button.on.on{background:var(--surf,#fff);color:var(--acc,#6d2561);border:0;box-shadow:0 1px 2px rgba(40,20,50,.08),0 2px 8px -4px rgba(40,20,50,.18)}
+.d2list.d2list.d2list .d2sub button.on i{color:var(--acc,#6d2561)}
+.d2list.d2list.d2list .d2sub button[disabled]{opacity:.45}
+.d2list.d2list.d2list .d2rgn,.d2list.d2list.d2list .d2rgn:not(.fold){width:calc(100% + 20px);margin:6px -10px 0;padding:10px 16px 6px;background:var(--surf,#fff);box-shadow:none;color:var(--mut,#9a92a2);border:0;align-items:center;gap:8px}
+.d2list.d2list.d2list .d2rgn b{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+.d2list.d2list.d2list .d2rgn s{order:3;flex-grow:0;font-size:11.5px;opacity:1;margin-left:auto}
+.d2list.d2list.d2list .d2rgn i{order:4;font-size:10px;opacity:.7}
+.d2list.d2list.d2list .d2rgn:hover,.d2list.d2list.d2list .d2rgn:not(.fold):hover{background:var(--surf,#fff);color:var(--ink,#2b2230)}
+.d2list.d2list.d2list .d2rgn.fold{opacity:.75}
+.d2list.d2list.d2list .d2grp{margin:0 -10px 0;padding:2px 16px 6px;background:var(--surf,#fff);border:0;gap:6px}
+.d2list.d2list.d2list .d2grp .d2cc{background:none;color:var(--mut,#8a8291);border:1px solid var(--line,#e6e0ea);border-radius:4px;padding:1px 4px;font-size:9.5px;font-weight:600}
+.d2list.d2list.d2list .d2grp b{font-size:12px;font-weight:500;color:var(--mut,#6d6577);font-variant:normal;letter-spacing:0}
+.d2list.d2list.d2list .d2grp s{font-size:11.5px;font-weight:500;color:var(--mut,#8a8291);margin-left:auto}
+.d2list.d2list.d2list .d2agw{margin:0 0 6px;border-bottom:0}
+.d2list.d2list.d2list .d2ag,.d2list.d2list.d2list .d2hidrow{border-radius:10px;padding:10px 12px;background:color-mix(in srgb,var(--ink,#2b2230) 4%,var(--surf,#fff));border:0;box-shadow:none}
+.d2list.d2list.d2list .d2ag:not(.on):hover,.d2list.d2list.d2list .d2hidrow:not(.on):hover{background:color-mix(in srgb,var(--ink,#2b2230) 7%,var(--surf,#fff))}
+.d2list.d2list.d2list .d2ag.on,.d2list.d2list.d2list .d2hidrow.on{background:color-mix(in srgb,var(--acc,#6d2561) 13%,var(--surf,#fff));color:var(--ink,#2b2230);box-shadow:none}
+.d2list.d2list.d2list .d2ag.on .d2agt b,.d2list.d2list.d2list .d2hidrow.on .d2agt b{color:var(--ink,#2b2230)}
+.d2list.d2list.d2list .d2ag.on .d2agt s,.d2list.d2list.d2list .d2hidrow.on .d2agt s{color:var(--mut,#8a8291)}
+.d2list.d2list.d2list .d2agt b{font-size:13.5px;font-weight:600;color:var(--ink,#2b2230)}
+.d2list.d2list.d2list .d2agt s{font-size:11.5px;opacity:1;color:var(--mut,#8a8291);line-height:17px}
+.d2list.d2list.d2list .d2agn b,.d2list.d2list.d2list .d2ag.on .d2agn b,.d2list.d2list.d2list .d2hidrow.on .d2agn b{background:none;padding:0;font-size:12px;font-weight:600;color:var(--mut,#6d6577)}
+.d2list.d2list.d2list .d2ag.on .d2agn b,.d2list.d2list.d2list .d2hidrow.on .d2agn b{color:var(--acc,#6d2561)}
+.d2list.d2list.d2list .d2ag.on .d2agn s{color:var(--mut,#8a8291)}
+.d2list.d2list.d2list .d2hidrow.d2hidsub{margin-left:14px;width:calc(100% - 14px)}
+.d2list.d2list.d2list .d2hidrow{margin-bottom:6px}
+.d2agt s.d2stl,.d2agt s.d2wl{display:flex;align-items:center;gap:0;min-width:0;overflow:hidden;white-space:nowrap}
+.d2agt s.d2wl{margin-top:2px;color:var(--mut,#6d6577)}
+.d2agt s .mlt{display:inline-flex;align-items:center;gap:4px;font-weight:600;flex:none}
+.d2agt s .d2mi{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;flex:none}
+.d2agt s .wkt{flex:none}
+.d2agt s .wksep{color:color-mix(in srgb,var(--mut,#8a8291) 55%,transparent);margin:0 5px;flex:none}
+.d2whos{display:inline-flex;align-items:center;gap:8px;flex:none}
+.d2who{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.d2who .iddisc{width:16px;height:16px;font-size:8px;border-width:1.5px;flex:none;margin:0}
+.d2pl{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.d2list .d2ag.on.wkl .d2agt s,.d2list .d2ag.on.wkd .d2agt s{color:var(--mut,#8a8291)}.d2list .d2list .d2ag.on .d2agt s .wkt{color:var(--wkt)}
+.d2list.d2list.d2list .d2ag.on .d2agt s .wkt{color:var(--wkt)}
+.d2list.d2list.d2list .d2ag.wkl::before,.d2list.d2list.d2list .d2ag.wkd::before{top:10px;bottom:10px}`;
   document.head.appendChild(st);
 })();
